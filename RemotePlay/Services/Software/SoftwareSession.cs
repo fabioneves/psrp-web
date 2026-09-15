@@ -20,22 +20,35 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         Guid? sessionId = null;
         Process? generator = null;
         SoftwareTranscoder? transcoder = null;
-        using var receiver = new SoftwareReceiver(grant.VideoCodec == "h264" ? 32 : 8);
+        using var receiver = new SoftwareReceiver(grant.VideoCodec == "mpeg1" ? 8 : 32, grant.VideoCodec == "h265" ? "hevc" : "h264");
         using var sendGate = new SemaphoreSlim(1, 1);
         Task[] workers = [];
-        ActiveSoftwareStream? published = null;
+        var published = new ActiveSoftwareStream(grant, lifetime);
+        published.Track(socket, sendGate);
+        active.Set(published);
+        var input = new SoftwareInputRouter(controller, null, initializing: true);
+        async Task ReadInput()
+        {
+            try { await input.ReceiveAsync(socket, ct, true, sendGate); }
+            finally { await lifetime.CancelAsync(); }
+        }
+        var inputTask = ReadInput();
+        workers = [inputTask];
         try
         {
-            await SendStatus(socket, "Connecting", ct);
+            await SendStatus(socket, "Connecting", ct, sendGate: sendGate);
             var profile = VideoProfile.Create(grant.Resolution, grant.Fps);
             transcoder = new SoftwareTranscoder(grant.BitrateKbps, grant.Resolution, grant.Fps, grant.VideoCodec);
             Task feed;
             if (grant.Demo)
             {
+                var encoderOptions = grant.VideoCodec == "h265"
+                    ? new[] { "-c:v", "libx265", "-x265-params", "pools=1:frame-threads=1:log-level=error:repeat-headers=1" }
+                    : new[] { "-c:v", "libx264" };
                 generator = SoftwareTranscoder.Start(["-hide_banner", "-loglevel", "error", "-re",
-                    "-f", "lavfi", "-i", $"testsrc2=size={profile.Width}x{profile.Height}:rate={profile.Fps}", "-an", "-c:v", "libx264",
+                    "-f", "lavfi", "-i", $"testsrc2=size={profile.Width}x{profile.Height}:rate={profile.Fps}", "-an", .. encoderOptions,
                     "-preset", "ultrafast", "-tune", "zerolatency", "-threads", "2", "-g", "60",
-                    "-b:v", "8000k", "-pix_fmt", "yuv420p", "-f", "h264", "pipe:1"]);
+                    "-b:v", "8000k", "-pix_fmt", "yuv420p", "-f", grant.VideoCodec == "h265" ? "hevc" : "h264", "pipe:1"]);
                 feed = transcoder.FeedAsync(generator.StandardOutput.BaseStream, ct);
             }
             else
@@ -43,7 +56,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 var device = await db.UserDevices.Where(d => d.UserId == grant.UserId && d.IsActive &&
                     d.Device != null && d.Device.HostId == grant.HostId && d.Device.IsRegistered == true)
                     .Select(d => d.Device!).SingleAsync(ct);
-                await power.EnsureReadyAsync(device, message => SendStatus(socket, message, ct), ct);
+                await power.EnsureReadyAsync(device, message => SendStatus(socket, message, ct, sendGate: sendGate), ct);
                 var session = await sessions.StartSessionAsync(device.IpAddress!, new DeviceCredentials
                 {
                     HostId = device.HostId!, HostName = device.HostName!, HostIp = device.IpAddress!,
@@ -51,7 +64,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                     ServerKey = Convert.FromHexString(device.RPKey!)
                 }, device.HostType!, new SessionStartOptions
                 {
-                    Resolution = grant.Resolution, Fps = grant.Fps.ToString(), Bitrate = Math.Min(grant.BitrateKbps, 15000).ToString(), StreamType = "1",
+                    Resolution = grant.Resolution, Fps = grant.Fps.ToString(), Bitrate = Math.Min(grant.BitrateKbps, 15000).ToString(), StreamType = grant.VideoCodec == "h265" ? "2" : "1",
                     AutoStartStream = false, AutoConnectController = false
                 }, ct);
                 sessionId = session.Id;
@@ -66,26 +79,22 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                     throw new IOException("Could not start console input.");
                 feed = transcoder.FeedAsync(receiver, ct);
             }
-            await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct);
-            var input = new SoftwareInputRouter(controller, sessionId);
-            published = new ActiveSoftwareStream(grant, input, ct);
-            active.Set(published);
-            workers = [feed, transcoder.SendAsync(socket, ct, sendGate), input.ReceiveAsync(socket, ct, true, sendGate),
+            await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct, sendGate: sendGate);
+            await input.BindSessionAsync(sessionId, ct);
+            published.Input = input;
+            workers = [feed, transcoder.SendAsync(socket, ct, sendGate), inputTask,
                 SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)];
             var completed = await Task.WhenAny(workers);
             await completed;
         }
+        catch (Exception) when (published.StopRequested) { }
         catch (Exception ex) when (ex is not OperationCanceledException || !aborted.IsCancellationRequested)
         {
             logger.LogWarning(ex, "Software stream ended: {Reason}", ex.Message);
             if (socket.State == WebSocketState.Open)
             {
-                lifetime.Cancel();
-                transcoder?.Dispose();
-                transcoder = null;
-                if (workers.Length > 0) await ObserveWorkers(workers);
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                try { await SendStatus(socket, ex is TimeoutException or ConsoleHandshakeException ? ex.Message : "Stream stopped. Check the console, network and server logs, then reconnect.", timeout.Token, true); }
+                try { await SendStatus(socket, ex is TimeoutException or ConsoleHandshakeException ? ex.Message : "Stream stopped. Check the console, network and server logs, then reconnect.", timeout.Token, true, sendGate); }
                 catch (WebSocketException) { }
                 catch (OperationCanceledException) { }
             }
@@ -93,29 +102,32 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         catch (OperationCanceledException) { }
         finally
         {
-            await lifetime.CancelAsync();
-            if (published != null) active.Remove(published);
-            receiver.Dispose();
-            transcoder?.Dispose();
-            if (generator != null)
+            try
             {
-                if (!generator.HasExited) generator.Kill(entireProcessTree: true);
-                generator.WaitForExit(3000);
-                generator.Dispose();
+                await lifetime.CancelAsync();
+                receiver.Dispose();
+                transcoder?.Dispose();
+                if (generator != null)
+                {
+                    if (!generator.HasExited) generator.Kill(entireProcessTree: true);
+                    generator.WaitForExit(3000);
+                    generator.Dispose();
+                }
+                await ObserveWorkers(workers);
+                if (sessionId is { } id)
+                {
+                    try { await streams.StopStreamAsync(id); }
+                    finally { await sessions.StopSessionAsync(id); }
+                }
+                if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+                    try { await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, published.StopRequested ? ActiveSoftwareStream.StopReason : "Session ended", timeout.Token); }
+                    catch (WebSocketException) { }
+                    catch (OperationCanceledException) { }
+                }
             }
-            await ObserveWorkers(workers);
-            if (sessionId is { } id)
-            {
-                try { await streams.StopStreamAsync(id); }
-                finally { await sessions.StopSessionAsync(id); }
-            }
-            if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
-            {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                try { await socket.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, "Session ended", timeout.Token); }
-                catch (WebSocketException) { }
-                catch (OperationCanceledException) { }
-            }
+            finally { active.Remove(published); published.Complete(); }
         }
     }
 
@@ -125,9 +137,16 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         catch (Exception) { }
     }
 
-    private static Task SendStatus(WebSocket socket, string message, CancellationToken ct, bool error = false) =>
-        socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = error ? "error" : "status", message }),
-            WebSocketMessageType.Text, true, ct);
+    private static async Task SendStatus(WebSocket socket, string message, CancellationToken ct, bool error = false, SemaphoreSlim? sendGate = null)
+    {
+        if (sendGate != null) await sendGate.WaitAsync(ct);
+        try
+        {
+            await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = error ? "error" : "status", message }),
+                WebSocketMessageType.Text, true, ct);
+        }
+        finally { sendGate?.Release(); }
+    }
 
     private static async Task SendAudioAsync(WebSocket socket, SoftwareReceiver receiver, bool demo,
         SemaphoreSlim sendGate, CancellationToken ct)

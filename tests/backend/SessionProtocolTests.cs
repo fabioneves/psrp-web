@@ -12,7 +12,7 @@ static class SessionProtocolTests
 {
     public static async Task RunAsync(Action<bool, string> check)
     {
-        foreach (var coalesced in new[] { false, true })
+        foreach (var (coalesced, remoteClose) in new[] { (false, false), (true, false), (false, true) })
         {
             using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(4));
             var ct = deadline.Token;
@@ -38,12 +38,22 @@ static class SessionProtocolTests
                 await stream.ReadExactlyAsync(reply, ct);
                 check(reply.SequenceEqual(new byte[] { 0, 0, 0, 0, 1, 254, 0, 0 }),
                     coalesced ? "control messages coalesced with HTTP headers are retained" : "console heartbeat reply has no payload");
+                if (remoteClose) return;
                 var closed = new byte[1];
                 check(await stream.ReadAsync(closed, ct) == 0, "stopping a session closes the console control socket");
             }, ct);
             var session = await service.StartSessionAsync("127.0.0.1", new DeviceCredentials { RegistrationKey = new byte[16], ServerKey = new byte[16] }, "PS5", ct);
-            try { await Task.Delay(200, ct); }
-            finally { await service.StopSessionAsync(session.Id, ct); }
+            if (remoteClose)
+            {
+                await console;
+                while ((await service.ListSessionsAsync(ct)).Count != 0) await Task.Delay(10, ct);
+                check((await service.ListSessionsAsync(ct)).Count == 0, "a closed console control connection removes its orphaned session automatically");
+            }
+            else
+            {
+                try { await Task.Delay(200, ct); }
+                finally { await service.StopSessionAsync(session.Id, ct); }
+            }
             await console;
         }
         foreach (var (response, expected) in new[] {

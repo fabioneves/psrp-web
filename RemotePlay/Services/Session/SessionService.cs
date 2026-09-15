@@ -671,7 +671,15 @@ namespace RemotePlay.Services.Session
             {
                 if (_sessions.ContainsKey(sessionId)) _logger.LogWarning(ex, "Console control connection ended unexpectedly");
             }
-            finally { control.Dispose(); }
+            finally
+            {
+                control.Dispose();
+                if (_sessions.ContainsKey(sessionId))
+                {
+                    try { await _serviceProvider.GetRequiredService<IStreamingService>().StopStreamAsync(sessionId); }
+                    finally { await StopSessionAsync(sessionId); }
+                }
+            }
         }
 
     }

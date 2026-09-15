@@ -14,7 +14,7 @@ public sealed class StreamTickets(TimeProvider clock)
     public string Issue(string userId, string? hostId, bool demo, int bitrateKbps, Guid? inputSession = null,
         string resolution = "720p", int fps = 60, string videoCodec = "mpeg1")
     {
-        if (videoCodec is not ("mpeg1" or "h264")) throw new ArgumentOutOfRangeException(nameof(videoCodec));
+        if (videoCodec is not ("mpeg1" or "h264" or "h265")) throw new ArgumentOutOfRangeException(nameof(videoCodec));
         lock (sync)
         {
             foreach (var key in tickets.Where(p => p.Value.Expires <= clock.GetUtcNow()).Select(p => p.Key).ToArray())
@@ -30,5 +30,12 @@ public sealed class StreamTickets(TimeProvider clock)
     {
         lock (sync)
             return tickets.Remove(token, out var ticket) && ticket.Expires > clock.GetUtcNow() ? ticket : null;
+    }
+
+    public void RevokeConsole(string hostId)
+    {
+        lock (sync)
+            foreach (var key in tickets.Where(pair => pair.Value.HostId == hostId).Select(pair => pair.Key).ToArray())
+                tickets.Remove(key);
     }
 }

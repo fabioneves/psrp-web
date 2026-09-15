@@ -566,5 +566,5 @@ footer {
 
 .device { flex-wrap:wrap; }
 .device > div:not(.device-actions) { flex:1; min-width:120px; }
-.device-actions { display:flex; gap:8px; margin-left:auto; }
+.device-actions { display:flex; flex-wrap:wrap; gap:8px; margin-left:auto; }
 .device-actions button { margin-left:0; }

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Buffers.Binary;
 using System.Net.Sockets;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -22,9 +23,16 @@ static class StreamDisconnectTests
         Set("_udpClient", new UdpClient(AddressFamily.InterNetwork));
         Set("_remoteEndPoint", console.Client.LocalEndPoint!);
         Set("_cipher", new StreamCipher(new byte[16], new byte[32]));
+        var send = typeof(RPStreamV2).GetMethod("SendPacketInternalAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        await (Task)send.Invoke(stream, [Packet.CreateData(5, 1, 1, new byte[] { 8, 1 }), 2, false])!;
+        using var sentTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+        await console.ReceiveAsync(sentTimeout.Token);
+        Set("_tsn", 9u);
         await stream.StopAsync();
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         var packet = await console.ReceiveAsync(timeout.Token);
+        check(BinaryPrimitives.ReadUInt32BigEndian(packet.Buffer.AsSpan(PacketConst.HeaderLength + 4)) == 6,
+            "disconnect follows the last transmitted sequence even when cancelled queued messages reserved later numbers");
         check(packet.Buffer.AsSpan(packet.Buffer.Length - payload.Length).SequenceEqual(payload), "stopping a cancelled stream sends the disconnect before closing UDP");
     }
 }

@@ -9,8 +9,35 @@ using RemotePlay.Services.Software;
 namespace RemotePlay.Controllers;
 
 [ApiController, Authorize, Route("api/software")]
-public sealed class SoftwareController(StreamTickets tickets, RPContext db, SoftwareSession runner, ActiveSoftwareStreams active, ConsolePower power) : ControllerBase
+public sealed class SoftwareController(StreamTickets tickets, RPContext db, SoftwareSession runner, ActiveSoftwareStreams active, ConsolePower power,
+    RemotePlay.Contracts.Services.ISessionService sessions, RemotePlay.Contracts.Services.IStreamingService streams) : ControllerBase
 {
+    [HttpPost("disconnect")]
+    public async Task<IActionResult> Disconnect(WakeRequest request, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var device = await power.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request.HostId, ct);
+        if (device == null) return NotFound(new { message = "Pair this console with your account first." });
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        tickets.RevokeConsole(request.HostId);
+        try
+        {
+            var stopped = await active.StopConsoleAsync(request.HostId, timeout.Token) ? 1 : 0;
+            foreach (var session in (await sessions.ListSessionsAsync(timeout.Token)).Where(session => session.HostId == device.HostId))
+            {
+                try { await streams.StopStreamAsync(session.Id, timeout.Token); }
+                finally { await sessions.StopSessionAsync(session.Id, timeout.Token); }
+                stopped++;
+            }
+            return Ok(new { stopped, message = "All sessions opened by this server for this console are disconnected." });
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return StatusCode(504, new { message = "Session cleanup is still running. Wait a moment and try again." });
+        }
+    }
+
     [HttpPost("wake")]
     public async Task<IActionResult> Wake(WakeRequest request, CancellationToken ct)
     {
@@ -38,6 +65,10 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
         else if (!request.Demo && !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive &&
                 d.Device != null && d.Device.HostId == request.HostId && d.Device.IsRegistered == true, ct))
             return NotFound(new { message = "Pair this console with your account first." });
+        if (!request.Demo && request.InputSession == null && request.VideoCodec == "h265" &&
+            !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive && d.Device != null &&
+                d.Device.HostId == request.HostId && d.Device.HostType == "PS5", ct))
+            return BadRequest(new { message = "H.265 requires a PS5. Select H.264 or Canvas for this console." });
         var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec);
         Response.Headers.CacheControl = "no-store";
         return Ok(new { ticket });
@@ -94,6 +125,6 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
 
 public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 30000)] int BitrateKbps = 10000,
     Guid? InputSession = null, string Resolution = "720p", int Fps = 60,
-    [Required, RegularExpression("^(mpeg1|h264)$")] string VideoCodec = "mpeg1");
+    [Required, RegularExpression("^(mpeg1|h264|h265)$")] string VideoCodec = "mpeg1");
 
 public sealed record WakeRequest([Required, MaxLength(100)] string HostId);

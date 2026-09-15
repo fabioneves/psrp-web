@@ -2,19 +2,29 @@ import { FramePresenter } from './frame-presenter.js';
 
 export const nativeConfig = codec => ({ codec, hardwareAcceleration: 'prefer-hardware', optimizeForLatency: true });
 
-export async function supportsNativeVideo(profile, platform = globalThis) {
+export async function supportsNativeVideo(profile, platform = globalThis, videoCodec = 'h264') {
   if (typeof platform.VideoDecoder?.isConfigSupported !== 'function') return false;
   const sizes = { '360p': [640, 360], '540p': [960, 540], '720p': [1280, 720], '1080p': [1920, 1080] };
   const [codedWidth, codedHeight] = sizes[profile.resolution];
   let timer;
   try {
     const result = await Promise.race([
-      platform.VideoDecoder.isConfigSupported({ ...nativeConfig('avc1.64002a'), codedWidth, codedHeight }),
+      platform.VideoDecoder.isConfigSupported({ ...nativeConfig(videoCodec === 'h265' ? 'hev1.1.6.L123.B0' : 'avc1.64002a'), codedWidth, codedHeight }),
       new Promise(resolve => { timer = setTimeout(() => resolve({ supported: false }), 2000); })
     ]);
     return result.supported;
   } catch { return false; }
   finally { clearTimeout(timer); }
+}
+
+export async function selectVideoCodec(preferred, profile, failed = new Set(), hostType = null, platform = globalThis) {
+  const candidates = { mpeg1: ['mpeg1'], h264: ['h264', 'mpeg1'], h265: ['h265', 'h264', 'mpeg1'] }[preferred] || ['h264', 'mpeg1'];
+  for (const codec of candidates) {
+    if (codec === 'mpeg1') return codec;
+    if (failed.has(codec) || (codec === 'h265' && hostType && hostType !== 'PS5')) continue;
+    if (await supportsNativeVideo(profile, platform, codec)) return codec;
+  }
+  return 'mpeg1';
 }
 
 export function h264Info(data) {
@@ -29,6 +39,34 @@ export function h264Info(data) {
     i += 3;
   }
   return { codec, key, picture };
+}
+
+export function h265Info(data) {
+  let codec, key = false, picture = false;
+  const starts = [], parameters = [];
+  for (let i = 0; i + 3 < data.length; i++)
+    if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 1) { starts.push(i + 3); i += 2; }
+  for (let index = 0; index < starts.length; index++) {
+    const nal = data.subarray(starts[index], index + 1 < starts.length ? starts[index + 1] - 3 : data.length);
+    if (nal.length < 2) continue;
+    const type = (nal[0] >> 1) & 63;
+    if (type <= 31) picture = true;
+    if (type >= 16 && type <= 21) key = true;
+    if (type >= 32 && type <= 34) {
+      if (nal.length > 65536) throw new Error('HEVC parameter set exceeds its size limit.');
+      parameters.push({ type, data: Uint8Array.from([0, 0, 0, 1, ...nal]) });
+    }
+    if (type !== 33) continue;
+    const rbsp = nal.subarray(2).filter((byte, i, bytes) => !(i >= 2 && byte === 3 && bytes[i - 1] === 0 && bytes[i - 2] === 0));
+    if (rbsp.length < 13) continue;
+    const flags = new DataView(rbsp.buffer, rbsp.byteOffset).getUint32(2);
+    let compatibility = 0;
+    for (let bit = 0; bit < 32; bit++) compatibility = compatibility * 2 + ((flags >>> bit) & 1);
+    const constraints = [...rbsp.subarray(6, 12)];
+    while (constraints.length > 1 && constraints.at(-1) === 0) constraints.pop();
+    codec = `hev1.${['', 'A', 'B', 'C'][rbsp[1] >> 6]}${rbsp[1] & 31}.${compatibility.toString(16).toUpperCase()}.${rbsp[1] & 32 ? 'H' : 'L'}${rbsp[12]}.${constraints.map(value => value.toString(16).toUpperCase().padStart(2, '0')).join('.')}`;
+  }
+  return { codec, key, picture, parameters };
 }
 
 export class NativeDecodeQueue {
@@ -50,10 +88,13 @@ export class NativeDecodeQueue {
 }
 
 export function createNativeDecoder(canvas, report, options = {}) {
+  const hevc = options.videoCodec === 'h265';
+  const label = hevc ? 'H.265' : 'H.264';
+  const parameters = new Map();
   const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
   if (!context) throw new Error('This browser does not support video drawing.');
   const pending = new Map();
-  let stopped = false, latest = null, configuration, mediaTimestamp, savedAt = 0, progressAt = null;
+  let stopped = false, latest = null, configuration, mediaTimestamp, savedAt = 0, progressAt = null, waitingForKey = true;
   let decoded = 0, drawn = 0, dropped = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
   let start = performance.now();
   const presentation = new FramePresenter(() => {
@@ -97,16 +138,27 @@ export function createNativeDecoder(canvas, report, options = {}) {
   demuxer.guessVideoFrameEnd = false;
   demuxer.connect(JSMpeg.Demuxer.TS.STREAM.VIDEO_1, { write(pts, buffers) {
     const size = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
-    if (size > 2 * 1024 * 1024) throw new Error('H.264 frame exceeds its size limit.');
-    const data = new Uint8Array(size);
+    if (size > 2 * 1024 * 1024) throw new Error(`${label} frame exceeds its size limit.`);
+    let data = new Uint8Array(size);
     let offset = 0;
     for (const buffer of buffers) { data.set(buffer, offset); offset += buffer.length; }
-    const info = h264Info(data);
+    const info = hevc ? h265Info(data) : h264Info(data);
+    for (const parameter of info.parameters || []) parameters.set(parameter.type, parameter.data);
     if (info.codec && info.codec !== configuration) {
       decoder.configure(nativeConfig(info.codec));
       configuration = info.codec;
+      waitingForKey = true;
     }
-    if (!configuration || !info.picture) return;
+    if (!configuration || !info.picture || (waitingForKey && !info.key)) return;
+    if (hevc && info.key) {
+      if (parameters.size !== 3) return;
+      const headers = [32, 33, 34].map(type => parameters.get(type));
+      const prefixed = new Uint8Array(headers.reduce((sum, header) => sum + header.length, data.length));
+      let position = 0;
+      for (const header of headers) { prefixed.set(header, position); position += header.length; }
+      prefixed.set(data, position); data = prefixed;
+    }
+    waitingForKey = false;
     queue.push({ timestamp: Math.round(pts * 1000000), mediaTimestamp, data, key: info.key });
   } });
   const timer = setInterval(() => {
@@ -119,7 +171,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
       decodeMs: drawn ? (decodeMs + drawMs) / drawn : 0, codecMs: 0, nativeDecodeMs: decoded ? decodeMs / decoded : 0,
       colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: dropped,
       pixelEngine: 'Browser', mbps: bytesReceived * 8 / elapsed / 1000, totalFrames,
-      width: canvas.width, height: canvas.height, engine: 'H.264 · hardware preferred' });
+      width: canvas.width, height: canvas.height, engine: `${label} · hardware preferred` });
     decoded = drawn = bytesReceived = decodeMs = drawMs = 0; start = performance.now();
   }, 1000);
   return {
@@ -131,7 +183,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     },
     destroy() {
       stopped = true; clearInterval(timer); presentation.destroy(); queue.destroy();
-      latest?.close(); latest = null; pending.clear();
+      latest?.close(); latest = null; pending.clear(); parameters.clear();
       if (decoder.state !== 'closed') decoder.close();
     }
   };

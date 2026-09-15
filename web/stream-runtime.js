@@ -5,10 +5,11 @@ import { now, StreamClock, unpackMedia } from './timing.js';
 export async function startStream(canvas, url, report, videoCodec = 'mpeg1') {
   const clock = new StreamClock();
   let videoAgeMs = null, transportMs = null, serverQueueMs = 0;
-  const decoder = canvas ? await (videoCodec === 'h264' ? createNativeDecoder : createDecoder)(canvas, message => {
+  const decoder = canvas ? await (videoCodec !== 'mpeg1' ? createNativeDecoder : createDecoder)(canvas, message => {
     report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs });
     serverQueueMs = 0;
   }, {
+    videoCodec,
     onError(message) { fail(message, 'renderer-error'); },
     onPresent(timestamp) {
       videoAgeMs = clock.age(timestamp);
@@ -52,10 +53,15 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1') {
           decoder?.write(media.bytes, media.timestamp);
         }
       }
-    } catch (error) { fail(error.message, videoCodec === 'h264' ? 'renderer-error' : 'error'); }
+    } catch (error) { fail(error.message, videoCodec !== 'mpeg1' ? 'renderer-error' : 'error'); }
   };
   socket.onerror = () => fail('Stream connection failed. The ticket may have expired or another viewer is connected.');
-  socket.onclose = () => { if (!stopped) report({ type: 'closed', message: 'Stream disconnected.' }); close(); };
+  socket.onclose = event => {
+    if (!stopped) report(event.reason === 'Disconnected by user'
+      ? { type: 'stopped', message: 'All sessions for this console were disconnected.' }
+      : { type: 'closed', message: 'Stream disconnected.' });
+    close();
+  };
   return {
     input(message) { if (socket.readyState === WebSocket.OPEN && socket.bufferedAmount <= 65536) socket.send(JSON.stringify(message)); },
     close

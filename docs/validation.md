@@ -417,3 +417,55 @@ long-session playback. Typical native decode turnaround was about 0.5–0.8 ms a
 These are idle-console measurements using the software WebCodecs test adapter,
 not physical GPU measurements, gameplay benchmarks or input-to-display latency.
 The diagnostic disconnected at completion and left no active app stream.
+
+### Video modes, console audio and session cleanup
+
+Stream settings now selects Canvas, H.264 or PS5 H.265 SDR. Unsupported HEVC falls
+back to H.264, then Canvas; decoder failures follow the same order without changing
+the saved preference. HEVC backend checks generate six real 720p HEVC frames and
+pass them through the receiver/remuxer; FFprobe decodes all six. Browser tests
+cover capability fallback, configuration failure, preference migration and HEVC
+parameter delivery. This Chrome installation cannot decode HEVC: its HEVC browser
+boundary test uses a stub, so it does not establish real browser HEVC playback.
+H.264 browser tests use real decoding with a test-only CPU preference because the
+validation browser has GPU acceleration disabled.
+
+Real console audio was silently discarded because SoftwareReceiver expected a
+packet prefix of 1 while OutputPipeline emits HeaderType.AUDIO (3). The receiver
+now uses the protocol enum. The regression sends encoded Opus through the actual
+OutputPipeline and verifies nonzero decoded PCM. Live PS5 audio reached the
+AudioWorklet with nonzero output RMS through both localhost and the public HTTPS
+address. This measures rendered audio samples, not a physical speaker recording.
+
+The disconnect endpoint is included in the production route allowlist. A forced
+stop sends a WebSocket close reason before cancelling its receive operation;
+cancelling first aborted the socket and caused browsers to reconnect automatically.
+A real loopback WebSocket regression verifies delivery of the stop reason. Cleanup
+also revokes console tickets, waits for stream teardown and closes orphaned control
+sessions. Missing browser heartbeats expire after 10 seconds, including connection
+setup. Ownership checks limit disconnects to consoles paired to the caller.
+
+Short live PS5 720p60 H.264 checks measured 58–60 displayed fps locally, native
+decode around 0.5–0.6 ms and server-remux-output-to-canvas age around 8–18 ms.
+The public HTTPS route measured about 124–125 ms round trip, around 62–64 ms
+one-way transport estimate, and 71–82 ms remux-output-to-canvas age. These are
+measurements from the server-hosted diagnostic browser, not the user's computer.
+They exclude console capture/encoding, pre-remux buffering and display scanout.
+The route contributes substantial latency; these changes do not establish that
+end-to-end input lag is solved. Native decode time now appears correctly in the
+UI instead of the zero value used to exclude native decoding from CPU adaptation.
+
+The full automated suite passed 31 JavaScript tests and 45 browser tests. Final
+backend validation passed 111 assertions. An additional UDP teardown regression
+reserves later sequence numbers for unsent messages, then verifies that the final
+disconnect uses the sequence immediately after the last transmitted DATA packet.
+This prevents cancellation from leaving a gap before the disconnect. Console
+errors are also sent before cancelling the WebSocket receive task, preserving
+specific busy/handshake feedback.
+
+Live checks confirmed HTTP 200 from the paired-console disconnect endpoint,
+explicit browser stop feedback without automatic reconnection, and successful
+reconnection in one check. Later attempts still received console-busy responses
+while the server had no active viewer. Repeated reliable real-console reconnects
+remain unverified; the final sequence-number correction has protocol regression
+coverage but needs another live check once the console accepts a session.

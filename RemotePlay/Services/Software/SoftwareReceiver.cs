@@ -2,10 +2,11 @@ using System.Threading.Channels;
 using System.Buffers.Binary;
 using Concentus;
 using RemotePlay.Models.PlayStation;
+using RemotePlay.Services.Streaming.Protocol;
 
 namespace RemotePlay.Services.Software;
 
-public sealed class SoftwareReceiver(int videoQueueCapacity = 8) : IAVReceiver, IDisposable
+public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCodec = "h264") : IAVReceiver, IDisposable
 {
     private readonly Channel<byte[]> packets = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(videoQueueCapacity)
     {
@@ -62,7 +63,7 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8) : IAVReceiver, 
             }
             if (waitingForIdr)
             {
-                if (!ContainsIdr(packet)) return;
+                if (!ContainsIdr(packet, videoCodec)) return;
                 if (header.Length > 0) Write(header);
                 waitingForIdr = false;
             }
@@ -76,23 +77,28 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8) : IAVReceiver, 
             packets.Writer.TryComplete(new IOException("Software encoder cannot keep up. Reconnect or lower the bitrate."));
     }
 
-    public static bool ContainsIdr(ReadOnlySpan<byte> packet)
+    public static bool ContainsIdr(ReadOnlySpan<byte> packet, string codec = "h264")
     {
         for (var i = 0; i + 3 < packet.Length; i++)
-            if (packet[i] == 0 && packet[i + 1] == 0 && packet[i + 2] == 1 && (packet[i + 3] & 31) == 5)
-                return true;
+            if (packet[i] == 0 && packet[i + 1] == 0 && packet[i + 2] == 1)
+            {
+                var nal = packet[i + 3];
+                if (codec == "hevc" ? i + 4 < packet.Length && ((nal >> 1) & 63) is >= 16 and <= 21 : (nal & 31) == 5)
+                    return true;
+            }
         return false;
     }
 
     public void EnterWaitForIdr() { lock (sync) waitingForIdr = true; }
     public void SetVideoCodec(string codec)
     {
-        if (!string.Equals(codec, "h264", StringComparison.OrdinalIgnoreCase) && !string.Equals(codec, "avc", StringComparison.OrdinalIgnoreCase))
-            packets.Writer.TryComplete(new IOException("The console must supply H.264 for software streaming."));
+        var normalized = codec.ToLowerInvariant() switch { "avc" => "h264", "h265" => "hevc", var value => value };
+        if (normalized != videoCodec)
+            packets.Writer.TryComplete(new IOException("The console supplied a different video codec than requested."));
     }
     public void OnAudioPacket(byte[] packet)
     {
-        if (packet.Length <= 1 || packet[0] != 1 || packet.Length > 65536) return;
+        if (packet.Length <= 1 || packet[0] != (byte)HeaderType.AUDIO || packet.Length > 65536) return;
         lock (audioSync)
         {
             if (opus == null) return;

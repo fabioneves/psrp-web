@@ -97,6 +97,7 @@ namespace RemotePlay.Services.Streaming.Core
         // 状态
         private string? _state;
         private uint _tsn = 1;
+        private uint? _lastSentDataTsn;
         private uint _tagLocal = 1;
         private uint _tagRemote = 0;
         private bool _isReady = false;
@@ -417,8 +418,8 @@ namespace RemotePlay.Services.Streaming.Core
                 try
                 {
                     var disconnectData = ProtoHandler.DisconnectPayload();
-                    AdvanceSequence();
-                    await SendPacketInternalAsync(Packet.CreateData(_tsn, 1, 1, disconnectData), disconnectData.Length);
+                    var disconnectTsn = _lastSentDataTsn is { } last ? unchecked(last + 1) : _tsn;
+                    await SendPacketInternalAsync(Packet.CreateData(disconnectTsn, 1, 1, disconnectData), disconnectData.Length);
                 }
                 catch (Exception ex)
                 {
@@ -2724,6 +2725,9 @@ namespace RemotePlay.Services.Streaming.Core
                 if (_udpClient != null && _remoteEndPoint != null)
                 {
                     await _udpClient.SendAsync(packet, _remoteEndPoint);
+                    if (packet.Length >= PacketConst.HeaderLength + 8 && packet[0] == (byte)HeaderType.CONTROL &&
+                        packet[PacketConst.HeaderLength] == (byte)ChunkType.DATA)
+                        _lastSentDataTsn = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(packet.AsSpan(PacketConst.HeaderLength + 4));
                 }
             }
             catch (Exception ex)

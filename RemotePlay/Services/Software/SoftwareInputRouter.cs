@@ -5,12 +5,19 @@ using RemotePlay.Contracts.Services;
 
 namespace RemotePlay.Services.Software;
 
-public sealed class SoftwareInputRouter(IControllerService controller, Guid? sessionId)
+public sealed class SoftwareInputRouter(IControllerService controller, Guid? sessionId, bool initializing = false)
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly SoftwareInputState state = new();
     private SoftwareInputState.State previous = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+
+    public async Task BindSessionAsync(Guid? id, CancellationToken ct)
+    {
+        await gate.WaitAsync(ct);
+        try { sessionId = id; initializing = false; }
+        finally { gate.Release(); }
+    }
 
     public async Task ReceiveAsync(WebSocket socket, CancellationToken ct, bool acknowledge = false, SemaphoreSlim? sendGate = null)
     {
@@ -47,6 +54,7 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
                     continue;
                 }
                 if (heartbeat.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("Browser heartbeat expired.");
+                if (initializing) continue;
                 await ApplyAsync(source, input, ct);
             }
         }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { h264Info, supportsNativeVideo, NativeDecodeQueue } from '../web/native-decoder.js';
+import { h264Info, h265Info, supportsNativeVideo, selectVideoCodec, NativeDecodeQueue } from '../web/native-decoder.js';
 
 test('H.264 detects three/four byte Annex B start codes, SPS profile and IDR frames', () => {
   assert.deepEqual(h264Info(Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 1, 101, 128])),
@@ -18,6 +18,33 @@ test('capability probe requests hardware decoding at selected dimensions and han
   assert.equal(await supportsNativeVideo({ resolution: '720p' }, {}), false);
   platform.VideoDecoder.isConfigSupported = async () => { throw new Error('GPU unavailable'); };
   assert.equal(await supportsNativeVideo({ resolution: '720p' }, platform), false);
+});
+
+test('HEVC parses the actual SPS profile, tier, level and escaped compatibility flags', () => {
+  const sps = Buffer.from('00000001420101016000000300900000030000030078a00280802d165ba4a4c2f0168080000003008000001e0400', 'hex');
+  const info = h265Info(sps);
+  assert.equal(info.codec, 'hev1.1.6.L120.90');
+  assert.equal(info.picture, false);
+  assert.equal(info.parameters[0].type, 33);
+  assert.equal(h265Info(Uint8Array.from([0, 0, 1, 0x26, 1, 9])).key, true);
+  assert.equal(h265Info(Uint8Array.from([0, 0, 1, 0x2a, 1, 9])).key, true);
+  assert.equal(h265Info(Uint8Array.from([0, 0, 1, 2, 1, 9])).key, false);
+  assert.equal(h265Info(Uint8Array.from([0, 0, 1, 0x42, 1])).codec, undefined);
+  assert.equal(h265Info(Uint8Array.from([0, 0, 1, 0x26])).picture, false);
+});
+
+test('video selection respects Canvas, console support and ordered native fallbacks', async () => {
+  const seen = [];
+  const platform = { VideoDecoder: { isConfigSupported: async config => { seen.push(config.codec); return { supported: true }; } } };
+  const profile = { resolution: '1080p' };
+  assert.equal(await selectVideoCodec('mpeg1', profile, new Set(), 'PS5', platform), 'mpeg1');
+  assert.deepEqual(seen, []);
+  assert.equal(await selectVideoCodec('h265', profile, new Set(), 'PS5', platform), 'h265');
+  assert.deepEqual(seen, ['hev1.1.6.L123.B0']);
+  assert.equal(await selectVideoCodec('h265', profile, new Set(), 'PS4', platform), 'h264');
+  assert.equal(await selectVideoCodec('h265', profile, new Set(['h265']), 'PS5', platform), 'h264');
+  assert.equal(await selectVideoCodec('h265', profile, new Set(['h265', 'h264']), 'PS5', platform), 'mpeg1');
+  assert.equal(await selectVideoCodec('h265', profile, new Set(), 'PS5', {}), 'mpeg1');
 });
 
 test('native decode queues network bursts in order and drains when the decoder is ready', () => {

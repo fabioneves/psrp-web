@@ -1,4 +1,4 @@
-import { supportsNativeVideo } from './native-decoder.js';
+import { selectVideoCodec } from './native-decoder.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
@@ -18,7 +18,8 @@ const resetInputs = bindInputs($('controls'), message => {
 }, () => playing);
 
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
-let audio = null, quality = null, forceSoftware = false, activeCodec = 'mpeg1';
+let audio = null, quality = null, activeCodec = 'mpeg1';
+const failedCodecs = new Set();
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
@@ -26,7 +27,11 @@ const settings = () => ({ mode: $('controller-mode').value, index: $('controller
   invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked });
 const gamepads = pollGamepads(resetInputs.state, () => playing && !document.hidden && document.hasFocus(),
   settings, text => $('controller-status').textContent = text);
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'hardware-acceleration'];
+try {
+  if (localStorage.getItem('remote-play:video-mode') === null && localStorage.getItem('remote-play:hardware-acceleration') === 'false')
+    $('video-mode').value = 'mpeg1';
+} catch {}
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -42,6 +47,7 @@ for (const id of preferenceIds) {
     updateWakeLock();
   });
 }
+if (!['mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'h264';
 const query = new URLSearchParams(location.search);
 for (const [param, id] of [['controllerMode', 'controller-mode'], ['controllerIndex', 'controller-index'], ['teslaSwap', 'controller-swap'], ['bitrate', 'bitrate'], ['resolution', 'resolution-profile'], ['fps', 'fps-profile']]) {
   if (query.has(param)) {
@@ -167,7 +173,7 @@ async function refresh() {
     const detail = document.createElement('p'); detail.textContent = `${device.hostType || 'Console'} · ${device.ipAddress || 'IP unavailable'} · ${consoleStatus(device.status)}`;
     info.append(title, detail);
     const button = document.createElement('button'); button.className = 'primary'; button.textContent = 'Play'; button.disabled = !device.isRegistered;
-    button.onclick = () => run(button, () => play(device.hostId, title.textContent));
+    button.onclick = () => run(button, () => play(device.hostId, title.textContent, false, null, device.hostType));
     const wake = document.createElement('button'); wake.className = 'quiet'; wake.textContent = 'Wake up';
     wake.disabled = !device.isRegistered;
     wake.onclick = () => run(wake, async () => {
@@ -176,11 +182,24 @@ async function refresh() {
       try { await api('software/wake', { hostId: device.hostId }, { timeout: 30000 }); await refresh(); notify('Console is awake. Choose Play to connect.'); }
       finally { wake.textContent = 'Wake up'; }
     });
-    const actions = document.createElement('div'); actions.className = 'device-actions'; actions.append(wake, button);
+    const disconnect = document.createElement('button'); disconnect.className = 'quiet'; disconnect.textContent = 'Disconnect all sessions';
+    disconnect.disabled = !device.isRegistered;
+    disconnect.onclick = () => run(disconnect, () => disconnectConsole(device.hostId));
+    const actions = document.createElement('div'); actions.className = 'device-actions'; actions.append(wake, disconnect, button);
     card.append(icon, info, actions); $('devices').append(card);
   }
   void discoverConsoles();
 }
+async function disconnectConsole(hostId) {
+  if (target?.hostId === hostId) stop();
+  notify('Disconnecting all sessions for this console…');
+  const result = await api('software/disconnect', { hostId }, { timeout: 20000 });
+  await refreshActive();
+  notify(result.message);
+}
+$('disconnect-all').onclick = () => {
+  if (target?.hostId) void run($('disconnect-all'), () => disconnectConsole(target.hostId));
+};
 $('refresh').onclick = () => run($('refresh'), refresh);
 $('account-id').oninput = () => {
   const value = $('account-id').value.trim(), preview = $('account-id-preview');
@@ -272,9 +291,9 @@ async function discoverConsoles(hostIp = '') {
   }
 }
 
-async function play(hostId, title, demo = false, inputSession = null) {
+async function play(hostId, title, demo = false, inputSession = null, hostType = null) {
   stop();
-  target = { hostId, title, demo, inputSession, profile: selectedProfile() };
+  target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile() };
   quality = new AdaptiveQuality(target.profile);
   if (!inputSession) {
     try {
@@ -284,7 +303,7 @@ async function play(hostId, title, demo = false, inputSession = null) {
       audio.setDelay(Number($('audio-delay').value));
     } catch (error) { $('audio-status').textContent = error.message; }
   }
-  forceMain = false; forceSoftware = false;
+  forceMain = false; failedCodecs.clear();
   await connect();
 }
 async function connect() {
@@ -310,15 +329,17 @@ function reconnect(message, workerFailed = false) {
   $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
 }
-async function openStream({ hostId, title, demo, inputSession, profile }) {
+async function openStream({ hostId, title, demo, inputSession, hostType, profile }) {
   stop(true);
   const current = ++attempt;
-  const native = !inputSession && !forceSoftware && $('hardware-acceleration').checked && await supportsNativeVideo(profile);
+  const preferred = $('video-mode').value;
+  const codec = inputSession ? 'mpeg1' : await selectVideoCodec(preferred, profile, failedCodecs, hostType);
   if (current !== attempt) return;
-  activeCodec = native ? 'h264' : 'mpeg1';
-  $('acceleration-status').textContent = native ? 'Browser H.264 decoding · hardware preferred.' :
-    $('hardware-acceleration').checked ? (isSecureContext ? 'Using software video; browser acceleration is unavailable for this session.' :
-      'Using software video. Open the HTTPS address to enable browser acceleration.') : 'Software video selected.';
+  activeCodec = codec;
+  const label = { mpeg1: 'Canvas software video', h264: 'H.264', h265: 'H.265' }[codec];
+  $('video-mode-status').textContent = codec === preferred
+    ? (codec === 'mpeg1' ? 'Canvas software video selected.' : `${label} · hardware decoding preferred.`)
+    : `Using ${label}; the selected mode is unavailable for this browser or console.${!isSecureContext ? ' Open the HTTPS address for browser decoding.' : ''}`;
   const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile, videoCodec: activeCodec });
   if (current !== attempt) return;
   const url = new URL('/api/software/stream', location.href);
@@ -327,6 +348,7 @@ async function openStream({ hostId, title, demo, inputSession, profile }) {
   $('library').hidden = true; $('player').hidden = false; $('connecting').hidden = !!inputSession;
   $('stage').hidden = !!inputSession; document.querySelector('.stats').hidden = !!inputSession;
   $('input-only-hint').hidden = !inputSession;
+  $('disconnect-all').hidden = demo || !hostId;
   $('audio-controls').hidden = !!inputSession; $('audio-status').hidden = !!inputSession;
   $('playing-profile').append($('profile-settings'));
   $('performance-details').hidden = !!inputSession;
@@ -363,16 +385,17 @@ async function openStream({ hostId, title, demo, inputSession, profile }) {
     updateWakeLock();
     document.activeElement?.blur();
     $('player').scrollIntoView({ block: 'start' });
-  } catch (error) { if (attempt === current) { if (activeCodec === 'h264') forceSoftware = true; else forceMain = true; stop(true); throw error; } }
+  } catch (error) { if (attempt === current) { if (activeCodec !== 'mpeg1') failedCodecs.add(activeCodec); else forceMain = true; stop(true); throw error; } }
 }
 function onStreamMessage(message) {
-  if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
+  if (message.type === 'stopped') { stop(); notify(message.message); }
+  else if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
   else if (message.type === 'sync') audio?.sync(message.timestamp);
   else if (message.type === 'renderer-error') {
-    if (activeCodec === 'h264') {
+    if (activeCodec !== 'mpeg1') {
       console.warn('Native video decoder fallback:', message.message);
-      forceSoftware = true;
-      reconnect('Browser video decoding failed. Switching to software video…');
+      failedCodecs.add(activeCodec);
+      reconnect('Browser video decoding failed. Trying the next supported video mode…');
       return;
     }
     reconnect('Switching to the compatibility renderer…', true);
@@ -387,7 +410,7 @@ function onStreamMessage(message) {
     $('network').textContent = `${message.mbps.toFixed(1)} Mbps`;
     const ms = value => value == null ? '…' : `${value.toFixed(1)} ms`;
     $('timing-status').textContent = `Round trip ${ms(message.rttMs)} · delivery estimate ${ms(message.transportMs)} · server send queue ${ms(message.serverQueueMs)} · ready-to-canvas ${ms(message.videoAgeMs)}`;
-    $('render-status').textContent = `Decode ${ms(message.codecMs)} · color ${ms(message.colorMs)} (${message.pixelEngine}) · draw ${ms(message.drawMs)} · canvas queue ${ms(message.queueMs)} · ${message.droppedFrames} superseded frames`;
+    $('render-status').textContent = `Decode ${ms(message.nativeDecodeMs ?? message.codecMs)} · color ${ms(message.colorMs)} (${message.pixelEngine}) · draw ${ms(message.drawMs)} · canvas queue ${ms(message.queueMs)} · ${message.droppedFrames} superseded frames`;
     $('timing-status').dataset.metrics = JSON.stringify(message);
     $('resolution').textContent = `${message.width} × ${message.height}`;
     $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}`;
@@ -513,7 +536,7 @@ $('apply-profile').onclick = () => {
   changeProfile(selectedProfile(), 'Manual profile selected');
 };
 
-$('hardware-acceleration').addEventListener('change', () => {
-  forceSoftware = false;
-  if (target && !target.inputSession) { retry.reset(); reconnect('Applying video acceleration setting…'); }
+$('video-mode').addEventListener('change', () => {
+  failedCodecs.clear();
+  if (target && !target.inputSession) { retry.reset(); reconnect('Applying video mode…'); }
 });

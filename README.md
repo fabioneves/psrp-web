@@ -199,28 +199,47 @@ During playback, expand **Playback timing and quality** for separate processing 
 
 The renderer decodes reference frames but draws only the newest pending image on each display tick. It avoids converting frames that would immediately be overwritten. If browser animation callbacks stall during fullscreen or a display change, presentation falls back to a timer without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
-## Video hardware acceleration
+## Video modes
 
-**Video hardware acceleration** is on by default in Stream settings and saved in
-this browser. Changing it during playback reconnects with the selected mode.
-With it enabled, supported secure browsers use WebCodecs H.264 decoding with
-`prefer-hardware`. The server remuxes the console's H.264 into MPEG-TS without
-video decoding, scaling or re-encoding. Resolution, frame rate and bitrate are
-requested from the console; actual output is reported in playback statistics.
-Console video requests currently cap bitrate at 15 Mbps; higher slider values
-affect only the software MPEG-1 output. Audio and input use the same paths in
-both modes.
+**Video mode** in Stream settings offers three choices, saved per browser:
 
-Unsupported browsers, ordinary LAN HTTP pages, and failed native decoders fall
-back to the software MPEG-1 canvas path. Use HTTPS (or localhost) for browser
-hardware decoding. Unchecking the option forces the existing software path.
-The preference remains enabled after an automatic fallback so the next Play can
-try acceleration again.
+| Mode | Server work | Browser work |
+| --- | --- | --- |
+| Canvas · software | Decode H.264, encode MPEG-1 | Software WASM decoding and Canvas 2D |
+| H.264 · browser decoding (default) | Copy H.264 into MPEG-TS | WebCodecs decoding and Canvas 2D |
+| H.265 · PS5, browser decoding | Request PS5 HEVC SDR, copy into MPEG-TS | WebCodecs HEVC decoding and Canvas 2D |
 
-The UI says **hardware preferred** because the browser controls which decoder it
-actually uses: the [WebCodecs specification](https://www.w3.org/TR/webcodecs/#hardware-acceleration)
-defines this as a preference, not a guarantee. No GPU is required on the Docker
-server. H.264 framing follows the [WebCodecs AVC registration](https://www.w3.org/TR/webcodecs-avc-codec-registration/).
+H.264 and H.265 request `prefer-hardware`. The browser decides which decoder it
+uses; this is a [WebCodecs preference](https://www.w3.org/TR/webcodecs/#hardware-acceleration),
+not a guarantee. Neither native mode decodes or re-encodes video on the server.
+Audio and input work in all three modes. No server GPU is required.
+
+Unsupported H.265 falls back to H.264, then Canvas. PS4 skips H.265. Native decoder
+failures also fall back, while retaining the saved selection for the next Play.
+Use HTTPS or localhost for WebCodecs; ordinary LAN HTTP uses Canvas. Changing modes
+while playing reconnects. An older disabled hardware-acceleration preference
+migrates to Canvas automatically.
+
+The console receives the selected resolution, frame rate and bitrate, capped at
+15 Mbps. Higher bitrate settings only affect the Canvas MPEG-1 output. Playback
+statistics report actual output. H.265 requires browser HEVC support, which varies
+by device. Its Annex B stream includes VPS/SPS/PPS on keyframes as required by the
+[WebCodecs HEVC registration](https://www.w3.org/TR/webcodecs-hevc-codec-registration/).
+
+## Disconnecting sessions
+
+**Disconnect all sessions** on a paired console card or in the player stops this
+server's viewer and attached controllers for that console, including a connection
+still starting. It revokes pending tickets and waits for server cleanup. Browsers
+receive an explicit stop signal so they do not automatically reclaim the console.
+The action requires a signed-in account paired with that console. It cannot kick
+sessions opened by other Remote Play applications.
+
+Browser heartbeats start during connection setup. An abandoned connection without
+a heartbeat expires after 10 seconds; normal disconnects release its video stream
+and console control socket. Console control-socket closure also cleans up the
+server session. A responsive browser watching without pressing buttons stays
+connected.
 
 ## Audio
 

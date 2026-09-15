@@ -12,34 +12,59 @@ async function register(page, suffix = '?mainThread=1') {
   await page.locator('#stream-settings > summary').click();
 }
 
-async function useNativeSoftwareDecoder(page, fail = false, dropOutputs = false) {
+async function useNativeSoftwareDecoder(page, fail = false, dropOutputs = false, hevcMode = null) {
   page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log(message.text()); });
-  const install = ({ fail, dropOutputs }) => {
+  const install = ({ fail, dropOutputs, hevcMode }) => {
     const Native = globalThis.VideoDecoder;
     globalThis.decoderPreferences = [];
     globalThis.nativeErrors = [];
+    globalThis.hevcChunks = [];
+    globalThis.hevcConfigurations = [];
     globalThis.VideoDecoder = class extends Native {
       constructor(options) {
         let frames = 0;
         super({ ...options,
           output(frame) { if (dropOutputs === 'all' || (dropOutputs && ++frames % 5 === 0)) frame.close(); else options.output(frame); },
           error(error) { globalThis.nativeErrors.push(error.message); options.error(error); } });
+        this.output = options.output;
       }
+      get decodeQueueSize() { return this.hevc ? 0 : super.decodeQueueSize; }
+      get state() { return this.hevc ? 'configured' : super.state; }
       decode(chunk) {
+        if (this.hevc) {
+          if (globalThis.hevcChunks.length < 20) {
+            const bytes = new Uint8Array(chunk.byteLength); chunk.copyTo(bytes);
+            const types = [];
+            for (let i = 0; i + 4 < bytes.length; i++)
+              if (bytes[i] === 0 && bytes[i + 1] === 0 && bytes[i + 2] === 1) types.push((bytes[i + 3] >> 1) & 63);
+            globalThis.hevcChunks.push({ type: chunk.type, types });
+          }
+          const canvas = new OffscreenCanvas(1280, 720);
+          canvas.getContext('2d').fillRect(0, 0, 1280, 720);
+          this.output(new VideoFrame(canvas, { timestamp: chunk.timestamp }));
+          return;
+        }
         try { super.decode(chunk); }
         catch (error) { globalThis.nativeErrors.push(error.message); throw error; }
       }
-      static isConfigSupported(config) { return Native.isConfigSupported({ ...config, hardwareAcceleration: 'prefer-software' }); }
+      static isConfigSupported(config) {
+        if (hevcMode && config.codec.startsWith('hev1.')) return Promise.resolve({ supported: hevcMode !== 'unsupported' });
+        return Native.isConfigSupported({ ...config, hardwareAcceleration: 'prefer-software' });
+      }
       configure(config) {
         globalThis.decoderPreferences.push(config.hardwareAcceleration);
+        if (hevcMode && config.codec.startsWith('hev1.')) {
+          if (hevcMode === 'fail') throw new Error('Simulated HEVC decoder failure');
+          this.hevc = true; globalThis.hevcConfigurations.push(config); return;
+        }
         if (fail) throw new Error('Simulated hardware decoder failure');
         try { super.configure({ ...config, hardwareAcceleration: 'prefer-software' }); }
         catch (error) { globalThis.nativeErrors.push(error.message); throw error; }
       }
     };
   };
-  await page.addInitScript(install, { fail, dropOutputs });
-  page.on('worker', worker => worker.evaluate(install, { fail, dropOutputs }).catch(() => {}));
+  await page.addInitScript(install, { fail, dropOutputs, hevcMode });
+  page.on('worker', worker => worker.evaluate(install, { fail, dropOutputs, hevcMode }).catch(() => {}));
 }
 
 test('native video tolerates decoder-discarded frames without mistaking timing records for a stall', async ({ page }) => {
@@ -58,22 +83,22 @@ test('native video falls back when the decoder genuinely stops producing frames'
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(60);
-  await expect(page.locator('#hardware-acceleration')).toBeChecked();
+  await expect(page.locator('#video-mode')).toHaveValue('h264');
   await page.locator('#stop').click();
 });
 
-test('acceleration defaults on, unavailable hardware falls back, and opting out survives refresh', async ({ page }) => {
+test('H.264 defaults on, unavailable decoding falls back, and Canvas survives refresh', async ({ page }) => {
   await page.addInitScript(() => { window.VideoDecoder = undefined; });
   await register(page);
-  await expect(page.locator('#hardware-acceleration')).toBeChecked();
+  await expect(page.locator('#video-mode')).toHaveValue('h264');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
-  await expect(page.locator('#acceleration-status')).toContainText('unavailable');
+  await expect(page.locator('#video-mode-status')).toContainText('unavailable');
   await page.locator('#stop').click();
-  await page.locator('#hardware-acceleration').uncheck();
+  await page.locator('#video-mode').selectOption('mpeg1');
   await page.reload();
   await page.locator('#stream-settings > summary').click();
-  await expect(page.locator('#hardware-acceleration')).not.toBeChecked();
+  await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
 });
 
 for (const resolution of ['720p', '1080p']) {
@@ -93,7 +118,7 @@ for (const resolution of ['720p', '1080p']) {
     await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(before + 60);
     await page.locator('#fullscreen').click();
     await page.locator('#performance-details > summary').click();
-    await page.locator('#hardware-acceleration').uncheck();
+    await page.locator('#video-mode').selectOption('mpeg1');
     await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
     await page.locator('#stop').click();
   });
@@ -111,7 +136,7 @@ test('native decoder failure automatically retries in software without changing 
   expect(codecs[0]).toBe('h264');
   expect(codecs.slice(1).every(codec => codec === 'mpeg1')).toBe(true);
   await expect(page.locator('#message')).toHaveText('');
-  await expect(page.locator('#hardware-acceleration')).toBeChecked();
+  await expect(page.locator('#video-mode')).toHaveValue('h264');
   await page.locator('#stop').click();
 });
 
@@ -131,4 +156,49 @@ test('native H.264 runs in the video worker with direct audio output', async ({ 
 test.afterEach(async ({ page }, testInfo) => {
   if (testInfo.status !== testInfo.expectedStatus)
     console.log('Native decoder diagnostics:', await page.evaluate(() => ({ errors: window.nativeErrors, preferences: window.decoderPreferences, message: document.getElementById('message')?.textContent })));
+});
+
+test('saved acceleration opt-out migrates to Canvas and a new codec choice survives refresh', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('remote-play:hardware-acceleration', 'false'));
+  await register(page);
+  await expect(page.getByLabel('Video mode', { exact: true })).toHaveValue('mpeg1');
+  await page.locator('#video-mode').selectOption('h265');
+  await page.reload();
+  await page.locator('#stream-settings > summary').click();
+  await expect(page.locator('#video-mode')).toHaveValue('h265');
+});
+
+for (const failure of ['unsupported', 'fail']) {
+  test(`HEVC ${failure} falls back to H.264 without changing the saved choice`, async ({ page }) => {
+    await useNativeSoftwareDecoder(page, false, false, failure);
+    await register(page);
+    await page.locator('#video-mode').selectOption('h265');
+    const codecs = [];
+    page.on('request', request => { if (request.url().includes('/api/software/tickets')) codecs.push(request.postDataJSON().videoCodec); });
+    await page.getByRole('button', { name: 'Start test stream' }).click();
+    await expect(page.locator('#engine')).toContainText('H.264', { timeout: 30000 });
+    await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(60);
+    await expect(page.locator('#video-mode')).toHaveValue('h265');
+    expect(codecs[0]).toBe(failure === 'fail' ? 'h265' : 'h264');
+    expect(codecs.at(-1)).toBe('h264');
+    await expect(page.locator('#video-mode-status')).toContainText('Using H.264');
+    await page.locator('#stop').click();
+  });
+}
+
+test('real HEVC transport reaches a stubbed WebCodecs boundary with codec configuration and keyframe parameter sets', async ({ page }) => {
+  await useNativeSoftwareDecoder(page, false, false, 'boundary');
+  await register(page);
+  await page.locator('#video-mode').selectOption('h265');
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#engine')).toContainText('H.265', { timeout: 30000 });
+  const received = await page.evaluate(() => ({ chunks: globalThis.hevcChunks, configurations: globalThis.hevcConfigurations }));
+  expect(received.configurations[0].codec).toMatch(/^hev1\.1\.6\.L\d+\.90$/);
+  expect(received.configurations[0].hardwareAcceleration).toBe('prefer-hardware');
+  const key = received.chunks.find(chunk => chunk.type === 'key');
+  expect(key.types).toEqual(expect.arrayContaining([32, 33, 34]));
+  expect(received.chunks.some(chunk => chunk.type === 'delta')).toBe(true);
+  await page.getByRole('button', { name: 'Enable sound' }).click();
+  await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
+  await page.locator('#stop').click();
 });
