@@ -27,3 +27,18 @@ test('audio queue waits for jitter buffer, plays both channels and bounds backlo
   queue.clear(); queue.read(left, right);
   assert.equal(left.at(-1), 0);
 });
+
+test('audio follows presented video, discards stale samples and holds future samples', () => {
+  const queue = new PcmQueue(48000, 40);
+  const sample = { rate: 48000, timestamp: 1000, left: new Float32Array(9600).fill(0.2), right: new Float32Array(9600).fill(-0.2) };
+  queue.push(sample); queue.sync(1190);
+  const left = new Float32Array(128), right = new Float32Array(128);
+  queue.read(left, right);
+  assert.ok(queue.trimmed >= 6240);
+  assert.ok(left[0] > 0); assert.ok(Math.abs(queue.skewMs) <= 20);
+  queue.clear(); queue.push(sample); queue.sync(940); queue.read(left, right);
+  assert.equal(left[0], 0); assert.equal(queue.length, 9600);
+  for (let i = 0; i < 50; i++) queue.read(left, right);
+  assert.ok(left[0] > 0);
+  queue.clear(); assert.equal(queue.target, null);
+});

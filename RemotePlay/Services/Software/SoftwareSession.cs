@@ -68,7 +68,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             var input = new SoftwareInputRouter(controller, sessionId);
             published = new ActiveSoftwareStream(grant, input, ct);
             active.Set(published);
-            workers = [feed, transcoder.SendAsync(socket, ct, sendGate), input.ReceiveAsync(socket, ct),
+            workers = [feed, transcoder.SendAsync(socket, ct, sendGate), input.ReceiveAsync(socket, ct, true, sendGate),
                 SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)];
             var completed = await Task.WhenAny(workers);
             await completed;
@@ -139,13 +139,17 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 var samples = new float[960 * 2];
                 for (var i = 0; i < 960; i++, sample++)
                     samples[i * 2] = samples[i * 2 + 1] = (float)(0.1 * Math.Sin(sample * 2 * Math.PI * 440 / 48000));
-                packet = SoftwareReceiver.PcmPacket(samples, 48000, 2);
+                packet = SoftwareReceiver.TimedPcmPacket(samples, 48000, 2);
             }
             else packet = await receiver.AudioPackets.ReadAsync(ct);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(1));
             await sendGate.WaitAsync(timeout.Token);
-            try { await socket.SendAsync(packet, WebSocketMessageType.Binary, true, timeout.Token); }
+            try
+            {
+                MediaPacket.MarkSent(packet);
+                await socket.SendAsync(packet, WebSocketMessageType.Binary, true, timeout.Token);
+            }
             finally { sendGate.Release(); }
         }
     }

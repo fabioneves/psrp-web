@@ -97,8 +97,15 @@ public sealed class SoftwareReceiver : IAVReceiver, IDisposable
         {
             if (opus == null) return;
             var count = opus.Decode(packet.AsSpan(1), pcmSamples.AsSpan(), pcmSamples.Length / audioChannels, false);
-            if (count > 0) audioPackets.Writer.TryWrite(PcmPacket(pcmSamples.AsSpan(0, count * audioChannels), audioRate, audioChannels));
+            if (count > 0) audioPackets.Writer.TryWrite(TimedPcmPacket(pcmSamples.AsSpan(0, count * audioChannels), audioRate, audioChannels));
         }
+    }
+
+    public static byte[] TimedPcmPacket(ReadOnlySpan<float> samples, int rate, int channels)
+    {
+        var ready = MediaPacket.Now;
+        return MediaPacket.Wrap(PcmPacket(samples, rate, channels), 2, ready,
+            ready - samples.Length * 1000.0 / (rate * channels));
     }
 
     public static byte[] PcmPacket(ReadOnlySpan<float> samples, int rate, int channels)

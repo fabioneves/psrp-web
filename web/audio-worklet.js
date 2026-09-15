@@ -1,4 +1,4 @@
-import { PcmQueue, unpackPcm } from './pcm.js';
+import { PcmQueue, unpackPcm, AUDIO_RESERVE_MS } from './pcm.js';
 
 class RemoteAudio extends AudioWorkletProcessor {
   constructor() {
@@ -16,6 +16,9 @@ class RemoteAudio extends AudioWorkletProcessor {
   }
   receive(data) {
     if (data instanceof ArrayBuffer) this.queue.push(unpackPcm(data));
+    else if (data.type === 'audio') this.queue.push({ ...unpackPcm(data.bytes), timestamp: data.timestamp });
+    else if (data.type === 'sync') this.queue.sync(data.timestamp);
+    else if (data.type === 'output-delay') this.queue.outputDelayMs = data.value;
     else if (data.type === 'reset') this.queue.clear();
     else if (data.type === 'delay') { this.queue.delayMs = data.value; this.queue.clear(); }
   }
@@ -26,7 +29,7 @@ class RemoteAudio extends AudioWorkletProcessor {
     this.samples += left.length; this.frames += left.length;
     if (this.frames >= sampleRate) {
       this.port.postMessage({ type: 'audio-stats', samples: this.samples, rms: Math.sqrt(this.energy / this.frames),
-        bufferedMs: this.queue.length / sampleRate * 1000, underruns: this.queue.underruns, engine: 'AudioWorklet' });
+        bufferedMs: this.queue.length / sampleRate * 1000, skewMs: this.queue.skewMs, lagMs: this.queue.skewMs == null ? null : AUDIO_RESERVE_MS - this.queue.skewMs + this.queue.outputDelayMs, trimmedSamples: this.queue.trimmed, underruns: this.queue.underruns, engine: 'AudioWorklet' });
       this.frames = 0; this.energy = 0;
     }
     return true;

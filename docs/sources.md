@@ -70,3 +70,14 @@ output is Web Audio/AudioWorklet, with no additional npm dependency.
 HTTPS overlay configuration follows Caddy's
 [reverse proxy documentation](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
 and [automatic HTTPS documentation](https://caddyserver.com/docs/automatic-https).
+
+## Pixel conversion and timing update
+
+`native/pixels/pixels.c` ports the arithmetic of the MIT-licensed JSMpeg Canvas2D
+converter to WASM SIMD. Preserve `third_party/jsmpeg/LICENSE` when distributing it.
+The artifact builds with the included Debian/Clang Docker toolchain; the JavaScript
+converter remains available when SIMD cannot load. Intrinsics and compiler flags
+follow [Emscripten's SIMD documentation](https://emscripten.org/docs/porting/simd.html).
+FFmpeg probing/flush controls follow its
+[format options](https://ffmpeg.org/ffmpeg-formats.html#Format-Options); startup and
+throughput behavior are measured with the project's actual pinned image contents.

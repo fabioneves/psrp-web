@@ -1,0 +1,33 @@
+{
+  "measuredAt": "2026-09-15T16:05:36.608Z",
+  "results": [
+    {
+      "width": 1280,
+      "height": 720,
+      "engine": "JavaScript",
+      "medianMs": 1.4529330000000016,
+      "p95Ms": 1.5427519999999788
+    },
+    {
+      "width": 1280,
+      "height": 720,
+      "engine": "WebAssembly including plane copies",
+      "medianMs": 0.5614889999999946,
+      "p95Ms": 0.5739299999999616
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "engine": "JavaScript",
+      "medianMs": 3.308856999999989,
+      "p95Ms": 3.5951630000000705
+    },
+    {
+      "width": 1920,
+      "height": 1080,
+      "engine": "WebAssembly including plane copies",
+      "medianMs": 1.3566809999999805,
+      "p95Ms": 1.4222740000000158
+    }
+  ]
+}

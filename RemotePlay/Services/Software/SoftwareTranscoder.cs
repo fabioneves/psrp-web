@@ -20,8 +20,10 @@ public sealed class SoftwareTranscoder : IDisposable
         var profile = VideoProfile.Create(resolution, fps);
         var threads = int.TryParse(Environment.GetEnvironmentVariable("ENCODER_THREADS"), out var configured)
             ? Math.Clamp(configured, 1, 16).ToString() : "4";
-        return ["-hide_banner", "-loglevel", "error", "-hwaccel", "none", "-threads", threads,
-            "-fflags", "+nobuffer", "-flags", "low_delay", "-probesize", "32768", "-analyzeduration", "0",
+        var decoderThreads = int.TryParse(Environment.GetEnvironmentVariable("DECODER_THREADS"), out var decoded)
+            ? Math.Clamp(decoded, 1, 16).ToString() : "1";
+        return ["-hide_banner", "-loglevel", "error", "-hwaccel", "none", "-threads", decoderThreads,
+            "-flags", "low_delay", "-probesize", "32768", "-analyzeduration", "0",
             "-f", "h264", "-r", profile.Fps.ToString(), "-i", "pipe:0", "-an", "-sn", "-dn",
             "-vf", $"scale={profile.Width}:{profile.Height}:flags=fast_bilinear", "-c:v", "mpeg1video", "-threads", threads,
             "-r", profile.Fps.ToString(), "-b:v", $"{bitrateKbps}k", "-maxrate", $"{bitrateKbps}k", "-bufsize", $"{bitrateKbps}k",
@@ -66,16 +68,21 @@ public sealed class SoftwareTranscoder : IDisposable
 
     public async Task SendAsync(WebSocket socket, CancellationToken ct, SemaphoreSlim? sendGate = null)
     {
-        var buffer = new byte[188 * 64];
+        var buffer = new byte[MediaPacket.HeaderSize + 188 * 64];
         while (true)
         {
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(15));
-            var count = await process.StandardOutput.BaseStream.ReadAsync(buffer, timeout.Token);
+            var count = await process.StandardOutput.BaseStream.ReadAsync(buffer.AsMemory(MediaPacket.HeaderSize), timeout.Token);
             if (count == 0) throw new IOException($"FFmpeg stopped: {await errors}");
+            var ready = MediaPacket.Now;
             timeout.CancelAfter(TimeSpan.FromSeconds(1));
             if (sendGate != null) await sendGate.WaitAsync(timeout.Token);
-            try { await socket.SendAsync(buffer.AsMemory(0, count), WebSocketMessageType.Binary, true, timeout.Token); }
+            try
+            {
+                MediaPacket.Stamp(buffer, 1, ready, ready);
+                await socket.SendAsync(buffer.AsMemory(0, count + MediaPacket.HeaderSize), WebSocketMessageType.Binary, true, timeout.Token);
+            }
             finally { sendGate?.Release(); }
         }
     }

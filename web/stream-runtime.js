@@ -1,7 +1,18 @@
 import { createDecoder } from './decoder.js';
+import { now, StreamClock, unpackMedia } from './timing.js';
 
 export async function startStream(canvas, url, report) {
-  const decoder = canvas ? await createDecoder(canvas, report) : null;
+  const clock = new StreamClock();
+  let videoAgeMs = null, transportMs = null, serverQueueMs = 0;
+  const decoder = canvas ? await createDecoder(canvas, message => {
+    report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs });
+    serverQueueMs = 0;
+  }, {
+    onPresent(timestamp) {
+      videoAgeMs = clock.age(timestamp);
+      report({ type: 'sync', timestamp });
+    }
+  }) : null;
   const socket = new WebSocket(url);
   socket.binaryType = 'arraybuffer';
   let stopped = false;
@@ -15,25 +26,27 @@ export async function startStream(canvas, url, report) {
   };
   const fail = message => { report({ type: 'error', message }); close(); };
   const heartbeat = setInterval(() => {
-    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping' }));
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping', clientTime: now() }));
     if (socket.bufferedAmount > 65536) fail('Input connection is falling behind. Reconnecting…');
     if (performance.now() - lastVideo > 30000) fail('No stream response for 30 seconds. Reconnecting…');
   }, 2000);
-  socket.onopen = () => report({ type: 'connected', inputOnly: !canvas });
+  socket.onopen = () => { socket.send(JSON.stringify({ type: 'ping', clientTime: now() })); report({ type: 'connected', inputOnly: !canvas }); };
   socket.onmessage = event => {
     try {
       if (typeof event.data === 'string') {
         const message = JSON.parse(event.data);
-        if (message.type === 'pong') { lastVideo = performance.now(); return; }
+        if (message.type === 'pong') { clock.sample(message); if (!canvas) lastVideo = performance.now(); return; }
         report(message);
         if (message.type === 'error') close();
       } else {
-        const bytes = new Uint8Array(event.data);
-        if (bytes.length >= 12 && bytes[0] === 80 && bytes[1] === 67 && bytes[2] === 77 && bytes[3] === 49)
-          report({ type: 'audio', bytes: event.data });
+        const media = unpackMedia(event.data);
+        if (media.kind === 1) transportMs = clock.age(media.sent);
+        serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
+        if (media.kind === 2)
+          report({ type: 'audio', bytes: media.bytes, timestamp: media.timestamp });
         else {
           lastVideo = performance.now();
-          decoder?.write(event.data);
+          decoder?.write(media.bytes, media.timestamp);
         }
       }
     } catch (error) { fail(error.message); }

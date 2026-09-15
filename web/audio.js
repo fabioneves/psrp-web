@@ -1,4 +1,4 @@
-import { unpackPcm } from './pcm.js';
+import { unpackPcm, AUDIO_RESERVE_MS } from './pcm.js';
 
 export class AudioOutput {
   constructor(report) {
@@ -31,6 +31,7 @@ export class AudioOutput {
       this.node.onprocessorerror = () => { this.node.disconnect(); this.node = null; this.report({ type: 'audio-fallback' }); };
       this.node.connect(this.gain);
       this.node.port.postMessage({ type: 'delay', value: this.delay });
+      this.node.port.postMessage({ type: 'output-delay', value: this.outputDelayMs });
     } catch { this.report({ type: 'audio-state', state: 'fallback' }); }
     finally { clearTimeout(timeout); }
   }
@@ -43,11 +44,25 @@ export class AudioOutput {
   resume() { this.context.resume().catch(() => {}); }
   volume(value) { this.gain.gain.value = value; }
   setDelay(value) { this.delay = value; this.node?.port.postMessage({ type: 'delay', value }); this.reset(); }
-  write(bytes) {
+  get outputDelayMs() { return ((this.context.outputLatency || 0) + (this.context.baseLatency || 0)) * 1000; }
+  sync(timestamp) {
+    if (!Number.isFinite(timestamp)) return;
+    this.video = { timestamp, at: this.context.currentTime };
+    this.node?.port.postMessage({ type: 'sync', timestamp });
+  }
+  write(bytes, timestamp) {
     if (this.closed || this.context.state !== 'running') return;
-    if (this.node) { this.node.port.postMessage(bytes, [bytes]); return; }
+    if (this.node) { this.node.port.postMessage({ type: 'audio', bytes, timestamp }, [bytes]); return; }
     const sample = unpackPcm(bytes);
-    if (this.next - this.context.currentTime > 0.5) this.reset();
+    const time = this.context.currentTime;
+    const synced = this.video && time - this.video.at < 0.5 && Number.isFinite(timestamp);
+    const desired = synced ? this.video.at + (timestamp - this.video.timestamp + AUDIO_RESERVE_MS) / 1000 : null;
+    const duration = sample.left.length / sample.rate;
+    if (desired != null && desired + duration < time - 0.08) return;
+    if (this.next - time > 0.5 || (desired != null && Math.abs(this.next - desired) > 0.08)) {
+      for (const source of this.sources) source.stop();
+      this.sources.clear(); this.next = Math.max(time, desired ?? time + this.delay / 1000);
+    }
     const buffer = this.context.createBuffer(2, sample.left.length, sample.rate);
     buffer.copyToChannel(sample.left, 0); buffer.copyToChannel(sample.right, 1);
     const source = this.context.createBufferSource();
@@ -64,7 +79,7 @@ export class AudioOutput {
   reset() {
     this.node?.port.postMessage({ type: 'reset' });
     for (const source of this.sources) source.stop();
-    this.sources.clear(); this.next = 0;
+    this.sources.clear(); this.next = 0; this.video = null;
   }
   close() {
     this.closed = true; this.reset(); this.node?.disconnect(); this.node?.port.close();

@@ -16,7 +16,7 @@
    codec headers, waits for an IDR and feeds Annex B bytes to FFmpeg. Opus audio packets lose their `0x01` prefix and are CPU-decoded to PCM.
 6. FFmpeg decodes on the CPU and encodes MPEG-1 without B frames at the selected profile. Its
    MPEG-TS output is sent as binary WebSocket messages. The browser demuxes,
-   software-decodes and renders every available frame immediately.
+   software-decodes reference frames, retains one pending image and renders the newest image on each presentation tick.
 7. Socket closure, an input error, encoder failure, idle timeout or cancellation
    stops workers and child processes, stops the stream/session and releases the slot.
 
@@ -25,7 +25,7 @@
 Browser → server JSON:
 
 ```json
-{"type":"ping"}
+{"type":"ping","clientTime":1780000000000}
 {"type":"button","button":"CROSS","pressed":true}
 {"type":"stick","stick":"left","x":-1,"y":0}
 {"type":"triggers","l2":0.4,"r2":0.8}
@@ -36,12 +36,12 @@ The button names are the upstream `FeedbackEvent.ButtonType` names. `reset`
 releases buttons, centers both sticks and releases both triggers. L2/R2 update
 both the button event and analog trigger state. Directions are clamped to [-1,1].
 
-Server → browser text messages contain `type` (`status` or `error`) and `message`.
-Video binary messages contain consecutive MPEG-TS bytes, not necessarily a whole
+Server → browser text messages contain `type` (`status` or `error`) and `message`,
+or a timestamped `pong`. Every binary message starts with the RPM1 timing envelope
+described below. Video payloads contain consecutive MPEG-TS bytes, not necessarily a whole
 frame or transport packet. JSMpeg handles arbitrary chunk boundaries. Audio
-binary messages begin with ASCII `PCM1`, followed by little-endian uint32 sample
-rate and channel count, then interleaved signed 16-bit little-endian PCM. Video
-and audio sends share a semaphore: the WebSocket never has concurrent sends.
+payloads begin with ASCII `PCM1`, followed by little-endian uint32 sample
+rate and channel count, then interleaved signed 16-bit little-endian PCM. Video, audio and pong sends share a semaphore: the WebSocket never has concurrent sends.
 The worker dispatches PCM directly through a MessagePort to AudioWorklet; main-thread
 Web Audio scheduling is the fallback. Audio packets carry samples rather than
 console presentation timestamps, so exact A/V synchronization is not guaranteed.
@@ -103,3 +103,51 @@ The worklet ring holds at most half a second, with a selectable 40/120/240 ms
 startup buffer. Buffer overruns clear the backlog; underruns re-prime. Muting
 changes the output gain while draining samples. Stop closes the AudioContext,
 ports, sources and workers. No hardware audio/video codec is required.
+
+## Media-ready timing and audio alignment
+
+Every binary message has a 32-byte `RPM1` envelope: little-endian uint32 kind
+(1 MPEG-TS, 2 PCM), then float64 readiness, send and media timestamps in Unix
+milliseconds at offsets 8, 16 and 24. The payload begins at offset 32; audio retains
+its existing PCM1 payload. Video uses the time FFmpeg output became available;
+audio uses packet readiness minus its sample duration as the first-sample estimate.
+Sending stamps the time after acquiring the shared video/audio/pong send semaphore.
+
+Viewer and input-only ping replies echo clientTime and include server received/sent
+times. The client chooses the least delayed offset estimate from the latest 20
+samples; RTT excludes server processing/queue time. The browser reports media-ready
+to canvas age, estimated transport age, peak send-gate wait, and presentation wait.
+This envelope change requires reloading older clients when deploying the server.
+
+A completed video PES carries the readiness of the transport chunk that completed
+it through the decoder and newest-frame buffer. Each canvas presentation sends
+that timestamp directly to the audio worklet. The worklet advances it with its
+sample clock, keeps a 40 ms playout reserve, trims stale PCM and
+holds early PCM with a 20 ms tolerance. Reported audio output delay is included
+in the audio-lag estimate rather than used to demand playback before packets arrive. The sync anchor expires after 500 ms without
+a presentation. PCM overruns clear the bounded queue; reconnect resets both clocks.
+The scheduled Web Audio fallback uses the same timestamps to drop late packets and
+reschedule when skew exceeds 80 ms, with less precise timing during UI stalls.
+
+These clocks track server media availability, not console capture. Video timestamps
+are assigned at completed transport chunks, so encoding and PES packetization also
+limit A/V accuracy. Alignment skew is the worklet sample-head difference from the reserved
+playout target. Audio lag also includes the reserve and reported output delay. No physical speaker, scanout, console-to-server or input latency is
+measured. See optimization.md for the tradeoff and validation scope.
+
+## Rendering and automatic quality
+
+Reference decoding and pixel presentation are separate. A burst still decodes its
+references, but copies only its last image into one owned pending YUV buffer.
+Presentation uses requestAnimationFrame where available (a 60 Hz timer otherwise).
+Color conversion uses WASM SIMD with a 32 MiB fixed memory; failed capability/load
+checks select the original JavaScript converter. No GPU path is introduced.
+
+Automatic quality is opt-in. It requires three unhealthy samples after startup
+and cooldown; network queue pressure lowers bitrate before resolution, while
+browser processing cost or low presentation rate lowers resolution first. The
+floor is 360p30. Recovery requires 30 seconds of healthy samples and at least 45
+seconds since the previous change. Hidden pages reset the observation window.
+Profiles never exceed the selected ceiling. Each change uses a fresh authorized
+ticket and the existing session teardown/reconnect path; manual apply disables
+automatic changes. Profile changes therefore briefly interrupt media.

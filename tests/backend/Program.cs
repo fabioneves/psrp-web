@@ -8,6 +8,8 @@ using RemotePlay.Services.Auth;
 using Concentus;
 using Concentus.Enums;
 
+if (args.Contains("--benchmark")) { await TranscoderBenchmark.RunAsync(); return; }
+
 static void Check(bool value, string message)
 {
     if (!value) throw new Exception(message);
@@ -73,8 +75,11 @@ for (var i = 0; i < 960; i++) sine[i * 2] = sine[i * 2 + 1] = (float)(0.2 * Math
 var encodedAudio = new byte[4000];
 var encodedSize = encoder.Encode(sine, 960, encodedAudio, encodedAudio.Length);
 audioReceiver.OnAudioPacket([1, .. encodedAudio.AsSpan(0, encodedSize)]);
-Check(audioReceiver.AudioPackets.TryRead(out var pcm) && pcm.Length == 3852 && pcm.AsSpan(0, 4).SequenceEqual("PCM1"u8), "real Opus frames decode to stereo PCM transport");
-Check(pcm!.Skip(12).Any(value => value != 0), "decoded Opus contains audible samples");
+Check(audioReceiver.AudioPackets.TryRead(out var pcm) && pcm.Length == 3884 && pcm.AsSpan(0, 4).SequenceEqual("RPM1"u8) && pcm.AsSpan(32, 4).SequenceEqual("PCM1"u8), "real Opus frames decode to stereo PCM transport");
+Check(pcm!.Skip(44).Any(value => value != 0), "decoded Opus contains audible samples");
+Check(BinaryPrimitives.ReadInt32LittleEndian(pcm!.AsSpan(4)) == 2 &&
+    BinaryPrimitives.ReadDoubleLittleEndian(pcm.AsSpan(8)) - BinaryPrimitives.ReadDoubleLittleEndian(pcm.AsSpan(24)) == 20,
+    "audio transport timestamps the first sample and packet readiness separately");
 var fullHd = SoftwareTranscoder.BuildArguments(20000, "1080p", 60);
 Check(fullHd.Contains("scale=1920:1080:flags=fast_bilinear"), "1080p60 config reaches the CPU encoder");
 Check(VideoProfile.Create("540p", 30).Width == 960, "540p30 console profile resolves correctly");

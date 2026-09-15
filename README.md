@@ -103,13 +103,13 @@ flowchart LR
     UI[Touch / keyboard / gamepads] -->|WebSocket input| RP
 ```
 
-Canvas rendering by itself does not force software video decoding. The Moonlight fork receives already-decoded WebRTC frames. Here, FFmpeg explicitly uses `-hwaccel none`, and the browser decodes MPEG-1 in WebAssembly (or JavaScript), then converts pixels and writes them with `putImageData`. No HTML video element, browser media decoder, WebRTC session, WebGL renderer is created. Audio is decoded on the server and played through Web Audio.
+Canvas rendering by itself does not force software video decoding. The Moonlight fork receives already-decoded WebRTC frames. Here, FFmpeg explicitly uses `-hwaccel none`, and the browser decodes MPEG-1 in WebAssembly (or JavaScript), then converts pixels using CPU WASM SIMD (JavaScript fallback) and writes them with `putImageData`. No HTML video element, browser media decoder, WebRTC session, WebGL renderer is created. Audio is decoded on the server and played through Web Audio.
 
 The browser uses an OffscreenCanvas worker where supported. A main-thread Canvas 2D fallback supports browsers without that capability; `?mainThread=1` forces it for diagnosis. Assets, including the decoder, are served locally with no runtime CDN dependency.
 
 **Tradeoffs:** MPEG-1 requires more bandwidth than H.264 and adds a lossy encode step and CPU processing on the server. 720p60 is a requested stream format and performance target, not a guarantee on every CPU. Resolution (360p/540p/720p/1080p), frame rate (30/60) and video bitrate (3–30 Mbps in the UI) are selectable independently. A lower resolution reduces browser CPU work more directly than a lower bitrate.
 
-The test pattern travels through a real H.264 encoder, the production CPU transcoder, WebSocket transport and browser decoder. Its metrics are decoded/rendered fps, decode + pixel conversion/draw time per frame, and received bitrate. They do not measure display scanout or end-to-end controller latency.
+The test pattern travels through a real H.264 encoder, the production CPU transcoder, WebSocket transport and browser decoder. Its metrics include decoded/displayed fps, separate decode/color/draw costs, superseded frames, received bitrate and server-to-browser timing estimates. They do not measure display scanout or end-to-end controller latency.
 
 ## Controls and limits
 
@@ -136,8 +136,7 @@ network. The browser displays the transcoded output dimensions. This does not
 prove the console supplied that native resolution. HDR/HEVC output is not exposed
 by this software MPEG-1 path.
 
-`ENCODER_THREADS=4` controls FFmpeg's CPU decoder/encoder thread count (1–16).
-Increase it only if server measurements show encoding cannot keep up. The server
+`DECODER_THREADS=1` and `ENCODER_THREADS=4` independently control FFmpeg's CPU threads (each 1–16). Run the [thread benchmark](docs/optimization.md) before increasing them; extra threads can increase latency. The server
 handles H.264 decode, scaling, MPEG-1 encode, Opus decode and audio conversion.
 The browser still has to decode MPEG-1 and draw pixels; a powerful server cannot
 remove that client CPU cost. Video runs in a worker where available, and audio
@@ -146,7 +145,15 @@ scheduling. No one-second TV buffer is added to game video.
 
 Bookmarks accept `?resolution=1080p&fps=60&bitrate=20000`, `controllerMode=auto`,
 `controllerIndex=0`, `teslaSwap=on` and `mainThread=1`. Launch overrides do not
-change saved controller preferences. Settings apply on the next Play/test launch.
+change saved controller preferences. Settings apply on the next Play/test launch, or through **Apply selected profile** during playback.
+
+## Adaptive quality and performance
+
+Enable **Automatically adjust quality** to let playback reduce bitrate for network queues, or resolution for browser overload. The chosen profile is the ceiling. It keeps 60 fps where possible, uses 30 fps at the minimum resolution if necessary, and restores quality slowly after sustained healthy playback. Changes reconnect the Remote Play session briefly; attached controllers reconnect through their existing retry flow.
+
+During playback, expand **Playback timing and quality** for separate processing costs, queue delays and the actual profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
+
+The renderer decodes reference frames but draws only the newest pending image on each display tick. It avoids converting frames that would immediately be overwritten. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
 ## Audio
 
@@ -157,15 +164,12 @@ no browser codec decoder. Stereo at 48 kHz adds about **1.54 Mbps** before overh
 separate from the displayed video bitrate.
 
 Audio starts with Play. If autoplay is blocked, tap **Enable sound** or the player.
-Use **Mute**, **Volume**, and the **40/120/240 ms audio buffer** selector. The default
-is 120 ms; larger values tolerate more jitter but add sound delay. HTTPS enables
+Use **Mute**, **Volume**, and the **40/120/240 ms audio startup buffer** selector. The default is 120 ms. After priming, timestamp alignment trims stale samples or holds early audio to follow the displayed video; the selected startup buffer is not a fixed playback delay. HTTPS enables
 AudioWorklet in browsers requiring a secure context; a scheduled Web Audio
 fallback handles browsers without it. Browser UI stalls can interrupt that fallback.
 No HTML audio/video element is needed.
 
-Unlike the IPTV player's one-second audio lead, this buffer favors interactive
-latency. Audio/video alignment depends on the console, transcoding, network and
-browser output latency; it has not been calibrated on real hardware. The demo
+The worklet aligns timestamped PCM to each displayed frame using the server's media-ready clock and a small playout reserve. This is approximate A/V synchronization: upstream capture timestamps are unavailable, and the console, decoder and physical outputs add unmeasured delay. It has not been calibrated on real hardware. The demo
 includes a low-volume 440 Hz tone, and audio statistics report decoded sample
 activity, queued time and underruns. They do not measure the physical speakers.
 

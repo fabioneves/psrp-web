@@ -9,8 +9,9 @@ self.onmessage = async ({ data }) => {
       audioEnabled = data.audioEnabled;
       const { startStream } = await import('./stream-runtime.js');
       stream = await startStream(data.canvas, data.url, message => {
-        if (message.type === 'audio' && !audioEnabled) return;
-        if (message.type === 'audio' && audioPort) audioPort.postMessage(message.bytes, [message.bytes]);
+        if ((message.type === 'audio' || message.type === 'sync') && !audioEnabled) return;
+        if (message.type === 'sync' && audioPort) { audioPort.postMessage(message); return; }
+        if (message.type === 'audio' && audioPort) audioPort.postMessage(message, [message.bytes]);
         else if (message.type === 'audio') postMessage(message, [message.bytes]);
         else postMessage(message);
       });

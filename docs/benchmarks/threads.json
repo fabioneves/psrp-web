@@ -1,0 +1,102 @@
+{
+  "measuredAt": "2026-09-15T16:16:12.0213525+00:00",
+  "profile": "1080p60",
+  "results": [
+    {
+      "decoderThreads": 1,
+      "encoderThreads": 1,
+      "throughputFps": 230.436560142886,
+      "firstVideoMs": 53.4359,
+      "elapsedMs": 1041.5014,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 1,
+      "encoderThreads": 2,
+      "throughputFps": 287.2514571727826,
+      "firstVideoMs": 60.9722,
+      "elapsedMs": 835.5049,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 1,
+      "encoderThreads": 4,
+      "throughputFps": 328.38116296188866,
+      "firstVideoMs": 68.6255,
+      "elapsedMs": 730.858,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 1,
+      "encoderThreads": 8,
+      "throughputFps": 376.4436023958753,
+      "firstVideoMs": 64.3421,
+      "elapsedMs": 637.5457,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 2,
+      "encoderThreads": 1,
+      "throughputFps": 218.8859743613386,
+      "firstVideoMs": 48.4933,
+      "elapsedMs": 1096.4613,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 2,
+      "encoderThreads": 2,
+      "throughputFps": 250.48489701313457,
+      "firstVideoMs": 66.8545,
+      "elapsedMs": 958.1416,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 2,
+      "encoderThreads": 4,
+      "throughputFps": 341.7810695725273,
+      "firstVideoMs": 65.3531,
+      "elapsedMs": 702.2039,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 2,
+      "encoderThreads": 8,
+      "throughputFps": 386.27624867821095,
+      "firstVideoMs": 69.1665,
+      "elapsedMs": 621.317,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 4,
+      "encoderThreads": 1,
+      "throughputFps": 237.83977269652922,
+      "firstVideoMs": 55.5748,
+      "elapsedMs": 1009.0827,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 4,
+      "encoderThreads": 2,
+      "throughputFps": 296.6874842384774,
+      "firstVideoMs": 66.9562,
+      "elapsedMs": 808.932,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 4,
+      "encoderThreads": 4,
+      "throughputFps": 343.8643707224705,
+      "firstVideoMs": 67.8404,
+      "elapsedMs": 697.9496,
+      "outputFrames": 240
+    },
+    {
+      "decoderThreads": 4,
+      "encoderThreads": 8,
+      "throughputFps": 414.7106865932848,
+      "firstVideoMs": 69.2121,
+      "elapsedMs": 578.7167,
+      "outputFrames": 240
+    }
+  ]
+}

@@ -115,6 +115,13 @@ test('1080p60 software profile renders with real stereo audio', async ({ page },
   await expect.poll(async () => Number(await page.locator('#fps').getAttribute('data-frames')), { timeout: 20000 }).toBeGreaterThan(600);
   const fps = Number.parseFloat(await page.locator('#fps').textContent());
   expect(fps).toBeGreaterThan(55);
+  const timing = JSON.parse(await page.locator('#timing-status').getAttribute('data-metrics'));
+  expect(timing.rttMs).toBeGreaterThanOrEqual(0);
+  expect(timing.videoAgeMs).toBeGreaterThanOrEqual(0);
+  expect(timing.videoAgeMs).toBeLessThan(250);
+  expect(timing.pixelEngine).toBe('WASM SIMD');
+  expect(Math.abs(Number(await page.locator('#audio-status').getAttribute('data-skew')))).toBeLessThanOrEqual(25);
+  await testInfo.attach('timing and rendering', { body: JSON.stringify(timing), contentType: 'application/json' });
   await testInfo.attach('1080p60 performance', { body: JSON.stringify({ fps, video: await page.locator('.stats').innerText(), audio: await page.locator('#audio-status').innerText() }), contentType: 'application/json' });
   await page.screenshot({ path: testInfo.outputPath('1080p60-audio.png') });
   const underruns = Number(await page.locator('#audio-status').getAttribute('data-underruns'));
@@ -123,6 +130,45 @@ test('1080p60 software profile renders with real stereo audio', async ({ page },
   await expect.poll(async () => Number(await page.locator('#audio-status').getAttribute('data-samples'))).toBeGreaterThan(samples + 24000);
   expect(Number(await page.locator('#audio-status').getAttribute('data-underruns'))).toBe(underruns);
   await page.getByLabel('Mute', { exact: true }).check();
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+});
+
+test('manual profile changes reconnect at 540p30 and burst frames recover with JavaScript pixels', async ({ page }) => {
+  await page.route('**/vendor/pixels.wasm', route => route.abort());
+  await register(page, '?mainThread=1');
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#connecting')).toBeHidden({ timeout: 30000 });
+  await page.getByText('Playback timing and quality', { exact: true }).click();
+  await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('540p');
+  await page.getByRole('combobox', { name: 'Frame rate', exact: true }).selectOption('30');
+  await page.getByRole('button', { name: 'Apply selected profile' }).click();
+  await expect(page.locator('#resolution')).toHaveText('960 × 540', { timeout: 30000 });
+  await expect(page.locator('#quality-status')).toContainText('Manual · active 540p30');
+  await expect(page.locator('#render-status')).toContainText('JavaScript');
+  const dropped = JSON.parse(await page.locator('#timing-status').getAttribute('data-metrics')).droppedFrames;
+  await page.evaluate(() => { const until = performance.now() + 500; while (performance.now() < until) {} });
+  await expect.poll(async () => JSON.parse(await page.locator('#timing-status').getAttribute('data-metrics')).droppedFrames).toBeGreaterThan(dropped);
+  await expect.poll(async () => parseFloat(await page.locator('#fps').textContent())).toBeGreaterThan(27);
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+});
+
+test('automatic quality responds to sustained CPU pressure and manual apply overrides it', async ({ page }) => {
+  await page.route('**/decoder.js', async route => {
+    const response = await route.fetch();
+    const script = (await response.text()).replace('codecMs: decoded ? decodeMs / decoded : 0', 'codecMs: 30');
+    await route.fulfill({ response, body: script });
+  });
+  await register(page, '?mainThread=1');
+  await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('1080p');
+  await page.getByLabel('Automatically adjust quality').check();
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
+  await expect(page.locator('#resolution')).toHaveText('1280 × 720', { timeout: 30000 });
+  await page.getByText('Playback timing and quality', { exact: true }).click();
+  await expect(page.locator('#quality-status')).toContainText('active 720p60');
+  await page.getByRole('button', { name: 'Apply selected profile' }).click();
+  await expect(page.getByLabel('Automatically adjust quality')).not.toBeChecked();
+  await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 });
 

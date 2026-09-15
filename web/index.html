@@ -64,12 +64,17 @@
           <button class="primary" type="submit">Pair console</button>
         </form>
       </div>
+      <div id="library-profile"><div id="profile-settings">
       <div class="settings-grid">
       <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>
       <label>Frame rate<select id="fps-profile"><option value="60" selected>60 fps</option><option value="30">30 fps</option></select></label>
       <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="3000">3 Mbps · low bandwidth</option><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · high quality</option><option value="30000">30 Mbps · 1080p quality</option></select></label>
       </div>
       <p class="hint">1080p depends on console support and browser CPU. Start with 720p60 and use the test stream to compare profiles.</p>
+        <label class="check"><input id="auto-quality" type="checkbox">Automatically adjust quality</label>
+        <button id="apply-profile" hidden>Apply selected profile</button>
+        <p id="quality-status" role="status">Manual quality. Your selected profile stays fixed.</p>
+      </div></div>
     </section>
 
     <section id="player" hidden>
@@ -77,11 +82,17 @@
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing software video…</div></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Software decoder</span><span id="resolution">1280 × 720 target</span></div>
+      <details id="performance-details"><summary>Playback timing and quality</summary>
+        <p id="timing-status">Measuring stream timing…</p>
+        <p id="render-status"></p>
+        <p class="hint">Delivery timing starts when media is ready on the server. A/V alignment is approximate; console capture and physical display delay are not measured.</p>
+        <div id="playing-profile"></div>
+      </details>
       <div id="audio-controls" class="settings-grid">
         <button id="enable-audio">Enable sound</button>
         <label class="check"><input id="mute" type="checkbox">Mute</label>
         <label>Volume<input id="volume" type="range" min="0" max="1" step="0.05" value="1"></label>
-        <label>Audio buffer<select id="audio-delay"><option value="40">40 ms · lowest delay</option><option value="120" selected>120 ms · balanced</option><option value="240">240 ms · tolerate stalls</option></select></label>
+        <label>Audio startup buffer<select id="audio-delay"><option value="40">40 ms · lowest delay</option><option value="120" selected>120 ms · balanced</option><option value="240">240 ms · tolerate stalls</option></select></label>
       </div>
       <p id="audio-status" role="status">Sound starts with playback; a tap may be required.</p>
       <p id="controller-status" role="status"></p>

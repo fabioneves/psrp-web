@@ -1,0 +1,33 @@
+{
+  "environment": "Intel Core Ultra 9 285HX, 12 exposed CPUs, Chrome GPU disabled, local Docker synthetic input",
+  "measuredAt": "2026-09-15T16:27:53.951Z",
+  "results": {
+    "timing and rendering": {
+      "type": "stats",
+      "fps": 60.00600059433682,
+      "decodedFps": 60.00600059433682,
+      "decodeMs": 5.596666661898295,
+      "codecMs": 3.1266666571299235,
+      "colorMs": 1.5983333269755045,
+      "drawMs": 0.871666677792867,
+      "queueMs": 1,
+      "droppedFrames": 39,
+      "pixelEngine": "WASM SIMD",
+      "mbps": 20.635439541986248,
+      "totalFrames": 647,
+      "width": 1920,
+      "height": 1080,
+      "engine": "WebAssembly",
+      "videoAgeMs": 6.4501953125,
+      "transportMs": 0.5498046875,
+      "serverQueueMs": 0,
+      "rttMs": 0.800048828125
+    },
+    "1080p60 performance": {
+      "fps": 60,
+      "video": "60.0 fps\n5.6 ms / frame\n20.6 Mbps\nWebAssembly \u00b7 Canvas 2D \u00b7 worker\n1920 \u00d7 1080",
+      "audio": "AudioWorklet \u00b7 13 ms queued \u00b7 1 underruns \u00b7 audio lag estimate 69 ms"
+    }
+  },
+  "audioReserveMs": 20
+}

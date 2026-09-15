@@ -12,7 +12,7 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
     private SoftwareInputState.State previous = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    public async Task ReceiveAsync(WebSocket socket, CancellationToken ct, bool acknowledge = false)
+    public async Task ReceiveAsync(WebSocket socket, CancellationToken ct, bool acknowledge = false, SemaphoreSlim? sendGate = null)
     {
         var source = Guid.NewGuid();
         var buffer = new byte[2048];
@@ -32,7 +32,18 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
                 if (input.Type == "ping")
                 {
                     heartbeat.Restart();
-                    if (acknowledge) await socket.SendAsync("{\"type\":\"pong\"}"u8.ToArray(), WebSocketMessageType.Text, true, timeout.Token);
+                    var received = MediaPacket.Now;
+                    if (acknowledge)
+                    {
+                        if (sendGate != null) await sendGate.WaitAsync(timeout.Token);
+                        try
+                        {
+                            var pong = JsonSerializer.SerializeToUtf8Bytes(new { type = "pong", clientTime = input.ClientTime,
+                                received, sent = MediaPacket.Now });
+                            await socket.SendAsync(pong, WebSocketMessageType.Text, true, timeout.Token);
+                        }
+                        finally { sendGate?.Release(); }
+                    }
                     continue;
                 }
                 if (heartbeat.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("Browser heartbeat expired.");

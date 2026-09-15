@@ -3,6 +3,7 @@ import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
 import { AudioOutput } from './audio.js';
 import { startStream } from './stream-runtime.js';
+import { AdaptiveQuality } from './adaptive.js';
 
 const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
@@ -12,7 +13,8 @@ const resetInputs = bindInputs($('controls'), message => {
 }, () => playing);
 
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
-let audio = null;
+let audio = null, quality = null;
+const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
   swap: $('controller-swap').value, deadZone: Number($('dead-zone').value),
@@ -156,7 +158,8 @@ $('discover').onclick = () => run($('discover'), async () => {
 
 async function play(hostId, title, demo = false, inputSession = null) {
   stop();
-  target = { hostId, title, demo, inputSession };
+  target = { hostId, title, demo, inputSession, profile: selectedProfile() };
+  quality = new AdaptiveQuality(target.profile);
   if (!inputSession) {
     try {
       const output = new AudioOutput(message => { if (audio === output) onAudioMessage(message); });
@@ -191,10 +194,10 @@ function reconnect(message, workerFailed = false) {
   $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
 }
-async function openStream({ hostId, title, demo, inputSession }) {
+async function openStream({ hostId, title, demo, inputSession, profile }) {
   stop(true);
   const current = ++attempt;
-  const { ticket } = await api('software/tickets', { hostId, demo, inputSession, bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
+  const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile });
   if (current !== attempt) return;
   const url = new URL('/api/software/stream', location.href);
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -203,7 +206,12 @@ async function openStream({ hostId, title, demo, inputSession }) {
   $('stage').hidden = !!inputSession; document.querySelector('.stats').hidden = !!inputSession;
   $('input-only-hint').hidden = !inputSession;
   $('audio-controls').hidden = !!inputSession; $('audio-status').hidden = !!inputSession;
-  $('stream-title').textContent = title; $('stream-status').textContent = 'Connecting…';
+  $('playing-profile').append($('profile-settings'));
+  $('performance-details').hidden = !!inputSession;
+  $('apply-profile').hidden = !!inputSession;
+  quality?.restart();
+  updateQuality();
+  $('stream-title').textContent = demo && !inputSession ? `${profile.resolution}${profile.fps} · Browser test` : title; $('stream-status').textContent = 'Connecting…';
   $('fps').textContent = '— fps'; $('decode').textContent = '— ms / frame'; $('network').textContent = '— Mbps';
   const previous = $('screen');
   const canvas = previous.cloneNode(); previous.replaceWith(canvas);
@@ -236,7 +244,8 @@ async function openStream({ hostId, title, demo, inputSession }) {
   } catch (error) { if (attempt === current) { forceMain = true; stop(true); throw error; } }
 }
 function onStreamMessage(message) {
-  if (message.type === 'audio') audio?.write(message.bytes);
+  if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
+  else if (message.type === 'sync') audio?.sync(message.timestamp);
   else if (message.type === 'renderer-error') {
     reconnect('Switching to the compatibility renderer…', true);
   } else if (message.type === 'connected') {
@@ -248,15 +257,29 @@ function onStreamMessage(message) {
     $('fps').dataset.frames = message.totalFrames;
     $('decode').textContent = `${message.decodeMs.toFixed(1)} ms / frame`;
     $('network').textContent = `${message.mbps.toFixed(1)} Mbps`;
+    const ms = value => value == null ? '…' : `${value.toFixed(1)} ms`;
+    $('timing-status').textContent = `Round trip ${ms(message.rttMs)} · delivery estimate ${ms(message.transportMs)} · server send queue ${ms(message.serverQueueMs)} · ready-to-canvas ${ms(message.videoAgeMs)}`;
+    $('render-status').textContent = `Decode ${ms(message.codecMs)} · color ${ms(message.colorMs)} (${message.pixelEngine}) · draw ${ms(message.drawMs)} · canvas queue ${ms(message.queueMs)} · ${message.droppedFrames} superseded frames`;
+    $('timing-status').dataset.metrics = JSON.stringify(message);
     $('resolution').textContent = `${message.width} × ${message.height}`;
     $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}`;
     if (message.totalFrames) { $('connecting').hidden = true; $('stream-status').textContent = 'Playing'; }
+    if ($('auto-quality').checked && !target?.inputSession) {
+      const change = quality?.sample(message, performance.now(), !document.hidden);
+      if (change) changeProfile(change.profile, change.reason);
+    }
   } else if (message.type === 'status') $('stream-status').textContent = message.message;
-  else if (message.type === 'error' || message.type === 'closed') { reconnect(message.message); }
+  else if (message.type === 'error' || message.type === 'closed') {
+    if ($('auto-quality').checked && quality && message.message.includes('Software decoding cannot keep up')) {
+      const change = quality.change(quality.lower(true), 'Browser decoding exceeded its time limit', performance.now());
+      if (change) { changeProfile(change.profile, change.reason); return; }
+    }
+    reconnect(message.message);
+  }
 }
 function stop(preserveTarget = false) {
   attempt++;
-  if (!preserveTarget) { retry.reset(); target = null; }
+  if (!preserveTarget) { retry.reset(); target = null; quality = null; }
   if (preserveTarget) audio?.reset();
   else { audio?.close(); audio = null; }
   gamepads.reset();
@@ -272,6 +295,8 @@ function stop(preserveTarget = false) {
   stream?.close(); stream = null;
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   $('player').classList.remove('theater');
+  $('library-profile').append($('profile-settings'));
+  $('apply-profile').hidden = true;
   $('player').hidden = true;
   $('library').hidden = !token;
 }
@@ -303,7 +328,9 @@ function onAudioMessage(message) {
     worker?.postMessage({ type: 'audio-fallback' });
     $('audio-status').textContent = 'Using compatible Web Audio output.';
   } else if (message.type === 'audio-stats') {
-    $('audio-status').textContent = `${message.engine} · ${Math.round(message.bufferedMs)} ms queued · ${message.underruns} underruns`;
+    $('audio-status').textContent = `${message.engine} · ${Math.round(message.bufferedMs)} ms queued · ${message.underruns} underruns${message.skewMs == null ? '' : ` · audio lag estimate ${Math.round(message.lagMs)} ms`}`;
+    $('audio-status').dataset.skew = message.skewMs ?? '';
+    $('audio-status').dataset.trimmed = message.trimmedSamples ?? 0;
     $('audio-status').dataset.samples = message.samples;
     $('audio-status').dataset.rms = message.rms;
     $('audio-status').dataset.underruns = message.underruns;
@@ -323,4 +350,33 @@ document.addEventListener('keydown', () => { if (audio?.context.state === 'suspe
 
 $('resolution-profile').onchange = () => {
   $('bitrate').value = { '360p': '3000', '540p': '6000', '720p': '10000', '1080p': '20000' }[$('resolution-profile').value];
+};
+
+function updateQuality(reason = '') {
+  const profile = target?.profile || selectedProfile();
+  const mode = $('auto-quality').checked ? 'Automatic · selected profile is the ceiling' : 'Manual';
+  $('quality-status').textContent = `${mode} · active ${profile.resolution}${profile.fps} · ${profile.bitrateKbps / 1000} Mbps${reason ? ` · ${reason}` : ''}`;
+}
+function changeProfile(profile, reason) {
+  if (!target || target.inputSession) return;
+  target.profile = { ...profile };
+  retry.reset();
+  reconnect(`${reason}. Reconnecting with ${profile.resolution}${profile.fps}…`);
+  updateQuality(reason);
+}
+$('auto-quality').onchange = () => {
+  if (target) {
+    quality = new AdaptiveQuality(selectedProfile());
+    const selected = selectedProfile();
+    const active = target.profile;
+    if ($('auto-quality').checked && (parseInt(active.resolution) > parseInt(selected.resolution) || active.fps > selected.fps || active.bitrateKbps > selected.bitrateKbps)) {
+      changeProfile(selected, 'Automatic quality ceiling applied');
+    } else quality.current = { ...active };
+  }
+  updateQuality();
+};
+$('apply-profile').onclick = () => {
+  $('auto-quality').checked = false;
+  quality = new AdaptiveQuality(selectedProfile());
+  changeProfile(selectedProfile(), 'Manual profile selected');
 };

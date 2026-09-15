@@ -101,3 +101,34 @@ physical controllers, PlayStation playback, speaker output and A/V alignment sti
 require target-device acceptance. No test authenticates to PSN or modifies a console.
 
 ![Software 1080p60 with audio](images/1080p60-audio.png)
+
+
+## Performance and adaptive quality update (2026-09-15)
+
+The final software-only 1080p60 run reported **60.0 fps**, **5.5 ms per displayed
+frame** (3.1 ms decode/copy, 1.6 ms SIMD color conversion, 0.8 ms canvas draw), and
+**20.6 Mbps video**. Audio queued about 59 ms and reported **zero underruns** in
+this run, including the existing 500 ms main-thread stall check. A 20 ms reserve
+trial reported one underrun; the final 40 ms reserve favors continuity. Neither
+run measures physical sound or controller-to-screen latency.
+
+Thirty backend assertions, twenty JavaScript unit tests and all fourteen browser/API
+tests passed. After the final audio reserve adjustment, the 1080p60/audio and
+scheduled-audio fallback checks were rerun and passed. The burst test separately
+verified that its superseded-frame count increases after a 500 ms stall and
+playback returns to the selected 30 fps profile.
+
+New coverage includes timestamp envelopes and offset estimation, timestamped audio
+trim/hold, byte-exact SIMD conversion, newest-frame ownership, adaptive hysteresis
+and limits, manual 540p30 reconnect, and real reconnect under simulated sustained
+CPU pressure. The automatic test restores 1080p through a manual override. Existing
+software fallbacks, authorization, phone input, gamepad and cleanup tests still pass.
+
+See [measurement methods and reproduction commands](optimization.md),
+[final browser metrics](benchmarks/browser-1080p60.json),
+[earlier low-reserve trial](benchmarks/browser-low-reserve.json),
+[pixel timings](benchmarks/pixels.json) and [thread timings](benchmarks/threads.json).
+These are desktop Chrome and synthetic input results; real console/Tesla validation
+and A/V calibration are still required.
+
+![Optimized software 1080p60 playback](images/optimized-1080p60.png)
