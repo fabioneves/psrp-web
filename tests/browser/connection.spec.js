@@ -98,6 +98,7 @@ test('retry preserves fullscreen until the user disconnects', async ({ page }) =
   await expect.poll(() => pending.length).toBe(2);
   expect(await page.evaluate(() => document.fullscreenElement?.id)).toBe('player');
   await expect(page.locator('#connection-message')).toHaveText('Retrying the connection.');
+  await page.locator('#stage').dblclick();
   await page.locator('#stop').click();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement)).toBeNull();
 });

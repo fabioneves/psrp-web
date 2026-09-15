@@ -280,7 +280,7 @@ Enable **Automatically adjust quality** to let playback reduce bitrate for netwo
 
 During playback, expand **Playback timing and quality** for separate processing costs, queue delays and the actual profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
-The renderer decodes reference frames but draws only the newest pending image on each display tick. It avoids converting frames that would immediately be overwritten. If browser animation callbacks stall during fullscreen or a display change, presentation falls back to a timer without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
+Smooth frame pacing retains up to three decoded images and primes a small buffer to absorb uneven delivery. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
 ## Video modes
 
@@ -336,7 +336,7 @@ no browser codec decoder. Stereo at 48 kHz adds about **1.54 Mbps** before overh
 separate from the displayed video bitrate.
 
 Audio starts with Play. If autoplay is blocked, tap **Enable sound** or the player.
-Use **Mute**, **Volume**, and the **40/120/240 ms audio startup buffer** selector. The default is 120 ms. After priming, timestamp alignment trims stale samples or holds early audio to follow the displayed video; the selected startup buffer is not a fixed playback delay. HTTPS enables
+Use **Mute**, **Volume**, and the **40/120/240 ms audio startup buffer** selector. The default is 120 ms. After priming, gradual sample-clock correction follows the displayed video. Only large timing discontinuities trim stale samples or hold early audio; the selected startup buffer is not a fixed playback delay. HTTPS enables
 AudioWorklet in browsers requiring a secure context; a scheduled Web Audio
 fallback handles browsers without it. Browser UI stalls can interrupt that fallback.
 No HTML audio/video element is needed.
@@ -399,3 +399,16 @@ npm run build:decoder
 This assembles the checked-in JSMpeg modules. The checked-in WASM binary is extracted unchanged from the pinned upstream distribution; the original C decoder sources are included under `third_party/jsmpeg/wasm/`.
 
 See [source attribution](docs/sources.md), [architecture and protocol](docs/architecture.md), and [validation](docs/validation.md).
+
+
+## Player One interface
+
+The retro interface uses custom pixel art and self-hosted fonts. Video settings are always visible in the console library and below the player. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
+
+- **Full screen** hides app controls and statistics. Exit with Escape or double-click/double-tap on the picture. Browsers without the Fullscreen API use a viewport-filling theater view; browser chrome cannot be hidden by the app in that fallback.
+- **Touch controls** are off by default and can be enabled before fullscreen. They remain available over the video when enabled.
+- **Debug HUD** (or **Shift+D**) shows actual codec, resolution, FPS history, frame interval p95, network RTT, estimated video age, bitrate, decode/draw times and audio queue/underruns. It is also visible in fullscreen. Copy diagnostics includes timing data, not account credentials or stream tickets.
+- **Smooth** pacing trades a small video buffer for fewer dropped frames. **Responsive** minimizes delay. See [comparison and timing limits](docs/retro-player.md).
+- **Put console to sleep** requests rest mode from a paired console, then releases this server's session. It works from the library or player. An idle console uses a short authenticated control connection; an already sleeping console is left asleep. Enable network wake in the console's rest-mode settings to wake it again remotely.
+
+[Artwork provenance and generation prompt](docs/artwork.md).

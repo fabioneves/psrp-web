@@ -1,3 +1,4 @@
+import { updateHud, resetHud, copyDiagnostics } from './debug-hud.js';
 import { selectVideoCodec, nativeVideoConfig } from './native-decoder.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
@@ -20,7 +21,7 @@ const resetInputs = bindInputs($('controls'), message => {
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
 let audio = null, quality = null, activeCodec = 'mpeg1';
 const failedCodecs = new Set();
-let decoderFailure = '';
+let decoderFailure = '', sleepingHost = null;
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
@@ -32,7 +33,7 @@ try {
   if (localStorage.getItem('remote-play:video-mode') === null && localStorage.getItem('remote-play:hardware-acceleration') === 'false')
     $('video-mode').value = 'mpeg1';
 } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -92,9 +93,9 @@ async function api(path, body, options = {}) {
     return result?.data ?? result;
   } finally { clearTimeout(timeout); }
 }
-async function run(button, action) {
+async function run(button, action, clearMessage = true) {
   button.disabled = true;
-  notify('');
+  if (clearMessage) notify('');
   try { await action(); } catch (error) { notify(error.message); }
   finally { button.disabled = false; }
 }
@@ -169,7 +170,7 @@ async function refresh() {
   }
   for (const device of devices) {
     const card = document.createElement('article'); card.className = 'device'; card.dataset.hostId = device.hostId;
-    const icon = document.createElement('span'); icon.className = 'device-icon'; icon.textContent = '▥'; icon.setAttribute('aria-hidden', 'true');
+    const icon = document.createElement('span'); icon.className = 'device-icon'; icon.textContent = ''; icon.setAttribute('aria-hidden', 'true');
     const info = document.createElement('div');
     const title = document.createElement('h2'); title.textContent = device.hostName || device.hostType || 'PlayStation';
     const detail = document.createElement('p'); detail.textContent = `${device.hostType || 'Console'} · ${device.ipAddress || 'IP unavailable'} · ${consoleStatus(device.status)}`;
@@ -187,11 +188,28 @@ async function refresh() {
     const disconnect = document.createElement('button'); disconnect.className = 'quiet'; disconnect.textContent = 'Disconnect all sessions';
     disconnect.disabled = !device.isRegistered;
     disconnect.onclick = () => run(disconnect, () => disconnectConsole(device.hostId));
-    const actions = document.createElement('div'); actions.className = 'device-actions'; actions.append(wake, disconnect, button);
+    const actions = document.createElement('div'); actions.className = 'device-actions'; const sleep = document.createElement('button'); sleep.className = 'quiet'; sleep.textContent = 'Put console to sleep';
+    sleep.disabled = !device.isRegistered;
+    sleep.onclick = () => run(sleep, () => sleepConsole(device.hostId));
+    actions.append(wake, sleep, disconnect, button);
     card.append(icon, info, actions); $('devices').append(card);
   }
   void discoverConsoles();
 }
+async function sleepConsole(hostId) {
+  retry.reset();
+  notify('Sending rest-mode request…');
+  sleepingHost = hostId;
+  try {
+    const result = await api('software/sleep', { hostId }, { timeout: 30000 });
+    if (target?.hostId === hostId) stop();
+    await refresh();
+    notify(result.message);
+  } finally { sleepingHost = null; }
+}
+$('sleep-console').onclick = () => {
+  if (target?.hostId) void run($('sleep-console'), () => sleepConsole(target.hostId));
+};
 async function disconnectConsole(hostId) {
   if (target?.hostId === hostId) stop();
   notify('Disconnecting all sessions for this console…');
@@ -296,6 +314,7 @@ async function discoverConsoles(hostIp = '') {
 async function play(hostId, title, demo = false, inputSession = null, hostType = null) {
   stop();
   target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile() };
+  resetHud();
   quality = new AdaptiveQuality(target.profile);
   $('connection-message').textContent = '';
   showPlayer(target);
@@ -340,6 +359,7 @@ function failConnection(message) {
 }
 function reconnect(message, workerFailed = false) {
   if (!target) return;
+  if (sleepingHost && target.hostId === sleepingHost) { stop(); return; }
   if (workerFailed) forceMain = true;
   stop(true);
   if (!retry.schedule()) { failConnection(`${message} Automatic reconnection stopped after five attempts. Choose Try again when ready.`); return; }
@@ -353,6 +373,8 @@ function showPlayer({ hostId, title, demo, inputSession, profile }) {
   $('stage').hidden = !!inputSession; document.querySelector('.stats').hidden = !!inputSession;
   $('input-only-hint').hidden = !inputSession;
   $('disconnect-all').hidden = demo || !hostId;
+  $('sleep-console').hidden = demo || !hostId;
+  $('player').classList.toggle('input-only', !!inputSession);
   $('audio-controls').hidden = !!inputSession; $('audio-status').hidden = !!inputSession;
   if ($('profile-settings').parentElement !== $('playing-profile')) $('playing-profile').append($('profile-settings'));
   $('performance-details').hidden = !!inputSession;
@@ -399,10 +421,11 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
       const offscreen = canvas.transferControlToOffscreen();
       const audioPort = audio?.workerPort();
       worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort, videoCodec: activeCodec, hardwareAcceleration,
+        presentation: { fps: profile.fps, pacing: $('frame-pacing').value },
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {
-      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration);
+      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration, { fps: profile.fps, pacing: $('frame-pacing').value });
       if (attempt !== current) { connection.close(); return; }
       stream = connection;
     }
@@ -428,6 +451,7 @@ function onStreamMessage(message) {
     resetInputs(); gamepads.reset();
     if (message.inputOnly) $('stream-status').textContent = 'Controller connected';
   } else if (message.type === 'stats') {
+    updateHud(message, activeCodec);
     if (message.totalFrames > 600) retry.reset();
     $('fps').textContent = `${message.fps.toFixed(1)} fps`;
     $('fps').dataset.frames = message.totalFrames;
@@ -484,11 +508,45 @@ $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profi
 $('stop').onclick = () => stop();
 $('retry-stream').onclick = () => { retry.reset(); void connect(); };
 $('show-controls').onchange = () => { resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
-$('fullscreen').onclick = () => run($('fullscreen'), async () => {
+$('controls').hidden = !$('show-controls').checked;
+async function toggleFullscreen() {
   if (document.fullscreenElement) await document.exitFullscreen();
+  else if ($('player').classList.contains('theater')) $('player').classList.remove('theater');
   else {
     try { if (!$('player').requestFullscreen) throw new Error(); await $('player').requestFullscreen(); }
-    catch { $('player').classList.toggle('theater'); }
+    catch { $('player').classList.add('theater'); }
+  }
+}
+$('fullscreen').onclick = () => run($('fullscreen'), toggleFullscreen, false);
+$('hud-exit').onclick = () => {
+  if (document.fullscreenElement || $('player').classList.contains('theater')) void toggleFullscreen();
+};
+function updateDebug() {
+  $('player').classList.toggle('debug', $('debug-mode').checked);
+  $('debug-overlay').hidden = !$('debug-mode').checked;
+}
+$('debug-mode').onchange = updateDebug;
+updateDebug();
+$('copy-debug').onclick = () => run($('copy-debug'), copyDiagnostics, false);
+let lastTouch = 0;
+$('stage').addEventListener('pointerup', event => {
+  if (event.pointerType !== 'touch' || event.target.id !== 'screen') return;
+  const now = performance.now();
+  if (now - lastTouch < 350 && (document.fullscreenElement || $('player').classList.contains('theater'))) {
+    event.preventDefault(); lastTouch = 0; void toggleFullscreen();
+  } else lastTouch = now;
+});
+$('stage').ondblclick = () => {
+  if (document.fullscreenElement || $('player').classList.contains('theater')) void toggleFullscreen();
+};
+document.addEventListener('keydown', event => {
+  if (event.target.closest('input,select,textarea') || event.repeat) return;
+  if (event.code === 'Escape') $('player').classList.remove('theater');
+  if (event.shiftKey && event.code === 'KeyD' && !$('player').hidden) {
+    event.preventDefault();
+    event.stopPropagation();
+    $('debug-mode').checked = !$('debug-mode').checked;
+    $('debug-mode').dispatchEvent(new Event('change', { bubbles: true }));
   }
 });
 window.addEventListener('pagehide', () => stop());
@@ -509,6 +567,7 @@ function onAudioMessage(message) {
     worker?.postMessage({ type: 'audio-fallback' });
     $('audio-status').textContent = 'Using compatible Web Audio output.';
   } else if (message.type === 'audio-stats') {
+    updateHud(message, activeCodec);
     $('audio-status').textContent = `${message.engine} · ${Math.round(message.bufferedMs)} ms queued · ${message.underruns} underruns${message.skewMs == null ? '' : ` · audio lag estimate ${Math.round(message.lagMs)} ms`}`;
     $('audio-status').dataset.skew = message.skewMs ?? '';
     $('audio-status').dataset.trimmed = message.trimmedSamples ?? 0;
@@ -566,3 +625,34 @@ $('video-mode').addEventListener('change', () => {
   failedCodecs.clear(); decoderFailure = '';
   if (target && !target.inputSession) { retry.reset(); reconnect('Applying video mode…'); }
 });
+
+const presets = {
+  tesla: { codec: 'mpeg1', resolution: '720p', fps: 60, bitrateKbps: 10000 },
+  balanced: { codec: 'h264', resolution: '720p', fps: 60, bitrateKbps: 10000 },
+  detail: { codec: 'h264', resolution: '1080p', fps: 60, bitrateKbps: 20000 }
+};
+function savePlaybackPreferences() {
+  for (const id of preferenceIds) {
+    const element = $(id);
+    try { localStorage.setItem(`remote-play:${id}`, element.type === 'checkbox' ? element.checked : element.value); } catch {}
+  }
+  for (const button of document.querySelectorAll('[data-preset]')) {
+    const preset = presets[button.dataset.preset], selected = selectedProfile();
+    button.setAttribute('aria-pressed', String(preset.codec === $('video-mode').value && preset.resolution === selected.resolution && preset.fps === selected.fps && preset.bitrateKbps === selected.bitrateKbps));
+  }
+}
+for (const button of document.querySelectorAll('[data-preset]')) button.onclick = () => {
+  const preset = presets[button.dataset.preset];
+  $('video-mode').value = preset.codec;
+  $('resolution-profile').value = preset.resolution;
+  $('fps-profile').value = String(preset.fps);
+  $('bitrate').value = String(preset.bitrateKbps);
+  failedCodecs.clear(); decoderFailure = '';
+  savePlaybackPreferences();
+  if (target && !target.inputSession) changeProfile(selectedProfile(), 'Quick profile selected');
+  else updateQuality();
+};
+document.addEventListener('change', event => { if (preferenceIds.includes(event.target.id)) savePlaybackPreferences(); });
+savePlaybackPreferences();
+
+$('frame-pacing').onchange = () => { if (target && !target.inputSession) changeProfile(selectedProfile(), 'Frame pacing updated'); };

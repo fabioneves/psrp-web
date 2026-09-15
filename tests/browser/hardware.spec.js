@@ -9,7 +9,7 @@ async function register(page, suffix = '?mainThread=1') {
   await page.getByLabel('Password', { exact: true }).fill('LocalTestPassword_123');
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your consoles', exact: true })).toBeVisible();
-  await page.locator('#stream-settings > summary').click();
+  await expect(page.locator('#video-mode')).toBeVisible();
 }
 
 async function useNativeSoftwareDecoder(page, fail = false, dropOutputs = false, hevcMode = null) {
@@ -97,7 +97,7 @@ test('H.264 defaults on, unavailable decoding falls back, and Canvas survives re
   await page.locator('#stop').click();
   await page.locator('#video-mode').selectOption('mpeg1');
   await page.reload();
-  await page.locator('#stream-settings > summary').click();
+  await expect(page.locator('#video-mode')).toBeVisible();
   await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
 });
 
@@ -116,8 +116,8 @@ for (const resolution of ['720p', '1080p']) {
     await page.locator('#fullscreen').click();
     const before = Number(await page.locator('#fps').getAttribute('data-frames'));
     await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(before + 60);
-    await page.locator('#fullscreen').click();
-    await page.locator('#performance-details > summary').click();
+    await page.locator('#stage').dblclick();
+    await expect(page.locator('#playing-profile')).toBeVisible();
     await page.locator('#video-mode').selectOption('mpeg1');
     await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
     await page.locator('#stop').click();
@@ -164,7 +164,7 @@ test('saved acceleration opt-out migrates to Canvas and a new codec choice survi
   await expect(page.getByLabel('Video mode', { exact: true })).toHaveValue('mpeg1');
   await page.locator('#video-mode').selectOption('h265');
   await page.reload();
-  await page.locator('#stream-settings > summary').click();
+  await expect(page.locator('#video-mode')).toBeVisible();
   await expect(page.locator('#video-mode')).toHaveValue('h265');
 });
 

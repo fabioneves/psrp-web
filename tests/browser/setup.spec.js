@@ -25,7 +25,7 @@ test('simple console screen restores silently and setup fits small screens', asy
   await expect(page.locator('#library')).toBeVisible();
   await expect(page.getByText(/restoring.*session/i)).toHaveCount(0);
   await expect(page.locator('#setup-dialog')).toBeHidden();
-  await expect(page.locator('#stream-settings')).not.toHaveAttribute('open');
+  await expect(page.locator('#video-mode')).toBeVisible();
   await page.getByRole('button', { name: 'Example PS5 · Set up' }).click();
   await expect(page.locator('#setup-title')).toHaveText('Set up Example PS5');
   await expect(page.locator('#manual-pairing')).not.toHaveAttribute('open');
