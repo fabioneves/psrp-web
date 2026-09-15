@@ -5,7 +5,6 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using System.Numerics;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -133,36 +132,25 @@ namespace RemotePlay.Services.Device
             int timeoutMs = 2000,
             CancellationToken cancellationToken = default)
         {
+            if (!IPAddress.TryParse(hostIp, out var address)) throw new ArgumentException("Invalid console IP address.", nameof(hostIp));
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(Math.Clamp(timeoutMs, 100, 10000));
+            using var client = new UdpClient(address.AddressFamily);
+            await client.SendAsync(CreateDiscoveryRequest(), new IPEndPoint(address, PS5_DDP_PORT), cancellationToken);
+            await client.SendAsync(Encoding.ASCII.GetBytes("SRCH * HTTP/1.1\ndevice-discovery-protocol-version:00020020\n"), new IPEndPoint(address, PS4_DDP_PORT), cancellationToken);
             try
             {
-                var request = CreateDiscoveryRequest();
-                var response = await SendUdpRequestAsync(
-                    request, hostIp,
-                    DISCOVERY_PORT, timeoutMs,
-                    receiveData: true,
-                    cancellationToken: cancellationToken);
-
-                if (response is null)
+                while (true)
                 {
-                    _logger.LogWarning("在指定时间内未发现设备: {HostIp}", hostIp);
-                    return null;
+                    UdpReceiveResult response;
+                    try { response = await client.ReceiveAsync(deadline.Token); }
+                    catch (SocketException) { continue; }
+                    if (!response.RemoteEndPoint.Address.Equals(address) || response.RemoteEndPoint.Port is not PS4_DDP_PORT and not PS5_DDP_PORT) continue;
+                    var found = ParseDeviceResponse(response.Buffer, response.RemoteEndPoint);
+                    if (found != null) return found;
                 }
-
-                var deviceInfo = ParseDeviceResponse(response, new IPEndPoint(IPAddress.Parse(hostIp), DISCOVERY_PORT));
-
-                if (deviceInfo != null)
-                {
-                    return deviceInfo;
-                }
-
-                _logger.LogWarning("收到无效响应: {HostIp}", hostIp);
-                return null;
             }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "发现设备时发生错误: {HostIp}", hostIp);
-                throw;
-            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) { return null; }
         }
 
         public async Task<bool> WakeUpDeviceAsync(
@@ -171,35 +159,13 @@ namespace RemotePlay.Services.Device
             string hostType,
             CancellationToken cancellationToken = default)
         {
+            if (!IPAddress.TryParse(host, out var address)) throw new ArgumentException("Invalid console IP address.", nameof(host));
             var targetPort = hostType == "PS5" ? PS5_DDP_PORT : PS4_DDP_PORT;
-            var _c = FormatRegistKey(credential);
-            var message = CreateWakeUpRequest(_c);
-
-            try
-            {
-                var networkInterfaces = GetActiveNetworkInterfaces();
-
-                foreach (var networkInterface in networkInterfaces)
-                {
-                    var unicastAddresses = GetUnicastAddresses(networkInterface);
-                    foreach (var address in unicastAddresses)
-                    {
-                        var broadcast = CalculateBroadcastAddress(address.Address, address.IPv4Mask);
-                        if (broadcast is null)
-                        {
-                            continue;
-                        }
-
-                        await SendUdpRequestAsync(message, broadcast.ToString(), targetPort, receiveData: false, cancellationToken: cancellationToken);
-                    }
-                }
-                return true;
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to send WAKEUP message to {Host}:{Port}", host, targetPort);
-                return false;
-            }
+            var message = CreateWakeUpRequest(FormatRegistKey(credential));
+            if (hostType != "PS5") message = Encoding.ASCII.GetBytes(Encoding.ASCII.GetString(message).Replace("00030010", "00020020"));
+            using var client = new UdpClient(address.AddressFamily);
+            await client.SendAsync(message, new IPEndPoint(address, targetPort), cancellationToken);
+            return true;
         }
 
         private async Task<List<ConsoleInfo>> DiscoverOnNetworkAsync(IPAddress localAddress, IPAddress broadcastAddress, int timeoutMs, CancellationToken cancellationToken)
@@ -436,79 +402,14 @@ namespace RemotePlay.Services.Device
             }
         }
 
-        private async Task<byte[]?> SendUdpRequestAsync(
-            byte[] requestData,
-            string targetIp,
-            int targetPort,
-            int timeoutMs = 2000,
-            int localport = CLIENT_PORT,
-            bool receiveData = false,
-            CancellationToken cancellationToken = default)
+        public static string FormatRegistKey(string registKey)
         {
-            if (!IPAddress.TryParse(targetIp, out var targetAddress))
-                throw new ArgumentException($"无效的IP地址: {targetIp}");
-
-            var localEndPoint = new IPEndPoint(IPAddress.Any, localport);
-            using var client = new UdpClient(localEndPoint);
-            client.EnableBroadcast = true;
-
-            var targetEndPoint = new IPEndPoint(targetAddress, targetPort);
-
-            await client.SendAsync(requestData, requestData.Length, targetEndPoint);
-
-            var endTime = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-            if (receiveData)
-                while (DateTime.UtcNow < endTime && !cancellationToken.IsCancellationRequested)
-                {
-                    try
-                    {
-                        var receiveTask = client.ReceiveAsync();
-                        var delayTask = Task.Delay(Math.Max(0, (int)(endTime - DateTime.UtcNow).TotalMilliseconds), cancellationToken);
-                        var completed = await Task.WhenAny(receiveTask, delayTask);
-
-                        if (completed == receiveTask)
-                            return receiveTask.Result.Buffer;
-                        else
-                            break;
-                    }
-                    catch (SocketException)
-                    {
-                        break;
-                    }
-                }
-
-            return null;
+            var value = Encoding.ASCII.GetString(Convert.FromHexString(registKey)).TrimEnd('\0');
+            if (value.Length is < 1 or > 16 || !ulong.TryParse(value, System.Globalization.NumberStyles.AllowHexSpecifier,
+                    System.Globalization.CultureInfo.InvariantCulture, out var credential))
+                throw new ArgumentException("Invalid console registration key.", nameof(registKey));
+            return credential.ToString(System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        private string FormatRegistKey(string registKey)
-        {
-            byte[] firstDecode = HexStringToBytes(registKey);
-            string decodedString = Encoding.UTF8.GetString(firstDecode);
-            byte[] secondDecode = HexStringToBytes(decodedString);
-            if (secondDecode.Length > 0 && (secondDecode[0] & 0x80) != 0)
-            {
-                byte[] temp = new byte[secondDecode.Length + 1];
-                temp[0] = 0x00;
-                Array.Copy(secondDecode, 0, temp, 1, secondDecode.Length);
-                secondDecode = temp;
-            }
-
-            BigInteger number = new BigInteger(secondDecode, isBigEndian: true);
-
-            return number.ToString();
-        }
-
-        private static byte[] HexStringToBytes(string hex)
-        {
-            if (hex.Length % 2 != 0)
-                throw new ArgumentException("Hex string must have an even length");
-
-            byte[] bytes = new byte[hex.Length / 2];
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
-            }
-            return bytes;
-        }
     }
 }

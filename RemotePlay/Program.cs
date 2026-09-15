@@ -125,6 +125,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<RemotePlay.Services.Software.StreamTickets>();
 builder.Services.AddSingleton<RemotePlay.Services.Software.ActiveSoftwareStreams>();
 builder.Services.AddScoped<RemotePlay.Services.Software.SoftwareSession>();
+builder.Services.AddScoped<RemotePlay.Services.Software.ConsolePower>();
 #endregion
 
 // 添加SignalR服务（用于低延迟控制器输入）
@@ -306,7 +307,7 @@ app.Use(async (context, next) =>
     if (path.StartsWith("/api/") &&
         path is not "/api/auth/login" and not "/api/auth/register" and not "/api/auth/session" and not "/api/auth/logout" and not "/api/playstation/bind" and not "/api/playstation/my-devices" &&
         !path.StartsWith("/api/playstation/discover") &&
-        path is not "/api/software/tickets" and not "/api/software/stream" and not "/api/software/active" &&
+        path is not "/api/software/wake" and not "/api/software/tickets" and not "/api/software/stream" and not "/api/software/active" &&
         path is not "/api/psn/login" and not "/api/psn/account" and not "/api/psn/lookup" and not "/api/psn/pair")
     {
         context.Response.StatusCode = 404;

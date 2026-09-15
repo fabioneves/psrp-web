@@ -279,3 +279,49 @@ Both reached Sony's email sign-in screen. No credentials were entered, so this
 does not verify the later authentication step. The dialog now offers a copyable
 sign-in URL and the browser workarounds reported upstream. All four setup tests
 passed again through the public HTTPS deployment after that change.
+
+### Console wake and packet latency
+
+Keyboard input delay was reported on a computer browser. The console video reorder
+queue had two related faults: a filled gap released only one waiting packet, and
+subsequent packets could wait behind a 300 ms base timeout (up to 500 ms with
+jitter). A regression test failed on the old code when packets arrived 0, 2, 3, 1:
+packets 2 and 3 were retained after packet 1 arrived. The fixed queue immediately
+releases consecutive packets, bounds gap waiting to 4–12 ms, and rejects stale
+packets without rewinding the sequence. Tests also cover loss and 16-bit wrap.
+This bounds a server-side source of delay; it does not measure physical
+keyboard-to-screen latency or establish that every reported delay had this cause.
+
+Wake requests previously ignored the saved console IP and used only broadcasts.
+The new authenticated wake action resolves the signed-in user's paired device,
+sends a direct PS4/PS5 wake packet and waits up to 25 seconds for a ready response.
+Play uses the same wake/readiness check automatically. Registration-key parsing
+handles null padding and unsigned credentials. Direct discovery uses independent
+sockets, checks reply sources, and probes both console protocol ports. The browser
+refreshes card status from live discovery instead of retaining the pairing snapshot.
+
+UDP tests verify the destination, PS4/PS5 versions and credentials. Database/fake
+console tests verify standby → ready, already-awake behavior, device identity and
+user isolation. Browser tests exercise wake progress, timeout messages and ownership
+rejection. The real PS5 at 192.0.2.20 responded HTTP 200 Ok during diagnosis.
+
+A real console connection then reproduced `Connection refused` at the control TCP
+connection immediately after the initial request. Session TCP connections now
+retry only connection refusal, with an eight-second deadline and cancellation;
+failed handshake sockets are disposed. A local TCP test starts its listener late
+to verify retry and cancellation behavior.
+
+With the updated handshake, two consecutive real PS5 connections through
+`https://play.example.com/` reached playback. Short snapshots decoded about 60 fps
+but presented 43–55 fps over that route, with 119–123 ms round trip and roughly
+64–69 ms from server-ready media to canvas. A local connection presented about
+59 fps with 0.4 ms round trip and 17 ms ready-to-canvas. These observations show
+substantial public-route latency/bursting; they do not measure console capture,
+keyboard-to-screen delay or the user's own browser/network. No gameplay controls
+were sent. No real standby-to-awake transition was forced for testing.
+
+The broader browser run passed 26 checks but its 1080p60 synthetic check sampled
+54 fps against a >55 fps threshold. The isolated re-run passed, along with wake and live-status UI checks; no
+assertion was relaxed. Final backend tests passed 75 assertions, and the database
+integration run passed 11 assertions. The initial rate variation remains a
+reminder that brief desktop measurements are not a sustained performance guarantee.

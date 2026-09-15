@@ -563,3 +563,8 @@ footer {
   #setup-dialog { padding:20px; }
   #library>.section-heading { align-items:flex-start; gap:16px; flex-direction:column; }
 }
+
+.device { flex-wrap:wrap; }
+.device > div:not(.device-actions) { flex:1; min-width:120px; }
+.device-actions { display:flex; gap:8px; margin-left:auto; }
+.device-actions button { margin-left:0; }

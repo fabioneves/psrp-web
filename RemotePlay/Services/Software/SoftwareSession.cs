@@ -10,7 +10,7 @@ using RemotePlay.Services.Streaming.Controller;
 namespace RemotePlay.Services.Software;
 
 public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStreamingService streams,
-    IControllerService controller, ActiveSoftwareStreams active, ILogger<SoftwareSession> logger)
+    IControllerService controller, ActiveSoftwareStreams active, ConsolePower power, ILogger<SoftwareSession> logger)
 {
     public async Task RunAsync(WebSocket socket, StreamTicket grant, CancellationToken aborted)
     {
@@ -42,6 +42,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 var device = await db.UserDevices.Where(d => d.UserId == grant.UserId && d.IsActive &&
                     d.Device != null && d.Device.HostId == grant.HostId && d.Device.IsRegistered == true)
                     .Select(d => d.Device!).SingleAsync(ct);
+                await power.EnsureReadyAsync(device, message => SendStatus(socket, message, ct), ct);
                 var session = await sessions.StartSessionAsync(device.IpAddress!, new DeviceCredentials
                 {
                     HostId = device.HostId!, HostName = device.HostName!, HostIp = device.IpAddress!,
@@ -75,13 +76,13 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         }
         catch (Exception ex) when (ex is not OperationCanceledException || !aborted.IsCancellationRequested)
         {
-            logger.LogWarning("Software stream ended: {Reason}", ex.Message);
+            logger.LogWarning(ex, "Software stream ended: {Reason}", ex.Message);
             if (socket.State == WebSocketState.Open)
             {
                 lifetime.Cancel();
                 if (workers.Length > 0) await ObserveWorkers(workers);
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                try { await SendStatus(socket, "Stream stopped. Check the console, network and server logs, then reconnect.", timeout.Token, true); }
+                try { await SendStatus(socket, ex is TimeoutException ? ex.Message : "Stream stopped. Check the console, network and server logs, then reconnect.", timeout.Token, true); }
                 catch (WebSocketException) { }
                 catch (OperationCanceledException) { }
             }

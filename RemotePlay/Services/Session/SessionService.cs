@@ -391,9 +391,7 @@ namespace RemotePlay.Services.Session
 
         private async Task<RawHttpResponse> SendHttpRequestRawAsync(string host, int port, byte[] requestBytes, bool keepAlive, CancellationToken ct)
         {
-            using var client = new TcpClient();
-            client.NoDelay = true;
-            await client.ConnectAsync(host, port, ct);
+            using var client = await ConsoleSocket.ConnectAsync(host, port, ct);
             using var stream = client.GetStream();
             await stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct);
             await stream.FlushAsync(ct);
@@ -437,36 +435,38 @@ namespace RemotePlay.Services.Session
 
         private async Task<KeepAliveConnection> ConnectHttpKeepAliveAsync(string host, int port, byte[] requestBytes, CancellationToken ct)
         {
-            var client = new TcpClient();
-            client.NoDelay = true;
-            await client.ConnectAsync(host, port, ct);
-            var stream = client.GetStream();
-            await stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct);
-            await stream.FlushAsync(ct);
-
-            var headerBuffer = new List<byte>();
-            var buf = new byte[4096];
-            int headerEnd = -1;
-            while (headerEnd < 0)
+            var client = await ConsoleSocket.ConnectAsync(host, port, ct);
+            try
             {
-                int r = await stream.ReadAsync(buf, 0, buf.Length, ct);
-                if (r <= 0) break;
-                headerBuffer.AddRange(buf.AsSpan(0, r).ToArray());
-                if (headerBuffer.Count >= 4)
+                var stream = client.GetStream();
+                await stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct);
+                await stream.FlushAsync(ct);
+
+                var headerBuffer = new List<byte>();
+                var buf = new byte[4096];
+                int headerEnd = -1;
+                while (headerEnd < 0)
                 {
-                    for (int i = 0; i <= headerBuffer.Count - 4; i++)
+                    int r = await stream.ReadAsync(buf, 0, buf.Length, ct);
+                    if (r <= 0) break;
+                    headerBuffer.AddRange(buf.AsSpan(0, r).ToArray());
+                    if (headerBuffer.Count >= 4)
                     {
-                        if (headerBuffer[i] == '\r' && headerBuffer[i + 1] == '\n' && headerBuffer[i + 2] == '\r' && headerBuffer[i + 3] == '\n')
+                        for (int i = 0; i <= headerBuffer.Count - 4; i++)
                         {
-                            headerEnd = i + 4;
-                            break;
+                            if (headerBuffer[i] == '\r' && headerBuffer[i + 1] == '\n' && headerBuffer[i + 2] == '\r' && headerBuffer[i + 3] == '\n')
+                            {
+                                headerEnd = i + 4;
+                                break;
+                            }
                         }
                     }
                 }
+                var headers = Encoding.ASCII.GetString(headerBuffer.Take(headerEnd > 0 ? headerEnd : headerBuffer.Count).ToArray());
+                // 剩余部分属于第一帧数据体，保留在接收循环中继续处理
+                return new KeepAliveConnection { Client = client, HeaderText = headers };
             }
-            var headers = Encoding.ASCII.GetString(headerBuffer.Take(headerEnd > 0 ? headerEnd : headerBuffer.Count).ToArray());
-            // 剩余部分属于第一帧数据体，保留在接收循环中继续处理
-            return new KeepAliveConnection { Client = client, HeaderText = headers };
+            catch { client.Dispose(); throw; }
         }
 
         private byte[] BuildMessage(int msgType, byte[] payload, SessionCipher? cipher)

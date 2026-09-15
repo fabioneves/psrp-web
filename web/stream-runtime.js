@@ -36,6 +36,7 @@ export async function startStream(canvas, url, report) {
       if (typeof event.data === 'string') {
         const message = JSON.parse(event.data);
         if (message.type === 'pong') { clock.sample(message); if (!canvas) lastVideo = performance.now(); return; }
+        if (message.type === 'status') lastVideo = performance.now();
         report(message);
         if (message.type === 'error') close();
       } else {

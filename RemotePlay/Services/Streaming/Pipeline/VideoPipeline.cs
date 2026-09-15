@@ -57,7 +57,7 @@ namespace RemotePlay.Services.Streaming.Pipeline
             int outputCapacity = 512,
             bool enableReorder = true,
             int reorderWindowSize = 192,
-            int reorderTimeoutMs = 1000)
+            int reorderTimeoutMs = 6)
         {
             _logger = logger;
             _inputReader = inputReader;
@@ -82,8 +82,7 @@ namespace RemotePlay.Services.Streaming.Pipeline
                     HandleOrderedPacket,
                     dropCallback: OnPacketDropped,
                     maxBufferFrames: reorderWindowSize,
-                    maxGap: Math.Min(reorderWindowSize, 128), // 允许更大的gap容忍（局域网乱序可能较大）
-                    timeoutMsBase: reorderTimeoutMs); // 使用传入的超时值，不再强制限制在4-12ms
+                    timeoutMsBase: reorderTimeoutMs);
 
                 // 启动定期 Flush 任务
                 _reorderFlushTask = Task.Run(ReorderFlushLoop, _cts.Token);

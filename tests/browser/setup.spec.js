@@ -124,3 +124,42 @@ test('PSN setup endpoints require authentication and reject an invalid callback 
   expect(invalid.status()).toBe(400);
   expect((await page.request.get('/api/psn/account', { headers })).headers()['cache-control']).toBe('no-store');
 });
+
+test('paired console wake shows progress, confirms readiness and reports failure', async ({ page, request }) => {
+  expect((await request.post('/api/software/wake', { data: { hostId: 'test-console' } })).status()).toBe(401);
+  await page.route('**/api/playstation/my-devices', route => route.fulfill({ json: [{ hostId: 'test-console', hostName: 'Test PS5', hostType: 'PS5', ipAddress: '192.0.2.5', status: 'STANDBY', isRegistered: true }] }));
+  await mockDiscovery(page);
+  await register(page);
+  await page.setViewportSize({ width: 320, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  let complete;
+  await page.route('**/api/software/wake', route => new Promise(resolve => {
+    expect(route.request().postDataJSON()).toEqual({ hostId: 'test-console' });
+    complete = async (status, json) => { await route.fulfill({ status, json }); resolve(); };
+  }));
+  await page.getByRole('button', { name: 'Wake up', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Waking…', exact: true })).toBeDisabled();
+  await expect.poll(() => typeof complete).toBe('function');
+  await complete(200, { status: 'Ok' });
+  await expect(page.locator('#message')).toContainText('Console is awake');
+  complete = null;
+  await page.getByRole('button', { name: 'Wake up', exact: true }).click();
+  await expect.poll(() => typeof complete).toBe('function');
+  await complete(504, { message: 'The console did not wake. Enable network wake in Rest Mode settings.' });
+  await expect(page.locator('#message')).toContainText('The console did not wake');
+  await expect(page.getByRole('button', { name: 'Wake up', exact: true })).toBeEnabled();
+  await page.unroute('**/api/software/wake');
+  await page.getByRole('button', { name: 'Wake up', exact: true }).click();
+  await expect(page.locator('#message')).toContainText('Pair this console with your account first.');
+});
+
+test('paired cards replace saved standby status with live console state', async ({ page }) => {
+  await page.route('**/api/playstation/my-devices', route => route.fulfill({ json: [{ hostId: '001122334455', hostName: 'Test PS5', hostType: 'PS5', ipAddress: '192.0.2.5', status: 'STANDBY', isRegistered: true }] }));
+  let status = 'Ok';
+  await page.route('**/api/playstation/discover?*', route => route.fulfill({ json: [{ uuid: '001122334455', name: 'Test PS5', ip: '192.0.2.5', hostType: 'PS5', status }] }));
+  await register(page);
+  await expect(page.locator('.device p')).toContainText('Ready');
+  status = 'STANDBY';
+  await page.locator('#refresh').click();
+  await expect(page.locator('.device p')).toContainText('Rest mode');
+});

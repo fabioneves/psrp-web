@@ -9,8 +9,23 @@ using RemotePlay.Services.Software;
 namespace RemotePlay.Controllers;
 
 [ApiController, Authorize, Route("api/software")]
-public sealed class SoftwareController(StreamTickets tickets, RPContext db, SoftwareSession runner, ActiveSoftwareStreams active) : ControllerBase
+public sealed class SoftwareController(StreamTickets tickets, RPContext db, SoftwareSession runner, ActiveSoftwareStreams active, ConsolePower power) : ControllerBase
 {
+    [HttpPost("wake")]
+    public async Task<IActionResult> Wake(WakeRequest request, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var device = await power.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request.HostId, ct);
+        if (device == null) return NotFound(new { message = "Pair this console with your account first." });
+        try
+        {
+            await power.EnsureReadyAsync(device, _ => Task.CompletedTask, ct);
+            return Ok(new { hostId = device.HostId, status = device.Status });
+        }
+        catch (TimeoutException error) { return StatusCode(504, new { message = error.Message }); }
+        catch (IOException error) { return StatusCode(409, new { message = error.Message }); }
+    }
+
     [HttpPost("tickets")]
     public async Task<IActionResult> Ticket(StreamRequest request, CancellationToken ct)
     {
@@ -79,3 +94,5 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
 
 public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 30000)] int BitrateKbps = 10000,
     Guid? InputSession = null, string Resolution = "720p", int Fps = 60);
+
+public sealed record WakeRequest([Required, MaxLength(100)] string HostId);

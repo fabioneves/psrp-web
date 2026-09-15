@@ -430,7 +430,6 @@ namespace RemotePlay.Services.Streaming.AV
                     }
                 },
                 maxBufferFrames: 192,
-                maxGap: 96,
                 timeoutMsBase: 6); // 注意：新实现会将超时限制在 4-12ms 范围内
         }
 

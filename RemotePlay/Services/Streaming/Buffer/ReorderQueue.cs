@@ -10,7 +10,6 @@ namespace RemotePlay.Services.Streaming.Buffer
     /// - Small fixed-ish window (default 8)
     /// - Short adaptive timeout (clamped 4..12ms by default)
     /// - Drop-from-begin strategy to avoid large latency accumulation
-    /// - No aggressive reset; only gentle rebase on extreme gap conditions
     /// </summary>
     public sealed class ReorderQueue<T> where T : class
     {
@@ -39,7 +38,7 @@ namespace RemotePlay.Services.Streaming.Buffer
         private int _timeoutMsBase;      // base timeout in ms
         private int _timeoutMs;          // adaptive timeout used in checks
         private const int TIMEOUT_MIN = 4;
-        private const int TIMEOUT_MAX = 500;  // 允许更大的超时（局域网可能需要50-200ms）
+        private const int TIMEOUT_MAX = 12;
 
         private bool _initialized;
 
@@ -56,13 +55,9 @@ namespace RemotePlay.Services.Streaming.Buffer
 
         // thresholds for behavior
         private readonly int _maxBufferFrames;   // recommended 8
-        private readonly int _maxGap;            // recommended 12
         private readonly uint _maxResetGap;      // if needed > this, reject or rebase conservatively
 
         private readonly object _lock = new object();
-
-        // output pacing limits: 每次只输出1帧，确保输出节奏绝对稳定（避免帧率锯齿）
-        private readonly int _maxOutputPerPull = 1;
 
         public ReorderQueue(
             ILogger logger,
@@ -71,7 +66,6 @@ namespace RemotePlay.Services.Streaming.Buffer
             Action<T>? dropCallback = null,
             Func<T, bool>? isKeyFrame = null,
             int maxBufferFrames = 8,      // Balanced default
-            int maxGap = 12,
             int timeoutMsBase = 6)       // base timeout (ms)
         {
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -93,7 +87,6 @@ namespace RemotePlay.Services.Streaming.Buffer
             _timeoutMsBase = Math.Clamp(timeoutMsBase, TIMEOUT_MIN, TIMEOUT_MAX);
             _timeoutMs = _timeoutMsBase;
 
-            _maxGap = Math.Clamp(maxGap, 4, Math.Max(32, maxBufferFrames)); // 允许更大的gap容忍
             _maxResetGap = (uint)(_maxBufferFrames * 8); // 增加极端gap阈值，减少误判
 
             _initialized = false;
@@ -125,37 +118,12 @@ namespace RemotePlay.Services.Streaming.Buffer
                     // falls into current window
                     PutInSlot(seq, item, now);
                     if (seq == _baseSeq)
-                        PullLockedSingle(); // pull aggressively but 1-2 frames
+                        DrainReadyPackets();
                     return;
                 }
 
-                // older than base?
                 if (!IsNewer(seq, _baseSeq))
                 {
-                    uint gap = SequenceDistance(_baseSeq, seq);
-                    // likely wrap-around?
-                    bool likelyWrap = _baseSeq > HALF_SPACE && seq < HALF_SPACE && gap > HALF_SPACE;
-                    if (likelyWrap)
-                    {
-                        GentleRebase(seq, item, "wrap-around", now);
-                        return;
-                    }
-
-                    // 如果是小gap（可能是乱序），尝试放入窗口而不是直接丢弃
-                    if (gap < (uint)_maxGap * 2)
-                    {
-                        // 尝试放入窗口（可能是乱序到达的包）
-                        if (gap < (uint)_countSlots)
-                        {
-                            PutInSlot(seq, item, now);
-                            return;
-                        }
-                        // gap较大但仍在容忍范围内，尝试rebase
-                        GentleRebase(seq, item, "out-of-order-old", now);
-                        return;
-                    }
-
-                    // gap太大，确实是旧包：drop
                     _drop?.Invoke(item);
                     _dropped++;
                     return;
@@ -195,7 +163,7 @@ namespace RemotePlay.Services.Streaming.Buffer
                 ReserveSlotsUntil(seq, now);
                 PutInSlot(seq, item, now);
                 if (seq == _baseSeq)
-                    PullLockedSingle();
+                    DrainReadyPackets();
             }
         }
 
@@ -240,60 +208,7 @@ namespace RemotePlay.Services.Streaming.Buffer
             _countSlots = 1;
             _arrived = 1;
             _initialized = true;
-            PullLockedSingle();
-        }
-
-        private void GentleRebase(uint seq, T item, string reason, DateTime now)
-        {
-            // Only used for wrap-around or when base window is dead.
-            // Move base forward in a conservative manner; do not wipe metrics.
-            _logger.LogWarning("ReorderQueue: gentle rebase ({Reason}) {Begin} -> {Seq}", reason, _baseSeq, seq);
-
-            uint gap = SequenceDistance(_baseSeq, seq);
-            if (gap == 0)
-            {
-                // same as base
-                int idx0 = IndexForOffset(0);
-                ref Slot s0 = ref _slots[idx0];
-                bool wasOcc = s0.Occupied;
-                s0.Set(seq, item, now);
-                if (!wasOcc) _arrived++;
-                if (_countSlots == 0) _countSlots = 1;
-                PullLockedSingle();
-                return;
-            }
-
-            // if gap moderately large but < maxResetGap, advance base by gap but treat skipped frames as dropped
-            int toAdvance = (int)Math.Min((uint)_countSlots, gap);
-            for (int i = 0; i < toAdvance; i++)
-            {
-                int idx = IndexForOffset(0);
-                ref Slot s = ref _slots[idx];
-                if (s.Exists && s.Occupied)
-                {
-                    // drop them (old frames are meaningless)
-                    _drop?.Invoke(s.Item!);
-                    _dropped++;
-                    _arrived--;
-                    _processed++;
-                }
-                s.Clear();
-                _baseSeq = MaskSeq(_baseSeq + 1u);
-                _countSlots--;
-            }
-
-            if (gap > (uint)toAdvance)
-            {
-                uint remaining = gap - (uint)toAdvance;
-                _baseSeq = MaskSeq(_baseSeq + remaining);
-            }
-
-            EnsureCapacity(1);
-            int newIdx = IndexForOffset(0);
-            _slots[newIdx].Set(seq, item, now);
-            _countSlots = Math.Max(1, _countSlots);
-            _arrived++;
-            PullLockedSingle();
+            DrainReadyPackets();
         }
 
         // Reserve empty slots up to seq
@@ -396,11 +311,9 @@ namespace RemotePlay.Services.Streaming.Buffer
             }
         }
 
-        // Single-frame pulling (avoid bursts)
-        private void PullLockedSingle()
+        private void DrainReadyPackets()
         {
-            int outputs = 0;
-            while (outputs < _maxOutputPerPull && PullLocked()) outputs++;
+            while (PullLocked()) { }
         }
 
         private bool PullLocked()
@@ -418,67 +331,17 @@ namespace RemotePlay.Services.Streaming.Buffer
             return true;
         }
 
-        // Timeout scanning: only scan a few head slots and advance when expired
         private void CheckTimeoutLocked()
         {
-            if (_countSlots == 0) return;
             var now = DateTime.UtcNow;
-            int scanned = 0;
-            int removed = 0;
-            int scanLimit = Math.Min(4, _countSlots); // very small scan
-            for (int i = 0; i < scanLimit; i++)
+            while (_countSlots > 0)
             {
-                int idx = IndexForOffset(i);
-                ref Slot s = ref _slots[idx];
-
-                if (!s.Exists)
-                {
-                    scanned++;
-                    removed++;
-                    continue;
-                }
-
-                bool timedOut = false;
-                if (!s.Occupied)
-                {
-                    // reserved but never filled
-                    var elapsed = (now - s.ReservedTime).TotalMilliseconds;
-                    if (elapsed > _timeoutMs) timedOut = true;
-                }
-                else
-                {
-                    var elapsed = (now - s.ArrivalTime).TotalMilliseconds;
-                    if (elapsed > _timeoutMs) timedOut = true;
-                }
-
-                if (timedOut)
-                {
-                    if (s.Occupied)
-                    {
-                        // output late frame rather than drop? Balanced mode: output to keep continuity
-                        _output(s.Item!);
-                        _processed++;
-                        _arrived--;
-                    }
-                    else
-                    {
-                        _timeoutDropped++;
-                        _dropped++;
-                    }
-                    removed++;
-                    scanned++;
-                    continue;
-                }
-
-                // head not timed out -> stop
-                break;
-            }
-            if (removed > 0)
-            {
-                // advance by removed
-                AdvanceBaseBy(removed);
-                // after advancing, try pull few frames
-                PullLockedSingle();
+                if (PullLocked()) continue;
+                ref Slot slot = ref _slots[IndexForOffset(0)];
+                if (slot.Exists && (now - slot.ReservedTime).TotalMilliseconds <= _timeoutMs) break;
+                _timeoutDropped++;
+                _dropped++;
+                AdvanceBaseBy(1);
             }
         }
 

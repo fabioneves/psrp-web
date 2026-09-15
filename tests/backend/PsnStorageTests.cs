@@ -36,6 +36,7 @@ static class PsnStorageTests
                 var registration = new RegisterResult { Success = true, RegistData = new() { ["RP-Key"] = new string('a', 32), ["PS5-RegistKey"] = new string('b', 32), ["PS5-Mac"] = "001122334455" } };
                 var device = await pairing.SaveAsync(userId, console, registration, null, default);
                 deviceId = device.Id;
+                await ConsolePowerTests.RunAsync(db, device, check);
                 check(await db.UserDevices.AnyAsync(row => row.UserId == userId && row.DeviceId == device.Id && row.IsActive), "pairing saves the console and its user binding atomically");
                 await pairing.SaveAsync(userId, console, registration, null, default);
                 check(await db.UserDevices.CountAsync(row => row.UserId == userId) == 1, "pairing an existing console reuses its user binding");

@@ -81,7 +81,7 @@ namespace RemotePlay.Services.Streaming.Pipeline
                 outputCapacity: 512,
                 enableReorder: true,        
                 reorderWindowSize: 256,
-                reorderTimeoutMs: 300);    
+                reorderTimeoutMs: 6);
 
             _audioPipeline = new AudioPipeline(
                 loggerFactory.CreateLogger<AudioPipeline>(),

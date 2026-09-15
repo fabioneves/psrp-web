@@ -141,6 +141,11 @@ async function restoreSession() {
   finally { showAccount(); }
 }
 
+function consoleStatus(status) {
+  if (/standby/i.test(status || '')) return 'Rest mode';
+  if (/^ok$/i.test(status || '')) return 'Ready';
+  return status || 'Paired';
+}
 async function refresh() {
   await refreshActive();
   const devices = await api('playstation/my-devices');
@@ -154,15 +159,24 @@ async function refresh() {
     empty.append(title, text); $('devices').append(empty);
   }
   for (const device of devices) {
-    const card = document.createElement('article'); card.className = 'device';
+    const card = document.createElement('article'); card.className = 'device'; card.dataset.hostId = device.hostId;
     const icon = document.createElement('span'); icon.className = 'device-icon'; icon.textContent = '▥'; icon.setAttribute('aria-hidden', 'true');
     const info = document.createElement('div');
     const title = document.createElement('h2'); title.textContent = device.hostName || device.hostType || 'PlayStation';
-    const detail = document.createElement('p'); detail.textContent = `${device.hostType || 'Console'} · ${device.ipAddress || 'IP unavailable'} · ${device.status || 'Paired'}`;
+    const detail = document.createElement('p'); detail.textContent = `${device.hostType || 'Console'} · ${device.ipAddress || 'IP unavailable'} · ${consoleStatus(device.status)}`;
     info.append(title, detail);
     const button = document.createElement('button'); button.className = 'primary'; button.textContent = 'Play'; button.disabled = !device.isRegistered;
     button.onclick = () => run(button, () => play(device.hostId, title.textContent));
-    card.append(icon, info, button); $('devices').append(card);
+    const wake = document.createElement('button'); wake.className = 'quiet'; wake.textContent = 'Wake up';
+    wake.disabled = !device.isRegistered;
+    wake.onclick = () => run(wake, async () => {
+      wake.textContent = 'Waking…';
+      notify('Waking console…');
+      try { await api('software/wake', { hostId: device.hostId }, { timeout: 30000 }); await refresh(); notify('Console is awake. Choose Play to connect.'); }
+      finally { wake.textContent = 'Wake up'; }
+    });
+    const actions = document.createElement('div'); actions.className = 'device-actions'; actions.append(wake, button);
+    card.append(icon, info, actions); $('devices').append(card);
   }
   void discoverConsoles();
 }
@@ -223,7 +237,10 @@ async function discoverConsoles(hostIp = '') {
     status.textContent = consoles.length
       ? `Found ${consoles.length} console${consoles.length === 1 ? '' : 's'}. Select one to fill in its IP address.`
       : 'No consoles found by automatic discovery. Enter the console IP address above and choose Check IP address to search directly.';
+    const cards = new Map([...$('devices').children].map(card => [card.dataset.hostId, card]));
     for (const console of consoles) {
+      const card = cards.get(console.uuid);
+      if (card) card.querySelector('p').textContent = `${console.hostType || 'Console'} · ${console.ip} · ${consoleStatus(console.status)}`;
       const button = document.createElement('button'); button.type = 'button';
       button.textContent = `${console.name} · ${console.ip}`;
       button.onclick = () => {

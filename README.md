@@ -4,7 +4,7 @@ A Docker-hosted PlayStation Remote Play client with **software decoding and Canv
 
 **Default: 1280×720 at 60 fps, 10 Mbps, with stereo audio. Select up to 1080p60.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Touch, keyboard, optional gamepads and second-device input are included.
 
-The synthetic video pipeline has been tested at 60 fps in desktop Chromium with GPU acceleration disabled. **A real PlayStation and Tesla browser have not been tested here.** See [validation and performance](docs/validation.md).
+The synthetic video pipeline has been tested at 60 fps in desktop Chromium with GPU acceleration disabled. **Brief real PS5 streaming checks passed; a Tesla browser has not been tested here.** See [validation and performance](docs/validation.md).
 
 ![Software-decoded 1080p60 stream with audio](docs/images/1080p60-audio.png)
 
@@ -21,7 +21,7 @@ Open **http://localhost:8080** (or your server's IP and port).
 1. Create a local account or sign in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it.
 2. Select a nearby console, or choose **Add console** to enter its IP address.
 3. Choose **Sign in to PSN**, sign in on Sony's page, then paste its final redirect URL back into setup. The app saves and encodes your account ID. Choose **Pair automatically**; if it fails, use **Pair with a PIN** and enter the console's Link Device PIN.
-4. Click **Play**. **Stream settings** offers resolutions through 1080p60. **Start test stream** checks browser playback. **Disconnect** ends the session.
+4. Click **Play**; a console in rest mode is woken automatically before connecting. **Wake up** wakes it without starting playback. **Stream settings** offers resolutions through 1080p60. **Start test stream** checks browser playback. **Disconnect** ends the session.
 
 Manual account-ID entry and public online-name lookup are also available under PIN pairing. The public lookup provider may be unavailable; Sony sign-in does not depend on it. See [setup details and verification limits](docs/psn-setup.md).
 
@@ -56,6 +56,7 @@ The Docker server must be able to reach the console on your home network. The br
 
 - **PS5:** enable Remote Play in Settings → System → Remote Play; use Link Device for the PIN.
 - **PS4:** enable Remote Play in Settings → Remote Play Connection Settings; use Add Device for the PIN.
+- The console list refreshes its status from network discovery. Wake waits for the console to report ready and only operates on your paired consoles.
 - For wake from rest mode, enable the console's network connection and network wake options. Sony documents these in its [Remote Play setup guide](https://www.playstation.com/en-us/support/games/playstation-remote-play-on-pc-and-mac/).
 - **Sign in to PSN** fills and saves your account ID and enables automatic pairing. Your PSN password stays on Sony's page. Access/refresh tokens are encrypted on the server for pairing.
 - Alternatively, use public online-name lookup or paste a **numeric PSN account ID**; it is encoded automatically. Existing Base64 IDs from Chiaki also work.
@@ -153,6 +154,16 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 - Optional gamepads supply analog sticks/triggers and positional PlayStation buttons. Tesla virtual-controller face swaps, source preference, manual index selection and dead zones are configurable. Polling detects devices even without browser connection events; only one local gamepad is selected to suppress mirrored input.
 - No microphone, rumble, motion sensing or touchpad gestures. Touch direction buttons provide full stick deflection. Some games require features beyond these controls.
 - PSN sign-in and pinless registration use a server-side Chiaki helper. Media playback connects directly from the server to the LAN console; internet media relay is not implemented.
+
+### Reducing input delay
+
+When your browser and server are on the same LAN, use the server's local address
+and configured port to avoid routing the stream through a public proxy. For this
+workspace that is `http://192.0.2.10:18080`. Use your own server address elsewhere.
+The same database accounts and paired consoles are available, but a different
+origin needs its own sign-in. Compare **Playback timing and quality → Round trip**.
+A powerful encoder cannot remove internet routing delay. Keep 720p60 as a starting
+profile; use lower resolution if browser decoding cannot sustain the frame rate.
 
 ## Profiles and server performance
 

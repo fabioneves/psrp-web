@@ -19,6 +19,8 @@ static void Check(bool value, string message)
 if (args.Contains("--psn-storage")) { await PsnStorageTests.RunAsync(Check); return; }
 
 var clock = new TestClock();
+await ConsoleSocketTests.RunAsync(Check);
+await ReorderTests.RunAsync(Check);
 await DiscoveryTests.RunAsync(Check);
 await PsnTests.RunAsync(Check);
 var browserRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
