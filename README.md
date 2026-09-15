@@ -145,6 +145,49 @@ play.example.com {
 
 Use your actual port if changed. Keep the server on a trusted network or behind controlled access, and use HTTPS whenever credentials cross an untrusted network. The app uses the existing local-account model; account creation is open to anyone who can reach it. Database and signing-secret volumes contain sensitive registration material.
 
+### Sharing HTTPS with DDEV
+
+For the deployment at `play.example.com`, `deploy/ddev-ps5rp.yaml` adds a
+hostname-specific route to the existing DDEV Traefik router. DDEV passes this
+hostname's TLS connection to Caddy at `192.0.2.10:18443`; Caddy manages its
+public certificate and proxies the app. Other DDEV sites retain their routes and
+certificates. Keep `COMPOSE_FILE=compose.yaml:compose.https.yaml`,
+`REMOTE_PLAY_DOMAIN=play.example.com`, `HTTP_PORT=18090`, `HTTPS_PORT=18443`,
+`PORT=18080`, and `HTTP_BIND=0.0.0.0` in this deployment's `.env`.
+
+Install the DDEV configuration:
+
+```sh
+cp deploy/ddev-ps5rp.yaml ~/.ddev/traefik/custom-global-config/ps5rp.yaml
+cp deploy/ddev-static-ps5rp.yaml ~/.ddev/traefik/static_config.ps5rp.yaml
+```
+
+The dynamic route passes HTTPS to Caddy and HTTP to its redirect/challenge
+listener at port 18090. The static setting allows TLS certificate validation to
+reach Caddy through DDEV. Apply static changes during a DDEV router restart;
+DDEV merges these files during startup. For an existing router, the dynamic file
+can also be copied to `/mnt/ddev-global-cache/traefik/config/ps5rp.yaml` inside
+`ddev-router` without restarting other projects.
+See [DDEV's routing configuration](https://docs.ddev.com/en/stable/users/extend/traefik-router/)
+and [Traefik's ACME passthrough setting](https://doc.traefik.io/traefik/routing/entrypoints/#allowacmebypass).
+
+Public TCP **443 must reach `192.0.2.10:8443`**, the existing DDEV HTTPS
+listener. All hostnames share this forwarding rule. Optional public TCP 80 can
+reach DDEV's port 8080. Open `https://play.example.com/` without `:18080`.
+Forwarding public port 443 directly to Caddy would bypass DDEV's other sites.
+
+DDEV's existing wildcard development certificates suppress its own ACME issuance
+for covered hostnames, so this integration uses Caddy for certificate management.
+Verify the public certificate with `curl -f https://play.example.com/healthz` from
+a device that does not trust DDEV's development CA. Until public 443 reaches
+DDEV, certificate issuance remains pending. If public 443 is unavailable, use
+DNS-based certificate validation instead.
+
+To remove just this integration, delete `ps5rp.yaml` from the user-managed
+configuration directory and the router's config volume. Remove
+`static_config.ps5rp.yaml` and restart the DDEV router to remove the passthrough
+setting. Other DDEV routes and the app's LAN HTTP address remain available.
+
 ## How software playback works
 
 ```mermaid

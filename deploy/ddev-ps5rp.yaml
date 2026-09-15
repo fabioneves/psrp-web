@@ -1,0 +1,26 @@
+tcp:
+  routers:
+    ps5rp-https:
+      entryPoints:
+        - http-8443
+      rule: HostSNI(`play.example.com`)
+      service: ps5rp-https
+      tls:
+        passthrough: true
+  services:
+    ps5rp-https:
+      loadBalancer:
+        servers:
+          - address: 192.0.2.10:18443
+http:
+  routers:
+    ps5rp-http:
+      entryPoints:
+        - http-8080
+      rule: Host(`play.example.com`)
+      service: ps5rp-http
+  services:
+    ps5rp-http:
+      loadBalancer:
+        servers:
+          - url: http://192.0.2.10:18090
