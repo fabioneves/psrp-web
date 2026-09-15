@@ -157,22 +157,6 @@ namespace RemotePlay.Services.Streaming.AV
                 _audioReceiver.SetHeader(audioHeader);
             }
             
-            // ✅ 设置帧丢失回调：当检测到帧丢失时，通知 receiver 重置解码器
-            _audioReceiver.SetFrameLossCallback((lostFrames) =>
-            {
-                if (_receiver is WebRTCReceiver webrtcReceiver)
-                {
-                    try
-                    {
-                        webrtcReceiver.ResetAudioDecoder(lostFrames);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogError(ex, "❌ 重置音频解码器失败");
-                    }
-                }
-            });
-
             if (_cipher != null)
             {
                 if (_workerTask == null || _workerTask.IsCompleted)
@@ -284,17 +268,7 @@ namespace RemotePlay.Services.Streaming.AV
                         Array.Copy(frame, 0, packetData, 1, frame.Length);
                         try
                         {
-                            // ✅ 检测是否为IDR关键帧，优先发送
-                            bool isIdrFrame = IsIdrFrame(frame);
-                            if (isIdrFrame && _receiver is WebRTCReceiver webrtcReceiver)
-                            {
-                                // IDR帧优先发送
-                                webrtcReceiver.OnVideoPacketPriority(packetData);
-                            }
-                            else
-                            {
-                                _receiver.OnVideoPacket(packetData);
-                            }
+                            _receiver.OnVideoPacket(packetData);
                         }
                         catch (Exception ex)
                         {

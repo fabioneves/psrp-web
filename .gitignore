@@ -1,0 +1,7 @@
+**/bin/
+**/obj/
+node_modules/
+.env
+test-results/
+artifacts/
+*.user

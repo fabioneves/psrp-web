@@ -1,4 +1,4 @@
-﻿
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -965,6 +965,9 @@ namespace RemotePlay.Controllers
         [Authorize]
         public async Task<ActionResult> BindDevice([FromBody] BindDeviceRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request.AccountId) || string.IsNullOrWhiteSpace(request.Pin))
+                return BadRequest(new { message = "Account ID and console pairing PIN are required." });
+
             try
             {
                 // 获取当前用户ID

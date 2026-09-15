@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0b1017">
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <title>Canvas Remote Play</title>
+  <script src="/vendor/jsmpeg-software.js" defer></script>
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">▰</span> CANVAS <span>REMOTE PLAY</span></a>
+    <span class="mode-badge">SOFTWARE VIDEO</span>
+    <button id="logout" class="quiet" hidden>Sign out</button>
+  </header>
+  <main>
+    <section id="account" class="account-layout">
+      <div class="intro">
+        <p class="eyebrow">YOUR CONSOLE. YOUR BROWSER.</p>
+        <h1>Press play.<br>Leave the hardware behind.</h1>
+        <p>Connect to your PlayStation with a browser. Software video, a canvas screen, and controls at your fingertips.</p>
+        <div class="spec-row"><span>720p / 60 fps target</span><span>No GPU required</span><span>Silent playback</span></div>
+      </div>
+      <form id="auth-form" class="panel">
+        <p class="eyebrow">WELCOME BACK</p>
+        <h2 id="auth-title">Sign in to play</h2>
+        <label>Username or email<input id="username" name="username" autocomplete="username" required maxlength="100"></label>
+        <label id="email-label" hidden>Email<input id="email" type="email" autocomplete="email" maxlength="100"></label>
+        <label>Password<input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="100"></label>
+        <button type="submit" class="primary" id="auth-submit">Sign in</button>
+        <button type="button" id="auth-toggle" class="quiet">Create a local account</button>
+        <p class="hint">This is your server account. Use your PlayStation account ID only when pairing a console.</p>
+      </form>
+    </section>
+
+    <section id="library" hidden>
+      <div class="section-heading"><div><p class="eyebrow">READY WHEN YOU ARE</p><h1>Your consoles</h1></div><button id="refresh">Refresh</button></div>
+      <div class="library-grid">
+        <div>
+          <div id="devices" class="device-list"></div>
+          <section class="panel benchmark">
+            <span class="eyebrow">CHECK YOUR BROWSER</span>
+            <h2>Try a 720p60 test stream</h2>
+            <p>Measure software playback before connecting a console. The moving test pattern uses the same video pipeline.</p>
+            <button id="demo">Start test stream <span aria-hidden="true">↗</span></button>
+          </section>
+        </div>
+        <form id="pair-form" class="panel">
+          <p class="eyebrow">ADD A PLAYSTATION</p><h2>Pair your console</h2>
+          <p class="hint">Enable Remote Play on your console, then open Link Device to get an 8-digit PIN.</p>
+          <label>Console IP address<input id="host-ip" placeholder="192.168.1.50" required maxlength="45" autocomplete="off"></label>
+          <button type="button" id="discover" class="quiet">Find consoles on this network</button>
+          <div id="discovered" aria-live="polite"></div>
+          <label>PlayStation account ID (Base64)<input id="account-id" required placeholder="Your encoded numeric account ID" autocomplete="off"></label>
+          <label>Link Device PIN<input id="pin" required inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="8 digits" autocomplete="off"></label>
+          <button class="primary" type="submit">Pair console</button>
+        </form>
+      </div>
+      <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · highest quality</option></select></label>
+    </section>
+
+    <section id="player" hidden>
+      <div class="player-bar"><div><span class="live-dot" aria-hidden="true"></span><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div><div class="player-actions"><label class="check"><input type="checkbox" id="show-controls" checked>Touch controls</label><button id="fullscreen">Full screen</button><button id="stop" class="danger">Disconnect</button></div></div>
+      <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing software video…</div></div>
+      <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Software decoder</span><span id="resolution">1280 × 720 target</span></div>
+      <div id="controls" class="controls" aria-label="Touch controller">
+        <div><span class="control-label">D-PAD</span><div class="pad">
+          <button class="north" data-command="button:UP" aria-label="D-pad up">↑</button><button class="west" data-command="button:LEFT" aria-label="D-pad left">←</button><button class="east" data-command="button:RIGHT" aria-label="D-pad right">→</button><button class="south" data-command="button:DOWN" aria-label="D-pad down">↓</button>
+        </div></div>
+        <div><span class="control-label">MOVE · WASD</span><div class="pad">
+          <button class="north" data-command="left:y:-1" aria-label="Move forward">↑</button><button class="west" data-command="left:x:-1" aria-label="Move left">←</button><button class="east" data-command="left:x:1" aria-label="Move right">→</button><button class="south" data-command="left:y:1" aria-label="Move backward">↓</button>
+        </div></div>
+        <div class="center-controls"><div><button data-command="button:L1">L1</button><button data-command="button:L2">L2</button><button data-command="button:R2">R2</button><button data-command="button:R1">R1</button></div><div><button data-command="button:SHARE">Share</button><button data-command="button:PS">PS</button><button data-command="button:OPTIONS">Options</button></div><div><button data-command="button:L3">L3</button><button data-command="button:TOUCHPAD">Touchpad</button><button data-command="button:R3">R3</button></div></div>
+        <div><span class="control-label">LOOK · IJKL</span><div class="pad">
+          <button class="north" data-command="right:y:-1" aria-label="Look up">↑</button><button class="west" data-command="right:x:-1" aria-label="Look left">←</button><button class="east" data-command="right:x:1" aria-label="Look right">→</button><button class="south" data-command="right:y:1" aria-label="Look down">↓</button>
+        </div></div>
+        <div><span class="control-label">ACTIONS</span><div class="pad faces">
+          <button class="north triangle" data-command="button:TRIANGLE" aria-label="Triangle">△</button><button class="west square" data-command="button:SQUARE" aria-label="Square">□</button><button class="east circle" data-command="button:CIRCLE" aria-label="Circle">○</button><button class="south cross" data-command="button:CROSS" aria-label="Cross">×</button>
+        </div></div>
+      </div>
+      <details><summary>Keyboard controls</summary><p>Arrows: D-pad · WASD: move · IJKL: look · X: cross · C: circle · Z: square · V: triangle · Q/E: L1/R1 · 1/3: L2/R2 · Enter: options · Backspace: share · Space: PS · 2/4: L3/R3 · T: touchpad.</p><p>Inputs release automatically when focus is lost. Some games require touch gestures or motion sensors, which are not supported.</p></details>
+    </section>
+    <p id="message" role="status" aria-live="polite" hidden></p>
+  </main>
+  <footer><span>CANVAS REMOTE PLAY</span><span>Independent software · PS4 & PS5 · No audio</span></footer>
+</body>
+</html>

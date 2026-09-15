@@ -14,8 +14,6 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-builder.Services.AddOpenApi();
 
 // 配置 CORS
 var allowedOrigins = builder.Configuration.GetSection("CORS:AllowedOrigins").Get<string[]>();
@@ -60,7 +58,9 @@ builder.Services.AddCors(options =>
 
 #region Add Authentication & Authorization
 // 配置JWT认证
-var jwtSecret = builder.Configuration["JWT:Secret"] ?? "YourSuperSecretKeyForJWTTokenGenerationMustBeAtLeast32Characters!";
+var jwtSecret = builder.Configuration["JWT:Secret"];
+if (string.IsNullOrWhiteSpace(jwtSecret) || jwtSecret.Length < 32)
+    throw new InvalidOperationException("JWT:Secret must contain at least 32 characters. Use the Docker entrypoint to generate it.");
 var jwtIssuer = builder.Configuration["JWT:Issuer"] ?? "RemotePlay";
 var jwtAudience = builder.Configuration["JWT:Audience"] ?? "RemotePlayClient";
 
@@ -114,7 +114,14 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser().Build();
+});
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<RemotePlay.Services.Software.StreamTickets>();
+builder.Services.AddScoped<RemotePlay.Services.Software.SoftwareSession>();
 #endregion
 
 // 添加SignalR服务（用于低延迟控制器输入）
@@ -212,10 +219,6 @@ builder.Services
 builder.Services.Configure<RemotePlayConfig>(
     builder.Configuration.GetSection("RemotePlay"));
 
-// 配置 WebRTC 相关参数（如端口范围、公网 IP 等）
-builder.Services.Configure<WebRTCConfig>(
-    builder.Configuration.GetSection("WebRTC"));
-
 // 配置设备状态更新服务
 builder.Services.Configure<RemotePlay.Services.Device.DeviceStatusUpdateConfig>(
     builder.Configuration.GetSection("RemotePlay:DeviceStatusUpdate"));
@@ -241,8 +244,6 @@ builder.Services.AddScoped<RemotePlay.Contracts.Services.IProfileService, Remote
 // 注册认证服务
 builder.Services.AddScoped<RemotePlay.Contracts.Services.IAuthService, RemotePlay.Services.Auth.AuthService>();
 
-// 注册WebRTC服务
-builder.Services.AddSingleton<RemotePlay.Services.WebRTC.WebRTCSignalingService>();
 
 // 注册延时统计服务
 builder.Services.AddSingleton<RemotePlay.Services.Statistics.LatencyStatisticsService>();
@@ -263,18 +264,6 @@ builder.Host.ConfigureHostOptions(options =>
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
-{
-    app.MapOpenApi();
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "v1");
-    });
-}
-
-//app.UseHttpsRedirection();
-
 // 配置静态文件选项
 var staticFileOptions = new StaticFileOptions
 {
@@ -294,6 +283,24 @@ var staticFileOptions = new StaticFileOptions
 };
 
 // 添加路由中间件
+app.Use(async (context, next) =>
+{
+    var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
+    if (path.StartsWith("/api/") &&
+        path is not "/api/auth/login" and not "/api/auth/register" and not "/api/playstation/bind" and not "/api/playstation/my-devices" &&
+        !path.StartsWith("/api/playstation/discover") &&
+        path is not "/api/software/tickets" and not "/api/software/stream")
+    {
+        context.Response.StatusCode = 404;
+        return;
+    }
+    context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+    context.Response.Headers["Referrer-Policy"] = "no-referrer";
+    context.Response.Headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; connect-src 'self'; style-src 'self'; img-src 'self' data:; frame-ancestors 'none'";
+    await next();
+});
+app.UseDefaultFiles();
+app.UseWebSockets(new WebSocketOptions { KeepAliveInterval = TimeSpan.FromSeconds(15) });
 app.UseRouting();
 
 // 使用 CORS 中间件（必须在 UseRouting 之后，UseAuthentication 之前）
@@ -312,15 +319,10 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapGet("/healthz", async (RPContext db) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503)).AllowAnonymous();
 
-// 映射SignalR Hub（用于低延迟控制器输入）
-app.MapHub<ControllerHub>("/hubs/controller");
 
-// 映射SignalR Hub（用于设备状态更新）
-app.MapHub<DeviceStatusHub>("/hubs/device-status");
-
-// 映射SignalR Hub（用于流媒体控制）
-app.MapHub<StreamingHub>("/hubs/streaming");
 
 // ✅ 注册应用程序关闭钩子，确保所有流被正确停止
 var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();

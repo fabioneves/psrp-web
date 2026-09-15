@@ -25,12 +25,8 @@ namespace RemotePlay.Utils
                     return;
                 }
 
-                var statusCode = context.Response.StatusCode;
-                if (ex is ArgumentException)
-                {
-                    statusCode = 200;
-                }
-                await HandleExceptionAsync(context, statusCode, ex.Message);
+                var statusCode = ex is ArgumentException ? 400 : 500;
+                await HandleExceptionAsync(context, statusCode, statusCode == 400 ? ex.Message : "The request failed. Check the server logs.");
                 return; // 异常已处理，不需要再处理状态码
             }
             
@@ -75,7 +71,7 @@ namespace RemotePlay.Utils
             var result = JsonConvert.SerializeObject(new { success = false, Msg = msg, errorMessage = msg, Type = statusCode.ToString() });
             if (!context.Response.HasStarted)
             {
-                context.Response.Clear();
+                context.Response.StatusCode = statusCode;
                 context.Response.ContentType = "application/json; charset=utf-8";
             }
             return context.Response.WriteAsync(result);

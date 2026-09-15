@@ -22,7 +22,7 @@ namespace RemotePlay.Services.Auth
         private readonly IConfiguration _configuration;
         private readonly IdGenerator _idGen ;
         private readonly ILogger<AuthService> _logger;
-        private const int Pbkdf2Iterations = 1000;
+        private const int Pbkdf2Iterations = 220000;
 
         public AuthService(
             RPContext context,

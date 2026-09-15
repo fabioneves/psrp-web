@@ -157,16 +157,7 @@ namespace RemotePlay.Services.Streaming.Pipeline
                                 frame.FrameIndex, frame.IsKeyFrame, packetData.Length, _receiver?.GetType().Name ?? "null", receivedCount);
                         }
 
-                        // 根据是否为关键帧选择发送方式
-                        if (frame.IsKeyFrame && _receiver is WebRTCReceiver webrtcReceiver)
-                        {
-                            webrtcReceiver.OnVideoPacketPriority(packetData);
-                            Interlocked.Increment(ref _priorityFramesSent);
-                        }
-                        else
-                        {
-                            _receiver.OnVideoPacket(packetData);
-                        }
+                        _receiver.OnVideoPacket(packetData);
 
                         Interlocked.Increment(ref _videoFramesSent);
                     }
