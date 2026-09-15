@@ -72,8 +72,9 @@ document.addEventListener('visibilitychange', updateWakeLock);
 window.addEventListener('focus', () => gamepads.reset());
 
 function notify(message) {
-  const target = $('setup-dialog').open ? $('psn-status') : $('message');
-  target.textContent = message; target.hidden = !message;
+  const element = $('setup-dialog').open ? $('psn-status') : $('player').hidden ? $('message') : $('connection-message');
+  element.textContent = message;
+  if (element.id !== 'connection-message') element.hidden = !message;
 }
 async function api(path, body, options = {}) {
   const controller = new AbortController();
@@ -296,6 +297,9 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
   stop();
   target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile() };
   quality = new AdaptiveQuality(target.profile);
+  $('connection-message').textContent = '';
+  showPlayer(target);
+  $('player').scrollIntoView({ block: 'start' });
   if (!inputSession) {
     try {
       const output = new AudioOutput(message => { if (audio === output) onAudioMessage(message); });
@@ -319,19 +323,47 @@ async function connect() {
       intent.inputSession = active.sessionId;
     }
     await openStream(intent);
-  } catch (error) { if (target === intent) reconnect(error.message); }
+  } catch (error) {
+    if (target === intent) {
+      if ([401, 403, 404, 409].includes(error.status)) failConnection(error.message);
+      else reconnect(error.message);
+    }
+  }
+}
+function failConnection(message) {
+  stop(true);
+  retry.reset();
+  $('retry-stream').disabled = false;
+  $('stream-status').textContent = 'Connection failed';
+  $('connecting').textContent = 'Connection failed';
+  notify(message);
 }
 function reconnect(message, workerFailed = false) {
   if (!target) return;
   if (workerFailed) forceMain = true;
   stop(true);
-  if (!retry.schedule()) { stop(); notify(`${message} Reconnection failed after five attempts.`); return; }
-  $('library').hidden = true; $('player').hidden = false;
+  if (!retry.schedule()) { failConnection(`${message} Automatic reconnection stopped after five attempts. Choose Try again when ready.`); return; }
   $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
 }
+function showPlayer({ hostId, title, demo, inputSession, profile }) {
+  $('library').hidden = true; $('player').hidden = false;
+  $('connecting').hidden = !!inputSession;
+  $('connecting').textContent = 'Preparing video…';
+  $('stage').hidden = !!inputSession; document.querySelector('.stats').hidden = !!inputSession;
+  $('input-only-hint').hidden = !inputSession;
+  $('disconnect-all').hidden = demo || !hostId;
+  $('audio-controls').hidden = !!inputSession; $('audio-status').hidden = !!inputSession;
+  if ($('profile-settings').parentElement !== $('playing-profile')) $('playing-profile').append($('profile-settings'));
+  $('performance-details').hidden = !!inputSession;
+  $('apply-profile').hidden = !!inputSession;
+  $('retry-stream').disabled = true;
+  $('stream-title').textContent = demo && !inputSession ? `${profile.resolution}${profile.fps} · Browser test` : title;
+  $('stream-status').textContent = 'Connecting…';
+}
 async function openStream({ hostId, title, demo, inputSession, hostType, profile }) {
   stop(true);
+  showPlayer({ hostId, title, demo, inputSession, profile });
   const current = ++attempt;
   const preferred = $('video-mode').value;
   const codec = inputSession ? 'mpeg1' : await selectVideoCodec(preferred, profile, failedCodecs, hostType);
@@ -343,29 +375,20 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   $('video-mode-status').textContent = codec === preferred
     ? (codec === 'mpeg1' ? 'Canvas software video selected.' : `${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware decoding preferred' : 'browser decoding; hardware preference unavailable'}.`)
     : `Using ${label}; ${decoderFailure || 'the selected mode is unavailable for this browser or console'}.${!isSecureContext ? ' Open the HTTPS address for browser decoding.' : ''}`;
+  await audio?.ready;
+  if (current !== attempt) return;
   const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile, videoCodec: activeCodec });
   if (current !== attempt) return;
   const url = new URL('/api/software/stream', location.href);
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   url.searchParams.set('ticket', ticket);
-  $('library').hidden = true; $('player').hidden = false; $('connecting').hidden = !!inputSession;
-  $('stage').hidden = !!inputSession; document.querySelector('.stats').hidden = !!inputSession;
-  $('input-only-hint').hidden = !inputSession;
-  $('disconnect-all').hidden = demo || !hostId;
-  $('audio-controls').hidden = !!inputSession; $('audio-status').hidden = !!inputSession;
-  $('playing-profile').append($('profile-settings'));
-  $('performance-details').hidden = !!inputSession;
-  $('apply-profile').hidden = !!inputSession;
   quality?.restart();
   updateQuality();
-  $('stream-title').textContent = demo && !inputSession ? `${profile.resolution}${profile.fps} · Browser test` : title; $('stream-status').textContent = 'Connecting…';
   $('fps').textContent = '— fps'; $('decode').textContent = '— ms / frame'; $('network').textContent = '— Mbps';
   const previous = $('screen');
   const canvas = previous.cloneNode(); previous.replaceWith(canvas);
   const report = message => { if (attempt === current) onStreamMessage(message); };
   try {
-    await audio?.ready;
-    if (attempt !== current) return;
     const useWorker = !inputSession && !forceMain && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
       typeof OffscreenCanvas === 'function' && !!new OffscreenCanvas(1, 1).getContext('2d') &&
       !new URLSearchParams(location.search).has('mainThread');
@@ -386,8 +409,6 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
     playing = true;
     gamepads.reset();
     updateWakeLock();
-    document.activeElement?.blur();
-    $('player').scrollIntoView({ block: 'start' });
   } catch (error) { if (attempt === current) { if (activeCodec !== 'mpeg1') failedCodecs.add(activeCodec); else forceMain = true; stop(true); throw error; } }
 }
 function onStreamMessage(message) {
@@ -419,7 +440,6 @@ function onStreamMessage(message) {
     $('resolution').textContent = `${message.width} × ${message.height}`;
     $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}`;
     if (message.totalFrames) {
-      if (!$('connecting').hidden) notify('');
       $('connecting').hidden = true;
       $('stream-status').textContent = 'Playing';
     }
@@ -452,6 +472,7 @@ function stop(preserveTarget = false) {
     worker = null;
   }
   stream?.close(); stream = null;
+  if (preserveTarget) return;
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   $('player').classList.remove('theater');
   $('library-profile').append($('profile-settings'));
@@ -461,6 +482,7 @@ function stop(preserveTarget = false) {
 }
 $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true));
 $('stop').onclick = () => stop();
+$('retry-stream').onclick = () => { retry.reset(); void connect(); };
 $('show-controls').onchange = () => { resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
 $('fullscreen').onclick = () => run($('fullscreen'), async () => {
   if (document.fullscreenElement) await document.exitFullscreen();

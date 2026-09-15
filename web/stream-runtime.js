@@ -27,14 +27,15 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
     decoder?.destroy();
     socket.close();
   };
-  const fail = (message, type = 'error') => { report({ type, message }); close(); };
+  const fail = (message, type = 'error') => { if (!stopped) { close(); report({ type, message }); } };
   const heartbeat = setInterval(() => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping', clientTime: now() }));
     if (socket.bufferedAmount > 65536) fail('Input connection is falling behind. Reconnecting…');
     if (performance.now() - lastVideo > 30000) fail('No stream response for 30 seconds. Reconnecting…');
   }, 2000);
-  socket.onopen = () => { socket.send(JSON.stringify({ type: 'ping', clientTime: now() })); report({ type: 'connected', inputOnly: !canvas }); };
+  socket.onopen = () => { if (!stopped) { socket.send(JSON.stringify({ type: 'ping', clientTime: now() })); report({ type: 'connected', inputOnly: !canvas }); } };
   socket.onmessage = event => {
+    if (stopped) return;
     try {
       if (typeof event.data === 'string') {
         const message = JSON.parse(event.data);
@@ -55,7 +56,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
       }
     } catch (error) { fail(error.message, videoCodec !== 'mpeg1' ? 'renderer-error' : 'error'); }
   };
-  socket.onerror = () => fail('Stream connection failed. The ticket may have expired or another viewer is connected.');
+  socket.onerror = () => fail('Could not open the streaming connection. Check your connection to the server.');
   socket.onclose = event => {
     if (!stopped) report(event.reason === 'Disconnected by user'
       ? { type: 'stopped', message: 'All sessions for this console were disconnected.' }

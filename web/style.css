@@ -258,8 +258,29 @@ main {
 .player-bar strong {
   margin-right:16px;
 }
+.player-bar>div:first-child {
+  flex:1;
+  min-width:0;
+}
 #stream-status {
+  display:block;
+  min-height:1.6em;
   color:var(--muted);
+  font-size:.85rem;
+}
+.connection-feedback {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  margin-bottom:12px;
+}
+#connection-message {
+  height:5rem;
+  overflow:auto;
+  overflow-wrap:anywhere;
+  margin:0;
+  color:#ffe0a7;
   font-size:.85rem;
 }
 .live-dot {
@@ -311,13 +332,17 @@ canvas {
   background:#080d13;
 }
 .stats {
-  display:flex;
-  flex-wrap:wrap;
-  gap:20px;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:4px 16px;
+  min-height:5rem;
   padding:12px 2px;
   color:var(--muted);
   font-size:.78rem;
   font-variant-numeric:tabular-nums;
+}
+#engine {
+  grid-column:span 2;
 }
 .stats span:first-child {
   color:var(--accent);

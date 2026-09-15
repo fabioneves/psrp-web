@@ -69,6 +69,12 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
             !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive && d.Device != null &&
                 d.Device.HostId == request.HostId && d.Device.HostType == "PS5", ct))
             return BadRequest(new { message = "H.265 requires a PS5. Select H.264 or Canvas for this console." });
+        if (request.InputSession == null)
+        {
+            if (!await tickets.Viewer.WaitAsync(TimeSpan.FromSeconds(8), ct))
+                return Conflict(new { message = "Another stream is still active on this server. Disconnect that stream before trying again." });
+            tickets.Viewer.Release();
+        }
         var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec);
         Response.Headers.CacheControl = "no-store";
         return Ok(new { ticket });
@@ -109,7 +115,7 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
             finally { stream.Detach(); }
             return;
         }
-        if (!await tickets.Viewer.WaitAsync(0, ct))
+        if (!await tickets.Viewer.WaitAsync(TimeSpan.FromSeconds(8), ct))
         {
             Response.StatusCode = 409;
             return;

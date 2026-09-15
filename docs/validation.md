@@ -509,3 +509,40 @@ an insecure context: native WebCodecs is unavailable there regardless of codec
 selection, so Canvas is expected. Native modes need trusted HTTPS or localhost;
 using the public HTTPS proxy from the LAN can add route latency. The isolated
 Chrome tests do not establish Tesla throughput or end-to-end controller latency.
+
+### Direct HTTPS and connection retry feedback
+
+`https://play.example.com/healthz` now responds over trusted TLS 1.3 with a
+Let's Encrypt certificate. Public traffic reaches DDEV, whose hostname-specific
+TLS route forwards this project to Caddy. Standard-port systemd listeners forward
+80/443 to DDEV's rootless 8080/8443 listeners. The 55 pre-existing DDEV HTTP routes
+were compared before and after and remain unchanged.
+
+Public HTTPS sign-in persistence and a 720p60 Canvas playback/reconnect test
+passed. A native H.264 startup test missed its five-second frame deadline on the
+public route (103 and 113 frames versus more than 120 required), while the same
+test passed over the LAN through the HTTPS proxy. A public worker diagnostic
+fell back to Canvas, so sustained public native decoding is not claimed verified.
+The diagnostic also revealed that test streams share the server's single viewer
+slot and could block a console connection. It was stopped; subsequent tests use
+a separate Compose app, database and volumes.
+
+Retrying previously called the full UI teardown: it hid the player, restored the
+library, moved profile controls and exited fullscreen. Retry teardown now only
+releases playback resources. Failure messages have a stable, scrollable region;
+terminal failures retain the player and expose a manual retry button. Duplicate
+and late socket events are ignored after closure. Ticket issuance and stream
+acquisition wait briefly for cleanup instead of immediately rejecting a new
+viewer, and ticket conflicts return a readable error before the WebSocket starts.
+
+Five regression cases cover unchanged player geometry and scroll position,
+persistent busy feedback, exhausted retries, fullscreen preservation and a
+replacement ticket waiting for the previous viewer to close. The first two tests
+failed against the previous frontend assets, then all five passed with the fix.
+Desktop and 390px mobile screenshots were inspected, with no horizontal overflow.
+These checks do not establish that every real PS5 connection succeeds on its
+first attempt or resolve the previously observed console-side busy state.
+
+The complete isolated browser suite passed all 51 tests, including native video,
+audio, input attachment, disconnect cleanup and fullscreen recovery. All 33
+JavaScript tests and 127 backend assertions also passed.

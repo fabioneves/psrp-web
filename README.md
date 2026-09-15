@@ -233,7 +233,7 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 - Touch: D-pad, move/look direction buttons, face buttons, shoulders, triggers, stick clicks, PS, Share, Options and touchpad click.
 - Keyboard: arrows = D-pad; WASD = left stick; IJKL = right stick; X/C/Z/V = cross/circle/square/triangle; Q/E = L1/R1; 1/3 = L2/R2; 2/4 = L3/R3; Enter = Options; Backspace = Share; Space = PS; T = touchpad click.
 - Input resets on focus loss, hidden tabs and disconnect. Opposing directions cancel; simultaneous touch and keyboard holds work together.
-- One active viewer/session per server. Stop it before connecting another viewer. An abandoned connection expires after missed heartbeats.
+- One active viewer/session per server, including browser test streams. Run diagnostics in a separate Compose project while a console viewer is active. An abandoned connection expires after missed heartbeats.
 - Optional gamepads supply analog sticks/triggers and positional PlayStation buttons. Tesla virtual-controller face swaps, source preference, manual index selection and dead zones are configurable. Polling detects devices even without browser connection events; only one local gamepad is selected to suppress mirrored input.
 - No microphone, rumble, motion sensing or touchpad gestures. Touch direction buttons provide full stick deflection. Some games require features beyond these controls.
 - PSN sign-in and pinless registration use a server-side Chiaki helper. Media playback connects directly from the server to the LAN console; internet media relay is not implemented.
@@ -360,7 +360,12 @@ shows the attached-device count. A viewer disconnect closes its input clients;
 clients retry while the same console stream reconnects.
 
 Connection failures retry up to five times with a fresh ticket and exponential
-backoff. Disconnect cancels retries. A failed video worker switches automatically
+backoff. The player, fullscreen state, settings and scroll position stay in place
+during retries. Connection messages remain visible, and **Try again** becomes
+available when retries stop. Authentication, pairing and active-viewer conflicts
+show their error without repeatedly reconnecting. New connections wait up to eight
+seconds for the previous viewer to release its slot; a still-active stream gets
+an explicit conflict message. Disconnect cancels retries. A failed video worker switches automatically
 to main-thread rendering. Fullscreen has a viewport fallback; screen wake lock is
 optional and depends on browser support.
 

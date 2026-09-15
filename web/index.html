@@ -115,6 +115,7 @@
 
     <section id="player" hidden>
       <div class="player-bar"><div><span class="live-dot" aria-hidden="true"></span><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div><div class="player-actions"><label class="check"><input type="checkbox" id="show-controls" checked>Touch controls</label><button id="fullscreen">Full screen</button><button id="stop" class="danger">Disconnect</button><button id="disconnect-all" class="danger">Disconnect all sessions</button></div></div>
+      <div class="connection-feedback"><p id="connection-message" role="status" aria-live="polite"></p><button id="retry-stream" disabled>Try again</button></div>
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing video…</div></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
