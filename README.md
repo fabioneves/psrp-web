@@ -18,9 +18,9 @@ docker compose up --build -d
 
 Open **http://localhost:8080** (or your server's IP and port).
 
-1. Create a local account in the web UI.
+1. Create a local account in the web UI. Login survives page refresh for up to 24 hours; **Sign out** clears the saved session.
 2. Click **Start test stream** to check your browser's software playback.
-3. Pair your PlayStation using its IP address, your Base64 PSN account ID and the console's Link Device PIN.
+3. Pair your PlayStation using its IP address, your Base64 PSN account ID and the console's Link Device PIN. **Find consoles on this network** shows search progress and results beside the button; you can also enter the IP manually.
 4. Click **Play**. **Disconnect** ends the Remote Play session and stops its FFmpeg process.
 
 The first build downloads the .NET SDK and FFmpeg and can take a few minutes. PostgreSQL migrations run automatically. Console registrations and accounts persist in `postgres-data`; the generated signing secret persists in `app-data`. There are no GPU device mounts or privileged containers.

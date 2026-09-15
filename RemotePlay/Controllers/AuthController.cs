@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using RemotePlay.Contracts.Services;
 using RemotePlay.Models.Auth;
 using RemotePlay.Models.Base;
+using RemotePlay.Services.Auth;
 
 namespace RemotePlay.Controllers
 {
@@ -79,6 +80,8 @@ namespace RemotePlay.Controllers
         [AllowAnonymous]
         public async Task<ActionResult<ResponseModel>> Login([FromBody] LoginRequest request)
         {
+            if (Request.Headers.ContainsKey("X-Remote-Play-Session") && !BrowserSession.IsSameOrigin(Request))
+                return StatusCode(403);
             try
             {
                 if (!ModelState.IsValid)
@@ -103,6 +106,11 @@ namespace RemotePlay.Controllers
                     });
                 }
 
+                Response.Headers.CacheControl = "no-store";
+                if (BrowserSession.IsSameOrigin(Request))
+                    Response.Cookies.Append(BrowserSession.CookieName, response.Token,
+                        BrowserSession.Options(Request, new DateTimeOffset(response.ExpiresAt)));
+
                 return Ok(new ApiSuccessResponse<object>
                 {
                     Success = true,
@@ -120,6 +128,32 @@ namespace RemotePlay.Controllers
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }
+        }
+
+        [HttpGet("session")]
+        [AllowAnonymous]
+        public async Task<IActionResult> RestoreSession()
+        {
+            Response.Headers.CacheControl = "no-store";
+            if (!BrowserSession.IsSameOrigin(Request)) return StatusCode(403);
+            var token = Request.Cookies[BrowserSession.CookieName];
+            if (token != null)
+            {
+                var user = await _authService.ValidateTokenAsync(token);
+                if (user?.IsActive == true) return Ok(new { token });
+                Response.Cookies.Delete(BrowserSession.CookieName, BrowserSession.Options(Request));
+            }
+            return Ok(new { token = (string?)null });
+        }
+
+        [HttpPost("logout")]
+        [AllowAnonymous]
+        public IActionResult Logout()
+        {
+            Response.Headers.CacheControl = "no-store";
+            if (!BrowserSession.IsSameOrigin(Request)) return StatusCode(403);
+            Response.Cookies.Delete(BrowserSession.CookieName, BrowserSession.Options(Request));
+            return Ok(new { success = true });
         }
 
         /// <summary>
@@ -189,4 +223,3 @@ namespace RemotePlay.Controllers
         }
     }
 }
-

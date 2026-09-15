@@ -132,3 +132,19 @@ These are desktop Chrome and synthetic input results; real console/Tesla validat
 and A/V calibration are still required.
 
 ![Optimized software 1080p60 playback](images/optimized-1080p60.png)
+
+## Discovery feedback and saved login
+
+Discovery now reports searching, empty results, failures and selections beside
+its button. A browser regression holds the response open to verify visible
+progress, then covers empty, failed and successful searches with retry.
+
+Login now survives refresh through a scoped HttpOnly session cookie. Browser tests
+verify restoration, sign-out across refresh, clearing an invalid saved token and
+rejecting cross-origin session requests. Backend checks cover the required request
+header, cookie attributes, HTTPS proxy behavior and same-site cross-origin rejection.
+The existing 24-hour token expiration remains in effect.
+
+Validation passed: 34 backend assertions, 20 JavaScript unit tests and all 17
+browser/API tests, including the existing software video/audio and input flows.
+Docker was rebuilt and the health endpoint reports ready.

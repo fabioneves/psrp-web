@@ -17,7 +17,8 @@
     <button id="logout" class="quiet" hidden>Sign out</button>
   </header>
   <main>
-    <section id="account" class="account-layout">
+    <p id="session-status" role="status">Restoring your session…</p>
+    <section id="account" class="account-layout" hidden>
       <div class="intro">
         <p class="eyebrow">YOUR CONSOLE. YOUR BROWSER.</p>
         <h1>Press play.<br>Leave the hardware behind.</h1>
@@ -57,8 +58,9 @@
           <p class="eyebrow">ADD A PLAYSTATION</p><h2>Pair your console</h2>
           <p class="hint">Enable Remote Play on your console, then open Link Device to get an 8-digit PIN.</p>
           <label>Console IP address<input id="host-ip" placeholder="192.168.1.50" required maxlength="45" autocomplete="off"></label>
-          <button type="button" id="discover" class="quiet">Find consoles on this network</button>
-          <div id="discovered" aria-live="polite"></div>
+          <button type="button" id="discover" class="quiet" aria-describedby="discovery-status" aria-controls="discovered">Find consoles on this network</button>
+          <p id="discovery-status" class="hint" role="status" aria-live="polite" aria-atomic="true"></p>
+          <div id="discovered"></div>
           <label>PlayStation account ID (Base64)<input id="account-id" required placeholder="Your encoded numeric account ID" autocomplete="off"></label>
           <label>Link Device PIN<input id="pin" required inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="8 digits" autocomplete="off"></label>
           <button class="primary" type="submit">Pair console</button>

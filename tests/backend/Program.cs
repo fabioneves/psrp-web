@@ -17,6 +17,21 @@ static void Check(bool value, string message)
 }
 
 var clock = new TestClock();
+var browserRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
+browserRequest.Host = new Microsoft.AspNetCore.Http.HostString("play.example.test");
+Check(!BrowserSession.IsSameOrigin(browserRequest), "session restoration requires an explicit browser request header");
+browserRequest.Headers["X-Remote-Play-Session"] = "1";
+browserRequest.Headers.Origin = "https://play.example.test";
+browserRequest.Headers["Sec-Fetch-Site"] = "same-origin";
+var cookieOptions = BrowserSession.Options(browserRequest);
+Check(BrowserSession.IsSameOrigin(browserRequest) && cookieOptions.HttpOnly && cookieOptions.Secure &&
+    cookieOptions.SameSite == Microsoft.AspNetCore.Http.SameSiteMode.Strict && cookieOptions.Path == "/api/auth",
+    "HTTPS browser sessions use scoped HttpOnly Secure SameSite cookies behind the proxy");
+browserRequest.Headers.Origin = "https://other.example.test";
+Check(!BrowserSession.IsSameOrigin(browserRequest), "another origin cannot restore or clear a browser session");
+browserRequest.Headers.Origin = "https://play.example.test";
+browserRequest.Headers["Sec-Fetch-Site"] = "same-site";
+Check(!BrowserSession.IsSameOrigin(browserRequest), "same-site cross-origin session requests are rejected");
 var tickets = new StreamTickets(clock);
 var token = tickets.Issue("alice", "ps5", false, 10000);
 Check(tickets.Consume(token)?.UserId == "alice", "ticket retains its owner");

@@ -81,3 +81,11 @@ follow [Emscripten's SIMD documentation](https://emscripten.org/docs/porting/sim
 FFmpeg probing/flush controls follow its
 [format options](https://ffmpeg.org/ffmpeg-formats.html#Format-Options); startup and
 throughput behavior are measured with the project's actual pinned image contents.
+
+
+Browser login persistence follows the cookie attribute and lifetime guidance in
+[ASP.NET Core cookie authentication](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-10.0)
+and the request-isolation guidance in
+[ASP.NET Core antiforgery documentation](https://learn.microsoft.com/en-us/aspnet/core/security/anti-request-forgery?view=aspnetcore-10.0).
+The session cookie restores an existing JWT; protected console APIs retain their
+bearer-token authorization rather than accepting cookies directly.

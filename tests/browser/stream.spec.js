@@ -12,6 +12,81 @@ async function register(page, suffix = '') {
   return name;
 }
 
+test('console discovery shows nearby progress, empty results, errors and selectable results', async ({ page }) => {
+  await register(page);
+  let completeSearch;
+  await page.route('**/api/playstation/discover?*', route => new Promise(resolve => {
+    completeSearch = async (status, body) => {
+      await route.fulfill({ status, json: body });
+      resolve();
+    };
+  }));
+  const button = page.locator('#discover');
+  const status = page.locator('#discovery-status');
+  await button.click();
+  await expect(button).toHaveText('Searching…');
+  await expect(button).toBeDisabled();
+  await expect(status).toContainText('Searching for consoles');
+  await expect(status).toBeInViewport();
+  await expect.poll(() => typeof completeSearch).toBe('function');
+  await completeSearch(200, []);
+  await expect(status).toContainText('No consoles found');
+  await expect(button).toBeEnabled();
+
+  completeSearch = null;
+  await button.click();
+  await expect.poll(() => typeof completeSearch).toBe('function');
+  await completeSearch(503, { message: 'Discovery is temporarily unavailable.' });
+  await expect(status).toContainText('Console search failed');
+  await expect(status).toContainText('Discovery is temporarily unavailable.');
+  await expect(button).toBeEnabled();
+
+  completeSearch = null;
+  await button.click();
+  await expect(status).toContainText('Searching for consoles');
+  await expect.poll(() => typeof completeSearch).toBe('function');
+  await completeSearch(200, [{ name: 'Living room PS5', ip: '192.168.1.50' }]);
+  await expect(status).toContainText('Found 1 console');
+  await expect(button).toHaveText('Find consoles on this network');
+  await page.getByRole('button', { name: 'Living room PS5 · 192.168.1.50' }).click();
+  await expect(page.locator('#host-ip')).toHaveValue('192.168.1.50');
+  await expect(page.locator('#account-id')).toBeFocused();
+  await expect(status).toContainText('Selected Living room PS5');
+});
+
+test('login survives refresh, uses an HttpOnly cookie, and sign-out survives refresh', async ({ page, context }) => {
+  await register(page);
+  const cookie = (await context.cookies()).find(cookie => cookie.name === 'remote-play-session');
+  expect(cookie).toBeDefined();
+  expect(cookie.httpOnly).toBe(true);
+  expect(cookie.sameSite).toBe('Strict');
+  expect(cookie.path).toBe('/api/auth');
+  expect(cookie.expires).toBeGreaterThan(Date.now() / 1000);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Your consoles', exact: true })).toBeVisible();
+  await expect(page.locator('#account')).toBeHidden();
+  expect(await page.evaluate(() => document.cookie.includes('remote-play-session'))).toBe(false);
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.locator('#account')).toBeVisible();
+  expect((await context.cookies()).some(cookie => cookie.name === 'remote-play-session')).toBe(false);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  await expect(page.locator('#library')).toBeHidden();
+});
+
+test('invalid saved sessions return to sign-in and cross-origin session requests are rejected', async ({ page, context, baseURL }) => {
+  await register(page);
+  const headers = { 'X-Remote-Play-Session': '1', Origin: 'https://untrusted.example' };
+  expect((await context.request.get('/api/auth/session', { headers })).status()).toBe(403);
+  expect((await context.request.post('/api/auth/logout', { headers })).status()).toBe(403);
+  expect((await context.request.get('/api/auth/session')).status()).toBe(403);
+  await context.addCookies([{ name: 'remote-play-session', value: 'invalid-token',
+    domain: new URL(baseURL).hostname, path: '/api/auth', httpOnly: true, sameSite: 'Strict' }]);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+  expect((await context.cookies()).some(cookie => cookie.name === 'remote-play-session')).toBe(false);
+});
+
 test('software-only 720p60 test stream renders, reports performance and reconnects', async ({ page }, testInfo) => {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));

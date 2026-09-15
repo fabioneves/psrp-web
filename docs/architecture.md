@@ -2,8 +2,9 @@
 
 ## Session lifecycle
 
-1. Browser signs into the upstream local-account service. Its bearer token stays
-   in page memory; reloading the page requires signing in again.
+1. Browser signs into the upstream local-account service. API requests use a bearer
+   token in page memory. An HttpOnly session cookie restores a valid login after
+   refresh, up to the token's existing 24-hour expiration.
 2. `POST /api/software/tickets` authenticates the user, validates the bitrate and
    checks their active console association. Demo tickets require authentication
    but no console. A cryptographically random ticket expires after 30 seconds.
@@ -151,3 +152,25 @@ seconds since the previous change. Hidden pages reset the observation window.
 Profiles never exceed the selected ceiling. Each change uses a fresh authorized
 ticket and the existing session teardown/reconnect path; manual apply disables
 automatic changes. Profile changes therefore briefly interrupt media.
+
+
+## Browser login persistence
+
+Browser login requests opt into a host-only `remote-play-session` cookie scoped to
+`/api/auth`, with HttpOnly, SameSite=Strict, and the JWT's existing expiration. HTTPS
+logins set Secure, including the same-origin HTTPS request through the Caddy proxy.
+Local HTTP deployment remains supported. The token is not saved to web storage.
+
+On page load, `GET /api/auth/session` validates the cookie's JWT signature, issuer,
+audience and expiration, checks the account is active, then restores the existing
+in-memory bearer token. Invalid saved sessions are cleared. The account form stays
+hidden while restoration runs. This endpoint does not renew the expiration.
+`POST /api/auth/logout` clears the saved cookie before the page clears its token.
+Both endpoints use no-store responses and require an explicit browser-session
+header; cross-origin Origin and Fetch Metadata values are rejected independently
+of CORS configuration. Login sets a cookie only for an accepted browser-session
+request. Normal API authorization continues to require bearer tokens or stream
+tickets; the cookie is not an alternative credential for console control APIs.
+
+Sign-out ends this browser's saved login; it does not revoke separately issued
+stateless API bearer tokens. Session restoration does not restart a video stream.

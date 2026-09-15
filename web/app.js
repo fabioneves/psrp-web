@@ -67,7 +67,7 @@ async function api(path, body) {
     const response = await fetch(`/api/${path}`, {
       method: body === undefined ? 'GET' : 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { 'Content-Type': 'application/json', 'X-Remote-Play-Session': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body)
     });
     const result = await response.json().catch(() => ({}));
@@ -109,7 +109,19 @@ $('auth-form').onsubmit = event => {
     await refresh();
   });
 };
-$('logout').onclick = () => { stop(); token = null; showAccount(); notify(''); };
+$('logout').onclick = () => run($('logout'), async () => {
+  await api('auth/logout', {});
+  stop(); token = null; showAccount(); notify('');
+});
+
+async function restoreSession() {
+  try {
+    const session = await api('auth/session');
+    token = session.token;
+    if (token) await refresh();
+  } catch (error) { notify(`Could not restore your session: ${error.message}`); }
+  finally { $('session-status').hidden = true; showAccount(); }
+}
 
 async function refresh() {
   await refreshActive();
@@ -144,17 +156,39 @@ $('pair-form').onsubmit = event => {
     notify('Console paired. Choose Play to connect.');
   });
 };
-$('discover').onclick = () => run($('discover'), async () => {
-  const consoles = await api('playstation/discover?timeoutMs=3000');
+$('discover').onclick = async () => {
+  const discover = $('discover'), status = $('discovery-status');
+  discover.disabled = true;
+  discover.textContent = 'Searching…';
+  discover.setAttribute('aria-busy', 'true');
+  notify('');
   $('discovered').replaceChildren();
-  if (!consoles.length) { notify('No consoles found. Enter the console IP manually and check its network connection.'); return; }
-  for (const console of consoles) {
-    const button = document.createElement('button'); button.type = 'button';
-    button.textContent = `${console.name} · ${console.ip}`;
-    button.onclick = () => { $('host-ip').value = console.ip; $('account-id').focus(); };
-    $('discovered').append(button);
+  status.textContent = 'Searching for consoles… This usually takes a few seconds.';
+  try {
+    const consoles = await api('playstation/discover?timeoutMs=3000');
+    status.textContent = consoles.length
+      ? `Found ${consoles.length} console${consoles.length === 1 ? '' : 's'}. Select one to fill in its IP address.`
+      : 'No consoles found. Check that the console is reachable from this server, or enter its IP address manually.';
+    for (const console of consoles) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.textContent = `${console.name} · ${console.ip}`;
+      button.onclick = () => {
+        $('host-ip').value = console.ip;
+        status.textContent = `Selected ${console.name}. Enter your account ID and Link Device PIN to pair it.`;
+        $('account-id').focus();
+      };
+      $('discovered').append(button);
+    }
+  } catch (error) {
+    status.textContent = error.name === 'AbortError'
+      ? 'Console search timed out. Try again, or enter the console IP address manually.'
+      : `Console search failed: ${error.message} Try again, or enter the console IP address manually.`;
+  } finally {
+    discover.disabled = false;
+    discover.textContent = 'Find consoles on this network';
+    discover.removeAttribute('aria-busy');
   }
-});
+};
 
 async function play(hostId, title, demo = false, inputSession = null) {
   stop();
@@ -311,7 +345,7 @@ $('fullscreen').onclick = () => run($('fullscreen'), async () => {
   }
 });
 window.addEventListener('pagehide', () => stop());
-showAccount();
+restoreSession();
 
 async function refreshActive() {
   if (!token) return;

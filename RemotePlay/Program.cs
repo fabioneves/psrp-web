@@ -288,7 +288,7 @@ app.Use(async (context, next) =>
 {
     var path = context.Request.Path.Value?.ToLowerInvariant() ?? "";
     if (path.StartsWith("/api/") &&
-        path is not "/api/auth/login" and not "/api/auth/register" and not "/api/playstation/bind" and not "/api/playstation/my-devices" &&
+        path is not "/api/auth/login" and not "/api/auth/register" and not "/api/auth/session" and not "/api/auth/logout" and not "/api/playstation/bind" and not "/api/playstation/my-devices" &&
         !path.StartsWith("/api/playstation/discover") &&
         path is not "/api/software/tickets" and not "/api/software/stream" and not "/api/software/active")
     {
