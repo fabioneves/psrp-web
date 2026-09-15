@@ -1,3 +1,4 @@
+import { FrameQueue } from './frame-queue.js';
 import { FramePresenter } from './frame-presenter.js';
 
 export const nativeConfig = codec => ({ codec, hardwareAcceleration: 'prefer-hardware', optimizeForLatency: true });
@@ -104,12 +105,14 @@ export function createNativeDecoder(canvas, report, options = {}) {
   const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
   if (!context) throw new Error('This browser does not support video drawing.');
   const pending = new Map();
-  let stopped = false, latest = null, configuration, mediaTimestamp, savedAt = 0, progressAt = null, waitingForKey = true;
-  let decoded = 0, drawn = 0, dropped = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
+  let stopped = false, configuration, mediaTimestamp, progressAt = null, waitingForKey = true;
+  let decoded = 0, drawn = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
   let start = performance.now();
+  const frames = new FrameQueue(item => item.frame.close(), options.fps, options.pacing !== 'responsive');
   const presentation = new FramePresenter(() => {
-    const frame = latest; latest = null;
-    if (!frame) return;
+    const item = frames.take(performance.now());
+    if (!item) return frames.pending ? 'waiting' : false;
+    const { frame, timestamp, savedAt } = item;
     try {
       if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
         canvas.width = frame.displayWidth; canvas.height = frame.displayHeight;
@@ -119,11 +122,11 @@ export function createNativeDecoder(canvas, report, options = {}) {
       context.drawImage(frame, 0, 0);
       drawMs += performance.now() - before;
       drawn++; totalFrames++;
-      options.onPresent?.(latestTimestamp);
+      options.onPresent?.(timestamp);
     } catch (error) { options.onError?.(error.message); }
     finally { frame.close(); }
+    return frames.pending;
   });
-  let latestTimestamp = null;
   const decoder = new VideoDecoder({
     output(frame) {
       if (stopped) { frame.close(); return; }
@@ -132,8 +135,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
       progressAt = pending.size ? performance.now() : null;
       if (timing) decodeMs += performance.now() - timing.started;
       decoded++;
-      if (latest) { latest.close(); dropped++; }
-      latest = frame; latestTimestamp = timing?.mediaTimestamp ?? null; savedAt = performance.now();
+      frames.push({ frame, timestamp: timing?.mediaTimestamp ?? null, savedAt: performance.now() });
       presentation.request();
     },
     error(error) { if (!stopped) options.onError?.(error.message); }
@@ -177,9 +179,9 @@ export function createNativeDecoder(canvas, report, options = {}) {
       return;
     }
     const elapsed = performance.now() - start;
-    report({ type: 'stats', fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
+    report({ type: 'stats', ...presentation.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
       decodeMs: drawn ? (decodeMs + drawMs) / drawn : 0, codecMs: 0, nativeDecodeMs: decoded ? decodeMs / decoded : 0,
-      colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: dropped,
+      colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: frames.dropped,
       pixelEngine: 'Browser', mbps: bytesReceived * 8 / elapsed / 1000, totalFrames,
       width: canvas.width, height: canvas.height, engine });
     decoded = drawn = bytesReceived = decodeMs = drawMs = 0; start = performance.now();
@@ -193,7 +195,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     },
     destroy() {
       stopped = true; clearInterval(timer); presentation.destroy(); queue.destroy();
-      latest?.close(); latest = null; pending.clear(); parameters.clear();
+      frames.destroy(); pending.clear(); parameters.clear();
       if (decoder.state !== 'closed') decoder.close();
     }
   };

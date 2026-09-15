@@ -2,14 +2,14 @@ import { createNativeDecoder } from './native-decoder.js';
 import { createDecoder } from './decoder.js';
 import { now, StreamClock, unpackMedia } from './timing.js';
 
-export async function startStream(canvas, url, report, videoCodec = 'mpeg1', hardwareAcceleration = 'prefer-hardware') {
+export async function startStream(canvas, url, report, videoCodec = 'mpeg1', hardwareAcceleration = 'prefer-hardware', presentation = {}) {
   const clock = new StreamClock();
   let videoAgeMs = null, transportMs = null, serverQueueMs = 0;
   const decoder = canvas ? await (videoCodec !== 'mpeg1' ? createNativeDecoder : createDecoder)(canvas, message => {
     report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs });
     serverQueueMs = 0;
   }, {
-    videoCodec, hardwareAcceleration,
+    ...presentation, videoCodec, hardwareAcceleration,
     onError(message) { fail(message, 'renderer-error'); },
     onPresent(timestamp) {
       videoAgeMs = clock.age(timestamp);

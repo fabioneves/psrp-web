@@ -40,6 +40,25 @@ test('lost animation callbacks recover without reconnecting and keep 60 Hz sched
   assert.equal([...timers.timers.values()][0].delay, 1000 / 60);
   timers.tick();
   assert.equal(draws, 2);
+  presenter.request();
+  assert.equal(timers.frames.size, 1);
+  timers.frame();
+  assert.equal(presenter.recovering, false);
+  assert.equal(draws, 3);
   presenter.destroy(); presenter.request();
   assert.equal(timers.timers.size, 0);
+});
+
+test('a late callback cannot present a newer request early', () => {
+  const timers = clock(); let draws = 0;
+  const presenter = new FramePresenter(() => { draws++; }, timers);
+  presenter.request();
+  const stale = [...timers.frames.values()][0];
+  timers.tick();
+  presenter.request();
+  stale();
+  assert.equal(draws, 1);
+  timers.frame();
+  assert.equal(draws, 2);
+  presenter.destroy();
 });

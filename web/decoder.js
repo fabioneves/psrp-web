@@ -1,3 +1,4 @@
+import { FrameQueue } from './frame-queue.js';
 import { FramePresenter } from './frame-presenter.js';
 import { LatestFrame } from './latest-frame.js';
 import { createPixelFactory } from './pixels.js';
@@ -25,17 +26,26 @@ export async function createDecoder(canvas, report, options = {}) {
   }
   const decoder = settings.wasmModule ? new JSMpeg.Decoder.MPEG1VideoWASM(settings) : new JSMpeg.Decoder.MPEG1Video(settings);
   const demuxer = new JSMpeg.Demuxer.TS(settings);
-  const latest = new LatestFrame();
+  const dimensions = { width: canvas.width, height: canvas.height };
+  const pool = [];
+  const frames = new FrameQueue(frame => pool.push(frame), options.fps, options.pacing !== 'responsive');
   let pixels, image, decoded = 0, drawn = 0, totalFrames = 0, decodeMs = 0, colorMs = 0, drawMs = 0, bytesReceived = 0;
-  let start = performance.now(), pendingPlanes, stopped = false, savedAt = 0, queueMs = 0, mediaTimestamp = null;
+  let start = performance.now(), stopped = false, queueMs = 0, mediaTimestamp = null;
   const timestamps = [];
   decoder.connect({
     resize(width, height) {
-      latest.resize(width, height); pixels = makePixels(width, height);
+      dimensions.width = width; dimensions.height = height; pixels = makePixels(width, height);
+      frames.destroy(); pool.length = 0;
+      for (let i = 0; i < 4; i++) { const frame = new LatestFrame(); frame.resize(width, height); pool.push(frame); }
       canvas.width = width; canvas.height = height;
       image = new ImageData(pixels.rgba, width, height);
     },
-    render(y, cr, cb) { pendingPlanes = [y, cr, cb, timestamps.shift() ?? null]; }
+    render(y, cr, cb) {
+      const frame = pool.pop();
+      frame.save(y, cr, cb, timestamps.shift() ?? null);
+      frame.savedAt = performance.now();
+      frames.push(frame);
+    }
   });
   demuxer.connect(JSMpeg.Demuxer.TS.STREAM.VIDEO_1, { write(pts, buffers) {
     timestamps.push(mediaTimestamp);
@@ -44,23 +54,25 @@ export async function createDecoder(canvas, report, options = {}) {
   } });
   const present = () => {
     if (stopped) return;
-    const frame = latest.take();
-    if (!frame) return;
-    queueMs = performance.now() - savedAt;
+    const frame = frames.take(performance.now());
+    if (!frame) return frames.pending ? 'waiting' : false;
+    queueMs = performance.now() - frame.savedAt;
     let before = performance.now(); pixels.convert(frame.y, frame.cr, frame.cb); colorMs += performance.now() - before;
     before = performance.now(); context.putImageData(image, 0, 0); drawMs += performance.now() - before;
     drawn++; totalFrames++;
     options.onPresent?.(frame.timestamp);
+    frame.take(); pool.push(frame);
+    return frames.pending;
   };
   const presentation = new FramePresenter(present);
   const timer = setInterval(() => {
     const elapsed = performance.now() - start;
-    report({ type: 'stats', fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
+    report({ type: 'stats', ...presentation.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
       decodeMs: drawn ? (decodeMs + colorMs + drawMs) / drawn : 0,
       codecMs: decoded ? decodeMs / decoded : 0, colorMs: drawn ? colorMs / drawn : 0,
-      drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: latest.dropped,
+      drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: frames.dropped,
       pixelEngine: pixels?.engine, mbps: bytesReceived * 8 / elapsed / 1000,
-      totalFrames, width: latest.width, height: latest.height, engine });
+      totalFrames, width: dimensions.width, height: dimensions.height, engine });
     decoded = 0; drawn = 0; decodeMs = 0; colorMs = 0; drawMs = 0; bytesReceived = 0; start = performance.now();
   }, 1000);
   return {
@@ -69,18 +81,14 @@ export async function createDecoder(canvas, report, options = {}) {
       bytesReceived += data.byteLength;
       demuxer.write(data);
       const before = performance.now();
-      let count = 0; pendingPlanes = null;
+      let count = 0;
       while (decoder.decode()) {
         count++;
         if (performance.now() - before > 250) throw new Error('Software decoding cannot keep up. Select a lower profile.');
       }
-      if (pendingPlanes) {
-        latest.dropped += Math.max(0, count - 1);
-        latest.save(...pendingPlanes); savedAt = performance.now();
-        presentation.request();
-      }
+      if (frames.pending) presentation.request();
       decoded += count; decodeMs += performance.now() - before;
     },
-    destroy() { stopped = true; clearInterval(timer); presentation.destroy(); decoder.destroy?.(); }
+    destroy() { stopped = true; clearInterval(timer); presentation.destroy(); frames.destroy(); decoder.destroy?.(); }
   };
 }
