@@ -27,24 +27,34 @@ export class PcmQueue {
     this.underruns = 0;
     this.clear();
   }
-  clear() { this.offset = 0; this.length = 0; this.primed = false; this.target = null; this.sinceSync = 0; this.skewMs = null; this.lastLeft = 0; this.lastRight = 0; }
+  clear() {
+    this.offset = 0; this.length = 0; this.primed = false;
+    this.target = null; this.sinceSync = 0; this.skewMs = null;
+    this.lastLeft = 0; this.lastRight = 0;
+    this.phase = 0; this.speed = 1; this.nextTimestamp = null; this.aligned = false;
+  }
   sync(timestamp) {
     if (!Number.isFinite(timestamp)) return;
-    this.target = timestamp - AUDIO_RESERVE_MS;
+    const desired = timestamp - AUDIO_RESERVE_MS;
+    if (this.target == null || Math.abs(desired - this.target) > 250) this.target = desired;
+    else this.target += Math.max(-1, Math.min(1, (desired - this.target) * 0.05));
     this.sinceSync = 0;
   }
   push(sample) {
     const count = Math.floor(sample.left.length * this.rate / sample.rate);
     if (this.length + count > this.capacity) this.clear();
+    if (Number.isFinite(sample.timestamp) && (this.nextTimestamp == null || Math.abs(sample.timestamp - this.nextTimestamp) > 250))
+      this.nextTimestamp = sample.timestamp;
     for (let i = 0; i < Math.min(count, this.capacity); i++) {
       const at = (this.offset + this.length) % this.capacity;
       const position = i * sample.rate / this.rate;
       const index = Math.floor(position), next = Math.min(index + 1, sample.left.length - 1), fraction = position - index;
       this.left[at] = sample.left[index] * (1 - fraction) + sample.left[next] * fraction;
       this.right[at] = sample.right[index] * (1 - fraction) + sample.right[next] * fraction;
-      this.timestamps[at] = Number.isFinite(sample.timestamp) ? sample.timestamp + i * 1000 / this.rate : NaN;
+      this.timestamps[at] = this.nextTimestamp == null ? NaN : this.nextTimestamp + i * 1000 / this.rate;
       this.length++;
     }
+    if (this.nextTimestamp != null) this.nextTimestamp += count * 1000 / this.rate;
   }
   read(left, right) {
     left.fill(0); right.fill(0);
@@ -59,11 +69,12 @@ export class PcmQueue {
     this.skewMs = null;
     const trimmedBefore = this.trimmed;
     if (target != null && Number.isFinite(this.timestamps[this.offset]) && this.length) {
-      while (this.length > left.length && this.timestamps[this.offset] < target - 20) {
+      const difference = this.timestamps[this.offset] - target;
+      while ((!this.aligned || difference < -150) && this.length > left.length && this.timestamps[this.offset] < target - 20) {
         this.offset = (this.offset + 1) % this.capacity; this.length--; this.trimmed++;
       }
       this.skewMs = this.timestamps[this.offset] - target;
-      if (this.skewMs > 20) {
+      if (this.skewMs > (this.aligned ? 150 : 20)) {
         for (let i = 0; i < Math.min(32, left.length); i++) {
           left[i] = this.lastLeft * (1 - (i + 1) / 32);
           right[i] = this.lastRight * (1 - (i + 1) / 32);
@@ -72,12 +83,21 @@ export class PcmQueue {
         return;
       }
     }
-    const count = Math.min(left.length, this.length);
-    for (let i = 0; i < count; i++) {
-      left[i] = this.left[this.offset]; right[i] = this.right[this.offset];
-      this.offset = (this.offset + 1) % this.capacity;
+    this.aligned = true;
+    const correction = this.skewMs == null ? 0 : Math.max(-0.01, Math.min(0.01, -this.skewMs / 2500));
+    this.speed += (1 + correction - this.speed) * 0.02;
+    let count = 0;
+    while (count < left.length && this.length > 1) {
+      const next = (this.offset + 1) % this.capacity;
+      left[count] = this.left[this.offset] + (this.left[next] - this.left[this.offset]) * this.phase;
+      right[count] = this.right[this.offset] + (this.right[next] - this.right[this.offset]) * this.phase;
+      this.phase += this.speed;
+      const consumed = Math.min(Math.floor(this.phase), this.length);
+      this.phase -= consumed;
+      this.offset = (this.offset + consumed) % this.capacity;
+      this.length -= consumed;
+      count++;
     }
-    this.length -= count;
     if (this.trimmed > trimmedBefore) {
       const fade = Math.min(32, count);
       for (let i = 0; i < fade; i++) {

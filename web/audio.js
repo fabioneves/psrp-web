@@ -4,7 +4,7 @@ export class AudioOutput {
   constructor(report) {
     this.report = report;
     this.sources = new Set();
-    this.next = 0; this.samples = 0; this.delay = 120; this.closed = false;
+    this.next = 0; this.samples = 0; this.delay = 120; this.underruns = 0; this.closed = false;
     const Context = globalThis.AudioContext || globalThis.webkitAudioContext;
     if (!Context) throw new Error('Web Audio is unavailable in this browser.');
     this.context = new Context({ sampleRate: 48000, latencyHint: 'interactive' });
@@ -42,7 +42,7 @@ export class AudioOutput {
     return channel.port2;
   }
   resume() { this.context.resume().catch(() => {}); }
-  volume(value) { this.gain.gain.value = value; }
+  volume(value) { this.gain.gain.setTargetAtTime(value, this.context.currentTime, 0.01); }
   setDelay(value) { this.delay = value; this.node?.port.postMessage({ type: 'delay', value }); this.reset(); }
   get outputDelayMs() { return ((this.context.outputLatency || 0) + (this.context.baseLatency || 0)) * 1000; }
   sync(timestamp) {
@@ -59,7 +59,7 @@ export class AudioOutput {
     const desired = synced ? this.video.at + (timestamp - this.video.timestamp + AUDIO_RESERVE_MS) / 1000 : null;
     const duration = sample.left.length / sample.rate;
     if (desired != null && desired + duration < time - 0.08) return;
-    if (this.next - time > 0.5 || (desired != null && Math.abs(this.next - desired) > 0.08)) {
+    if (this.next - time > 0.5 || (desired != null && Math.abs(this.next - desired) > 0.25)) {
       for (const source of this.sources) source.stop();
       this.sources.clear(); this.next = Math.max(time, desired ?? time + this.delay / 1000);
     }
@@ -69,12 +69,17 @@ export class AudioOutput {
     source.buffer = buffer; source.connect(this.gain);
     source.onended = () => { source.disconnect(); this.sources.delete(source); };
     this.sources.add(source);
-    if (this.next < this.context.currentTime) this.next = this.context.currentTime + this.delay / 1000;
-    source.start(this.next); this.next += buffer.duration;
+    if (this.next < this.context.currentTime) {
+      if (this.next) this.underruns++;
+      this.next = this.context.currentTime + this.delay / 1000;
+    }
+    const skew = desired == null ? 0 : this.next - desired;
+    source.playbackRate.value = 1 + Math.max(-0.005, Math.min(0.005, skew / 5));
+    source.start(this.next); this.next += buffer.duration / source.playbackRate.value;
     this.samples += sample.left.length;
     if (this.samples % 48000 < sample.left.length) this.report({ type: 'audio-stats', samples: this.samples,
       rms: Math.sqrt(sample.left.reduce((sum, value) => sum + value * value, 0) / sample.left.length),
-      bufferedMs: (this.next - this.context.currentTime) * 1000, underruns: 0, engine: 'Web Audio fallback' });
+      bufferedMs: (this.next - this.context.currentTime) * 1000, underruns: this.underruns, engine: 'Web Audio fallback' });
   }
   reset() {
     this.node?.port.postMessage({ type: 'reset' });

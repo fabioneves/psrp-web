@@ -42,3 +42,23 @@ test('audio follows presented video, discards stale samples and holds future sam
   assert.ok(left[0] > 0);
   queue.clear(); assert.equal(queue.target, null);
 });
+
+test('ordinary video timestamp jitter never interrupts continuous audio', () => {
+  const queue = new PcmQueue(48000, 120);
+  const left = new Float32Array(128), right = new Float32Array(128);
+  let written = 0, silent = 0;
+  for (let block = 0; block < 3750; block++) {
+    const time = block * 128 / 48;
+    while (written < time + 140) {
+      queue.push({ rate: 48000, timestamp: 1000 + written,
+        left: new Float32Array(960).fill(0.2), right: new Float32Array(960).fill(0.2) });
+      written += 20;
+    }
+    if (block % 6 === 0) queue.sync(1000 + time + 40 + (block % 12 ? 32 : -32));
+    queue.read(left, right);
+    if (block > 100 && left.every(value => value === 0)) silent++;
+  }
+  assert.equal(silent, 0);
+  assert.equal(queue.underruns, 0);
+  assert.ok(queue.trimmed < 960, `unexpected discarded samples: ${queue.trimmed}`);
+});
