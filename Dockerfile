@@ -1,3 +1,9 @@
+FROM node:24-bookworm-slim AS web
+WORKDIR /src
+COPY scripts/build-web.mjs scripts/build-web.mjs
+COPY web/ web/
+RUN node scripts/build-web.mjs web /out
+
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 COPY RemotePlay/RemotePlay.csproj RemotePlay/
@@ -21,7 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl && 
 WORKDIR /app
 COPY --from=build /out/app/ ./
 COPY --from=build /out/migrate/ /migrate/
-COPY web/ ./wwwroot/
+COPY --from=web /out/ ./wwwroot/
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN mkdir -p /data && chown app:app /data && chmod +x /entrypoint.sh
 USER app

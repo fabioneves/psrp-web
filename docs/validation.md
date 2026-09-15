@@ -162,4 +162,30 @@ Validation: 36 backend assertions and 20 unit tests passed. All 19 browser/API
 scenarios passed across the full run and the focused session rerun. An additional
 real Chrome check through a local HTTPS proxy confirmed Secure/HttpOnly/Strict
 cookie creation, restoration after reload, and sign-out after reload. The user's
-specific URL/browser path still needs confirmation if the issue persists there.
+specific URL/browser path was not tested in that round.
+
+### Public-domain cache fix
+
+The refresh failure was reproduced in Chrome through `https://play.example.com/`.
+Cloudflare returned an older `/app.js` with `CF-Cache-Status: HIT` and a four-hour
+cache lifetime. Login saved its cookie, but that cached client never called the
+session restore endpoint on reload. The origin's JavaScript `no-cache` header and
+container restarts did not invalidate the public cached response.
+
+Docker now builds a content-hashed asset directory and points the HTML at it.
+Relative module imports stay within that directory; absolute references to local
+workers, worklets and decoders use the same version. API URLs remain unchanged.
+The build hash includes every source asset and the build script itself.
+
+The original public-domain login/refresh/sign-out test now passes. Public checks
+also passed for stale unversioned assets, older login clients, missing-cookie
+feedback and invalid/cross-origin sessions. The older-client test fixture uses
+its own ETag and cache policy so its deliberately modified script is not retained
+as the current release. A build regression verifies deterministic versions,
+dependency invalidation, worker references and unchanged API paths.
+
+Validation: all 21 JavaScript/build tests and all 20 browser/API tests passed
+against the rebuilt Docker deployment, including 720p60, 1080p60 stereo audio,
+software fallbacks, adaptive profiles and controls. The five public-domain session
+scenarios passed across the focused run and the corrected legacy-fixture rerun.
+Docker reports healthy.

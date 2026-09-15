@@ -25,6 +25,11 @@ Open **http://localhost:8080** (or your server's IP and port).
 
 The first build downloads the .NET SDK and FFmpeg and can take a few minutes. PostgreSQL migrations run automatically. Console registrations and accounts persist in `postgres-data`; the generated signing secret persists in `app-data`. There are no GPU device mounts or privileged containers.
 
+After updating the code, run `docker compose up --build -d` and refresh the page.
+Docker builds content-versioned asset URLs so browser/CDN caches fetch the updated
+client, including its workers and decoders. Restarting an existing container alone
+does not rebuild the application.
+
 ### Change the port
 
 ```sh
@@ -197,7 +202,9 @@ Moonlight fork and the architecture-specific exclusions.
 
 ## Development and verification
 
-The frontend is static JavaScript; Node is needed only for tests and rebuilding the vendored decoder bundle.
+The frontend is static JavaScript. Docker uses Node in a build stage to version
+the web assets; Node is not included in the running server. Local Node is needed
+for tests and rebuilding the vendored decoder bundle.
 
 ```sh
 docker build --target test -t canvas-remote-play-tests .
