@@ -407,7 +407,7 @@ namespace RemotePlay.Services.Session
             {
                 _logger.LogError("响应格式无效 (未找到 \\r\\n\\r\\n)");
             }
-            _logger.LogInformation("注册信息: {Info}", string.Join(", ", info.Select(kv => $"{kv.Key}={kv.Value}")));
+            _logger.LogInformation("Console registration returned {FieldCount} fields", info.Count);
             return info;
         }
 

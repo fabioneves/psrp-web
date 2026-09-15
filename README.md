@@ -18,12 +18,14 @@ docker compose up --build -d
 
 Open **http://localhost:8080** (or your server's IP and port).
 
-1. Create a local account in the web UI. Login survives page refresh for up to 24 hours; **Sign out** clears the saved session.
-2. Click **Start test stream** to check your browser's software playback.
-3. Pair your PlayStation using its IP address, your numeric or Base64 PSN account ID and the console's Link Device PIN. Numeric IDs are encoded automatically. **Find consoles on this network** shows search progress and results beside the button. If the scan finds nothing, enter the console IP and choose **Check IP address** to search directly.
-4. Click **Play**. **Disconnect** ends the Remote Play session and stops its FFmpeg process.
+1. Create a local account or sign in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it.
+2. Select a nearby console, or choose **Add console** to enter its IP address.
+3. Choose **Sign in to PSN**, sign in on Sony's page, then paste its final redirect URL back into setup. The app saves and encodes your account ID. Choose **Pair automatically**; if it fails, use **Pair with a PIN** and enter the console's Link Device PIN.
+4. Click **Play**. **Stream settings** offers resolutions through 1080p60. **Start test stream** checks browser playback. **Disconnect** ends the session.
 
-The first build downloads the .NET SDK and FFmpeg and can take a few minutes. PostgreSQL migrations run automatically. Console registrations and accounts persist in `postgres-data`; the generated signing secret persists in `app-data`. There are no GPU device mounts or privileged containers.
+Manual account-ID entry and public online-name lookup are also available under PIN pairing. The public lookup provider may be unavailable; Sony sign-in does not depend on it. See [setup details and verification limits](docs/psn-setup.md).
+
+The first build downloads the .NET SDK, FFmpeg and a pinned Chiaki-ng library for PSN pairing. PostgreSQL migrations run automatically. Accounts and console registrations persist in `postgres-data`; the signing secret and PSN token-encryption keys persist in `app-data`. Keep both volumes when upgrading. There are no GPU device mounts or privileged containers.
 
 After updating the code, run `docker compose up --build -d` and refresh the page.
 Docker builds content-versioned asset URLs so browser/CDN caches fetch the updated
@@ -55,8 +57,9 @@ The Docker server must be able to reach the console on your home network. The br
 - **PS5:** enable Remote Play in Settings → System → Remote Play; use Link Device for the PIN.
 - **PS4:** enable Remote Play in Settings → Remote Play Connection Settings; use Add Device for the PIN.
 - For wake from rest mode, enable the console's network connection and network wake options. Sony documents these in its [Remote Play setup guide](https://www.playstation.com/en-us/support/games/playstation-remote-play-on-pc-and-mac/).
-- Paste your **numeric PSN account ID** and the browser will encode it automatically, showing the Base64 value before pairing. Existing Base64 IDs from Chiaki also work. This is not your online name or password; username lookup is not included. If you do not have the ID, obtain it with [Chiaki-ng's account ID script](https://github.com/streetpea/chiaki-ng/blob/main/scripts/psn-account-id.py). This app does not need your PSN password.
-- Pairing requires a fresh PIN from the console even if another local user already paired it. Access to a stream is checked against the signed-in user's paired devices.
+- **Sign in to PSN** fills and saves your account ID and enables automatic pairing. Your PSN password stays on Sony's page. Access/refresh tokens are encrypted on the server for pairing.
+- Alternatively, use public online-name lookup or paste a **numeric PSN account ID**; it is encoded automatically. Existing Base64 IDs from Chiaki also work.
+- Automatic pairing requires the PSN account on the console and working PSN connectivity. PIN pairing requires a fresh console PIN. Each local user must pair their own console; stream access is checked against their device bindings.
 
 Default Compose uses bridge networking. To enable **automatic network discovery**
 when Docker cannot forward LAN broadcasts, set your LAN subnet in `.env` and
@@ -149,7 +152,7 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 - One active viewer/session per server. Stop it before connecting another viewer. An abandoned connection expires after missed heartbeats.
 - Optional gamepads supply analog sticks/triggers and positional PlayStation buttons. Tesla virtual-controller face swaps, source preference, manual index selection and dead zones are configurable. Polling detects devices even without browser connection events; only one local gamepad is selected to suppress mirrored input.
 - No microphone, rumble, motion sensing or touchpad gestures. Touch direction buttons provide full stick deflection. Some games require features beyond these controls.
-- No native PSN login or console-to-server relay/TURN. The server connects directly to the paired console.
+- PSN sign-in and pinless registration use a server-side Chiaki helper. Media playback connects directly from the server to the LAN console; internet media relay is not implemented.
 
 ## Profiles and server performance
 

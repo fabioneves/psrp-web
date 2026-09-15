@@ -242,3 +242,40 @@ Validation after deploying both changes: all 46 backend assertions, 24 JavaScrip
 tests and 22 browser/API tests passed. Public-domain checks passed for encoding
 and saved login, in addition to the real automatic-discovery check. The rebuilt
 Docker deployment is healthy.
+
+### Simplified setup and PSN account persistence
+
+The console list is now the main screen, with automatic nearby discovery. PSN
+sign-in, manual IP entry and PIN pairing live in a setup dialog; stream settings
+are collapsed. Refresh loads the saved login silently. Local users remain in the
+existing PostgreSQL database; no account migration was needed.
+
+Validation on 2026-09-15:
+
+- 65 backend assertions passed, including exact PSN account encoding, OAuth state
+  ownership/expiry/replay, fake Sony responses and registered-console MAC checks.
+- Seven PostgreSQL integration assertions passed: tokens are encrypted, users are
+  isolated, metadata/tokens survive a new context/key provider, and console/user
+  bindings persist without duplicate bindings. Test-owned rows are cleaned up.
+- 24 JavaScript tests and 26 browser/API tests passed with GPU acceleration
+  disabled. Existing software video, stereo audio, gamepads, phone input and
+  1080p60 rendering checks passed. Setup tests cover the Sony callback UI,
+  automatic-pairing success/error responses, public lookup and PIN fallback.
+- The public HTTPS site automatically discovered the real PS5Pro at 192.0.2.20.
+  Desktop and mobile setup screens were inspected in Chromium.
+- The native helper compiled in Docker and rejected invalid input in the running
+  application container without outputting credentials. Its source download
+  returned HTTP 200. Both Compose services were healthy. npm audit reported zero
+  vulnerabilities.
+
+Sony sign-in and pinless pairing are tested with fake service responses, not a live
+PSN account. The real console check covers discovery, not registration or gameplay.
+The public lookup provider returned HTTP 500; the app offers Sony sign-in/manual
+entry when it is unavailable. See [setup boundaries](psn-setup.md).
+
+After a reported Sony “Something went wrong” error, the generated authorization
+URL was opened in fresh Chromium contexts with Linux and Windows user agents.
+Both reached Sony's email sign-in screen. No credentials were entered, so this
+does not verify the later authentication step. The dialog now offers a copyable
+sign-in URL and the browser workarounds reported upstream. All four setup tests
+passed again through the public HTTPS deployment after that change.

@@ -30,6 +30,7 @@ namespace RemotePlay.Controllers
         private readonly IControllerService _controllerService;
         private readonly ILoggerFactory _loggerFactory;
         private readonly IRegisterService _reg;
+        private readonly RemotePlay.Services.Device.ConsolePairingStore _pairing;
         private readonly RPContext _rpContext;
         private readonly IWebHostEnvironment _env;
         private readonly IDeviceSettingsService _deviceSettingsService;
@@ -45,9 +46,11 @@ namespace RemotePlay.Controllers
             ILogger<PlayStationController> logger,
             ILoggerFactory loggerFactory,
             IWebHostEnvironment env,
-            IDeviceSettingsService deviceSettingsService)
+            IDeviceSettingsService deviceSettingsService,
+            RemotePlay.Services.Device.ConsolePairingStore pairing)
         {
             _remotePlayService = remotePlayService;
+            _pairing = pairing;
             _reg = registeredServices;
             _rpContext = rpContext;
             _sessionService = sessionService;
@@ -1022,92 +1025,7 @@ namespace RemotePlay.Controllers
                     });
                 }
 
-                // 检查设备是否已存在
-                var existingDevice = await _rpContext.PSDevices
-                    .FirstOrDefaultAsync(d => d.HostId == deviceInfo.Uuid);
-
-                Models.DB.PlayStation.Device device;
-                if (existingDevice != null)
-                {
-                    // 更新现有设备信息
-                    device = existingDevice;
-                    device.IpAddress = deviceInfo.Ip;
-                    device.HostName = deviceInfo.Name;
-                    device.HostType = deviceInfo.HostType;
-                    device.SystemVersion = deviceInfo.SystemVerion;
-                    device.DiscoverProtocolVersion = deviceInfo.DeviceDiscoverPotocolVersion;
-                    device.Status = "OK";
-
-                    // 如果注册成功，更新注册信息
-                    if (registerResult != null && registerResult.Success)
-                    {
-                        device.IsRegistered = true;
-                        device.APBssid = registerResult?.RegistData?.GetValueOrDefault("AP-Bssid");
-                        device.RegistData = JObject.FromObject(registerResult?.RegistData ?? new() { });
-                        device.RegistKey = registerResult?.RegistData?.FirstOrDefault(x => x.Key.Contains("RegistKey")).Value;
-                        device.MacAddress = registerResult?.RegistData?.FirstOrDefault(x => x.Key.Contains("Mac")).Value;
-                        device.RPKeyType = registerResult?.RegistData?.GetValueOrDefault("RP-KeyType");
-                        device.RPKey = registerResult?.RegistData?.GetValueOrDefault("RP-Key");
-                    }
-                }
-                else
-                {
-                    // 创建新设备
-                    device = new Models.DB.PlayStation.Device
-                    {
-                        Id = _idGenerator.NextStringId(),
-                        uuid = Guid.NewGuid(),
-                        HostId = deviceInfo.Uuid,
-                        HostName = deviceInfo.Name,
-                        HostType = deviceInfo.HostType,
-                        IpAddress = deviceInfo.Ip,
-                        SystemVersion = deviceInfo.SystemVerion,
-                        DiscoverProtocolVersion = deviceInfo.DeviceDiscoverPotocolVersion,
-                        Status = deviceInfo.status,
-                        IsRegistered = registerResult?.Success ?? false,
-                        APBssid = registerResult?.RegistData?.GetValueOrDefault("AP-Bssid"),
-                        RegistData = JObject.FromObject(registerResult?.RegistData ?? new() { }),
-                        RegistKey = registerResult?.RegistData?.FirstOrDefault(x => x.Key.Contains("RegistKey")).Value,
-                        MacAddress = registerResult?.RegistData?.FirstOrDefault(x => x.Key.Contains("Mac")).Value,
-                        RPKeyType = registerResult?.RegistData?.GetValueOrDefault("RP-KeyType"),
-                        RPKey = registerResult?.RegistData?.GetValueOrDefault("RP-Key"),
-
-                    };
-                    _rpContext.PSDevices.Add(device);
-                }
-
-                await _rpContext.SaveChangesAsync();
-
-                // 检查用户是否已绑定此设备
-                var existingUserDevice = await _rpContext.UserDevices
-                    .FirstOrDefaultAsync(ud => ud.UserId == userIdClaim && ud.DeviceId == device.Id);
-
-                if (existingUserDevice == null)
-                {
-                    // 创建用户设备关联
-                    var userDevice = new Models.DB.Auth.UserDevice
-                    {
-                        Id = Guid.NewGuid().ToString(),
-                        UserId = userIdClaim,
-                        DeviceId = device.Id,
-                        DeviceName = request.DeviceName ?? device.HostName,
-                        DeviceType = device.HostType,
-                        IsActive = true,
-                        CreatedAt = DateTime.UtcNow
-                    };
-                    _rpContext.UserDevices.Add(userDevice);
-                    await _rpContext.SaveChangesAsync();
-                }
-                else
-                {
-                    // 如果已存在但未激活，则激活
-                    if (!existingUserDevice.IsActive)
-                    {
-                        existingUserDevice.IsActive = true;
-                        existingUserDevice.UpdatedAt = DateTime.UtcNow;
-                        await _rpContext.SaveChangesAsync();
-                    }
-                }
+                var device = await _pairing.SaveAsync(userIdClaim, deviceInfo, registerResult!, request.DeviceName, HttpContext.RequestAborted);
 
                 return Ok(new ApiSuccessResponse<object>
                 {

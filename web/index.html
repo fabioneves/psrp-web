@@ -13,17 +13,15 @@
 <body>
   <header class="site-header">
     <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">▰</span> CANVAS <span>REMOTE PLAY</span></a>
-    <span class="mode-badge">SOFTWARE VIDEO</span>
+
     <button id="logout" class="quiet" hidden>Sign out</button>
   </header>
   <main>
-    <p id="session-status" role="status">Restoring your session…</p>
     <section id="account" class="account-layout" hidden>
       <div class="intro">
         <p class="eyebrow">YOUR CONSOLE. YOUR BROWSER.</p>
-        <h1>Press play.<br>Leave the hardware behind.</h1>
-        <p>Connect to your PlayStation with a browser. Software video, a canvas screen, and controls at your fingertips.</p>
-        <div class="spec-row"><span>720p / 60 fps target</span><span>No GPU required</span><span>Stereo audio</span></div>
+        <h1>Your PlayStation.<br>Ready to play.</h1>
+        <p>Sign in to connect to your consoles.</p>
       </div>
       <form id="auth-form" class="panel">
         <p class="eyebrow">WELCOME BACK</p>
@@ -33,42 +31,72 @@
         <label>Password<input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="100"></label>
         <button type="submit" class="primary" id="auth-submit">Sign in</button>
         <button type="button" id="auth-toggle" class="quiet">Create a local account</button>
-        <p class="hint">This is your server account. Use your PlayStation account ID only when pairing a console.</p>
+        <p class="hint">Your account keeps your consoles and settings together.</p>
       </form>
     </section>
 
     <section id="library" hidden>
-      <div class="section-heading"><div><p class="eyebrow">READY WHEN YOU ARE</p><h1>Your consoles</h1></div><button id="refresh">Refresh</button></div>
+      <div class="section-heading"><h1>Your consoles</h1><div class="setup-actions"><button id="refresh" class="quiet">Refresh</button><button id="add-console" class="primary">Add console</button></div></div>
       <section id="attach-panel" class="panel" hidden>
         <h2>Stream running on another screen</h2>
         <p>Attach this device as a controller. The other screen keeps playing.</p>
         <button id="attach-input" class="primary">Attach input only</button>
       </section>
-      <div class="library-grid">
-        <div>
-          <div id="devices" class="device-list"></div>
-          <section class="panel benchmark">
-            <span class="eyebrow">CHECK YOUR BROWSER</span>
-            <h2>Try a test stream</h2>
-            <p>Measure software playback before connecting a console. The moving test pattern and tone use your selected profile.</p>
-            <button id="demo">Start test stream <span aria-hidden="true">↗</span></button>
+      <div id="devices" class="device-list"></div>
+      <section id="nearby-panel" hidden>
+        <h2>Nearby consoles</h2>
+        <p id="nearby-status" class="hint" role="status"></p>
+        <div id="nearby-devices" class="device-list"></div>
+      </section>
+      <div class="library-tools"><button id="account-settings" class="quiet">PlayStation account</button><button id="demo" class="quiet">Start test stream</button></div>
+      <dialog id="setup-dialog" aria-labelledby="setup-title">
+        <form id="pair-form" novalidate>
+          <div class="section-heading"><h2 id="setup-title">Add a console</h2><button type="button" id="close-setup" class="quiet" aria-label="Close setup">Close</button></div>
+          <p id="selected-console" class="hint">Select a nearby console, or find it below.</p>
+          <details id="console-search">
+            <summary>Find a console or enter its IP</summary>
+            <label>Console IP address<input id="host-ip" placeholder="192.168.1.50" maxlength="45" autocomplete="off"></label>
+            <div class="setup-actions"><button type="button" id="check-ip" class="quiet" aria-describedby="discovery-status" aria-controls="discovered">Check IP address</button><button type="button" id="discover" class="quiet" aria-describedby="discovery-status" aria-controls="discovered">Find consoles on this network</button></div>
+            <p id="discovery-status" class="hint" role="status" aria-live="polite" aria-atomic="true"></p>
+            <div id="discovered"></div>
+          </details>
+          <section class="setup-account">
+            <h3>PlayStation account</h3>
+            <p id="psn-account-status" role="status">Sign in to PSN to fill in your account and pair automatically.</p>
+            <div class="setup-actions"><button type="button" id="psn-login" class="primary">Sign in to PSN</button><button type="button" id="psn-disconnect" class="quiet" hidden>Forget PSN account</button></div>
+            <div id="psn-login-flow" hidden>
+              <p>Open Sony’s sign-in page. When it finishes on a page named “redirect”, copy that page’s full address and paste it here.</p>
+              <a id="psn-login-link" target="_blank" rel="noopener noreferrer">Open PlayStation sign-in ↗</a>
+              <details id="psn-login-help"><summary>Sony says “Something went wrong”?</summary>
+                <p>Try this link in a private window or another browser. You can also open this app on your phone or computer, sign in to the same local account, and finish PlayStation setup there. Then refresh this screen.</p>
+                <p>Another option: sign in at <a href="https://www.playstation.com/" target="_blank" rel="noopener noreferrer">PlayStation.com</a> first, then open the sign-in link above in that same browser. If you use a VPN, try without it. These steps may help with Sony’s login error.</p>
+                <label>Sign-in link<input id="psn-copy-url" readonly autocomplete="off" spellcheck="false"></label>
+                <button type="button" id="psn-copy-link" class="quiet">Copy sign-in link</button>
+                <p class="hint">This link lasts ten minutes. Paste the final redirect URL back into this app. Your PSN password belongs only on Sony’s page.</p>
+              </details>
+              <label>PSN redirect URL<input id="psn-redirect" type="url" maxlength="4096" autocomplete="off" spellcheck="false" placeholder="https://remoteplay.dl.playstation.net/remoteplay/redirect?…"></label>
+              <button type="button" id="psn-complete" class="primary">Continue</button>
+            </div>
+            <p id="psn-status" class="hint" role="status" aria-live="polite" hidden></p>
           </section>
-        </div>
-        <form id="pair-form" class="panel">
-          <p class="eyebrow">ADD A PLAYSTATION</p><h2>Pair your console</h2>
-          <p class="hint">Enable Remote Play on your console, then open Link Device to get an 8-digit PIN.</p>
-          <label>Console IP address<input id="host-ip" placeholder="192.168.1.50" required maxlength="45" autocomplete="off"></label>
-          <button type="button" id="check-ip" class="quiet" aria-describedby="discovery-status" aria-controls="discovered">Check IP address</button>
-          <button type="button" id="discover" class="quiet" aria-describedby="discovery-status" aria-controls="discovered">Find consoles on this network</button>
-          <p id="discovery-status" class="hint" role="status" aria-live="polite" aria-atomic="true"></p>
-          <div id="discovered"></div>
-          <label>PlayStation account ID<input id="account-id" required maxlength="20" placeholder="Numeric ID or Base64" autocomplete="off" aria-describedby="account-id-hint account-id-preview"></label>
-          <p id="account-id-hint" class="hint">Paste your numeric PSN account ID or its Base64 value. Numeric IDs are encoded automatically; this is not your PSN online name.</p>
-          <p id="account-id-preview" class="hint" role="status" aria-live="polite" hidden></p>
-          <label>Link Device PIN<input id="pin" required inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="8 digits" autocomplete="off"></label>
-          <button class="primary" type="submit">Pair console</button>
+          <button type="button" id="auto-pair" class="primary" hidden>Pair automatically</button>
+          <details id="manual-pairing">
+            <summary>Pair with a PIN or use an account ID</summary>
+            <details id="public-lookup"><summary>Find an ID by PSN online name</summary>
+              <p class="hint">Public lookup sends your online name to <a href="https://psn.flipscreen.games/" target="_blank" rel="noopener noreferrer">FlipScreen Games</a>. Your PSN privacy settings must allow Anyone to find you in search.</p>
+              <label>PSN online name<input id="psn-online-name" maxlength="16" autocomplete="off" spellcheck="false"></label>
+              <button type="button" id="psn-lookup" class="quiet">Find account ID</button>
+            </details>
+            <label>PlayStation account ID<input id="account-id" maxlength="20" placeholder="Numeric ID or Base64" autocomplete="off" aria-describedby="account-id-hint account-id-preview"></label>
+            <p id="account-id-hint" class="hint">Numeric IDs are encoded automatically. Existing Base64 IDs also work.</p>
+            <p id="account-id-preview" class="hint" role="status" aria-live="polite" hidden></p>
+            <p class="hint">On PS5, open Settings → System → Remote Play → Link Device. On PS4, use Remote Play Connection Settings → Add Device.</p>
+            <label>Link Device PIN<input id="pin" inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="8 digits" autocomplete="off"></label>
+            <button class="primary" type="submit">Pair console</button>
+          </details>
         </form>
-      </div>
+      </dialog>
+      <details id="stream-settings"><summary>Stream settings</summary>
       <div id="library-profile"><div id="profile-settings">
       <div class="settings-grid">
       <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>
@@ -80,6 +108,7 @@
         <button id="apply-profile" hidden>Apply selected profile</button>
         <p id="quality-status" role="status">Manual quality. Your selected profile stays fixed.</p>
       </div></div>
+      </details>
     </section>
 
     <section id="player" hidden>
@@ -134,6 +163,6 @@
     </section>
     <p id="message" role="status" aria-live="polite" hidden></p>
   </main>
-  <footer><span>CANVAS REMOTE PLAY</span><span>Independent software · PS4 & PS5 · Software video and audio</span></footer>
+  <footer><a href="/native-psn-source.tar.gz">PSN pairing source</a><span>Independent software · PS4 & PS5 · Software video and audio</span></footer>
 </body>
 </html>

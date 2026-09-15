@@ -5,9 +5,12 @@ import { AudioOutput } from './audio.js';
 import { startStream } from './stream-runtime.js';
 import { AdaptiveQuality } from './adaptive.js';
 import { encodeAccountId } from './account-id.js';
+import { bindSetup } from './setup.js';
 
 const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
+const setup = bindSetup(api, refresh, notify);
+let pairedConsoleIds = new Set(), scanning = false;
 const resetInputs = bindInputs($('controls'), message => {
   worker?.postMessage(message);
   stream?.input(message);
@@ -60,13 +63,16 @@ async function updateWakeLock() {
 document.addEventListener('visibilitychange', updateWakeLock);
 window.addEventListener('focus', () => gamepads.reset());
 
-function notify(message) { $('message').textContent = message; $('message').hidden = !message; }
-async function api(path, body) {
+function notify(message) {
+  const target = $('setup-dialog').open ? $('psn-status') : $('message');
+  target.textContent = message; target.hidden = !message;
+}
+async function api(path, body, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 15000);
+  const timeout = setTimeout(() => controller.abort(), options.timeout || 15000);
   try {
     const response = await fetch(`/api/${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
+      method: options.method || (body === undefined ? 'GET' : 'POST'),
       signal: controller.signal,
       headers: { 'Content-Type': 'application/json', 'X-Remote-Play-Session': '1', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body)
@@ -105,9 +111,11 @@ $('auth-form').onsubmit = event => {
     if (registering) await api('auth/register', { username: credentials.usernameOrEmail, email: $('email').value, password: credentials.password });
     const result = await api('auth/login', credentials);
     token = result.token;
+    setup.reset();
     $('password').value = '';
     showAccount();
     await refresh();
+    void setup.restore();
     const signedInToken = token;
     try {
       const saved = await api('auth/session');
@@ -121,27 +129,28 @@ $('auth-form').onsubmit = event => {
 };
 $('logout').onclick = () => run($('logout'), async () => {
   await api('auth/logout', {});
-  stop(); token = null; showAccount(); notify('');
+  stop(); token = null; setup.reset(); showAccount(); notify('');
 });
 
 async function restoreSession() {
   try {
     const session = await api('auth/session');
     token = session.token;
-    if (token) await refresh();
+    if (token) { await refresh(); void setup.restore(); }
   } catch (error) { notify(`Could not restore your session: ${error.message}`); }
-  finally { $('session-status').hidden = true; showAccount(); }
+  finally { showAccount(); }
 }
 
 async function refresh() {
   await refreshActive();
   const devices = await api('playstation/my-devices');
+  pairedConsoleIds = new Set(devices.map(device => device.hostId));
   $('devices').replaceChildren();
   if (!devices.length) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    const title = document.createElement('h2'); title.textContent = 'Your screen is waiting.';
-    const text = document.createElement('p'); text.textContent = 'Pair a PlayStation to get started, or try the test stream below.';
+    const title = document.createElement('h2'); title.textContent = 'Connect your first console';
+    const text = document.createElement('p'); text.textContent = 'Select a nearby PlayStation below, or choose Add console.';
     empty.append(title, text); $('devices').append(empty);
   }
   for (const device of devices) {
@@ -155,6 +164,7 @@ async function refresh() {
     button.onclick = () => run(button, () => play(device.hostId, title.textContent));
     card.append(icon, info, button); $('devices').append(card);
   }
+  void discoverConsoles();
 }
 $('refresh').onclick = () => run($('refresh'), refresh);
 $('account-id').oninput = () => {
@@ -172,8 +182,11 @@ $('pair-form').onsubmit = event => {
   event.preventDefault();
   run(event.submitter, async () => {
     const accountId = encodeAccountId($('account-id').value);
+    if (!$('host-ip').value.trim()) throw new Error('Select a console or enter its IP address first.');
+    if (!/^\d{8}$/.test($('pin').value)) throw new Error('Enter the 8-digit Link Device PIN from your console.');
     await api('playstation/bind', { hostIp: $('host-ip').value.trim(), accountId, pin: $('pin').value });
     $('pin').value = '';
+    $('setup-dialog').close();
     await refresh();
     notify('Console paired. Choose Play to connect.');
   });
@@ -187,6 +200,9 @@ $('check-ip').onclick = () => {
 };
 
 async function discoverConsoles(hostIp = '') {
+  if (scanning) return;
+  scanning = true;
+  const viewer = token;
   const button = hostIp ? $('check-ip') : $('discover'), status = $('discovery-status');
   const label = button.textContent;
   $('discover').disabled = $('check-ip').disabled = true;
@@ -194,11 +210,16 @@ async function discoverConsoles(hostIp = '') {
   button.setAttribute('aria-busy', 'true');
   notify('');
   $('discovered').replaceChildren();
+  $('nearby-panel').hidden = false;
+  $('nearby-status').textContent = 'Searching for consoles…';
   status.textContent = hostIp ? `Checking ${hostIp}… This usually takes a few seconds.`
     : 'Searching for consoles… This usually takes a few seconds.';
   try {
     const result = await api(`playstation/discover${hostIp ? '/' + encodeURIComponent(hostIp) : ''}?timeoutMs=3000`);
     const consoles = hostIp ? [result] : result;
+    if (token !== viewer) return;
+    $('nearby-devices').replaceChildren();
+    $('nearby-status').textContent = consoles.length ? '' : 'No nearby consoles found. Use Add console to enter an IP address.';
     status.textContent = consoles.length
       ? `Found ${consoles.length} console${consoles.length === 1 ? '' : 's'}. Select one to fill in its IP address.`
       : 'No consoles found by automatic discovery. Enter the console IP address above and choose Check IP address to search directly.';
@@ -206,19 +227,27 @@ async function discoverConsoles(hostIp = '') {
       const button = document.createElement('button'); button.type = 'button';
       button.textContent = `${console.name} · ${console.ip}`;
       button.onclick = () => {
-        $('host-ip').value = console.ip;
-        status.textContent = `Selected ${console.name}. Enter your account ID and Link Device PIN to pair it.`;
-        $('account-id').focus();
+        setup.select(console);
+        status.textContent = `Selected ${console.name}. Sign in to PSN to pair automatically, or use a Link Device PIN.`;
       };
       $('discovered').append(button);
+      if (!pairedConsoleIds.has(console.uuid)) {
+        const nearby = document.createElement('button');
+        nearby.className = 'nearby-console';
+        nearby.textContent = `${console.name} · Set up`;
+        nearby.onclick = () => setup.select(console);
+        $('nearby-devices').append(nearby);
+      }
     }
   } catch (error) {
+    $('nearby-status').textContent = 'Console search failed. Choose Refresh to try again.';
     if (hostIp && error.status === 404)
       status.textContent = `No console responded at ${hostIp}. Check the IP address, turn on the console and enable Remote Play, then try again.`;
     else status.textContent = error.name === 'AbortError'
       ? 'Console search timed out. Try again, or enter the console IP address and choose Check IP address.'
       : `Console search failed: ${error.message} Try again, or enter the console IP address and choose Check IP address.`;
   } finally {
+    scanning = false;
     $('discover').disabled = $('check-ip').disabled = false;
     button.textContent = label;
     button.removeAttribute('aria-busy');

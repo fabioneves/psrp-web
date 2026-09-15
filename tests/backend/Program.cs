@@ -16,8 +16,11 @@ static void Check(bool value, string message)
     Console.WriteLine($"PASS: {message}");
 }
 
+if (args.Contains("--psn-storage")) { await PsnStorageTests.RunAsync(Check); return; }
+
 var clock = new TestClock();
 await DiscoveryTests.RunAsync(Check);
+await PsnTests.RunAsync(Check);
 var browserRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
 browserRequest.Host = new Microsoft.AspNetCore.Http.HostString("play.example.test");
 Check(!BrowserSession.IsSameOrigin(browserRequest), "session restoration requires an explicit browser request header");

@@ -532,3 +532,34 @@ footer {
   overflow-y: auto;
   padding: 16px;
 }
+
+#setup-dialog {
+  width:min(620px,calc(100vw - 32px));
+  max-height:calc(100dvh - 40px);
+  color:var(--text);
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:28px;
+}
+#setup-dialog::backdrop { background:rgb(0 0 0 / .72); }
+#setup-dialog label { margin:16px 0; }
+#setup-dialog details { margin:18px 0; }
+#setup-dialog summary { cursor:pointer; padding:8px 0; }
+#setup-dialog .section-heading { margin-bottom:16px; gap:12px; }
+#setup-dialog h2 { margin:0; font-size:1.4rem; }
+#setup-dialog h3 { font-size:1rem; }
+#setup-dialog a { color:var(--accent); }
+#setup-dialog input { width:100%; }
+#psn-status { overflow-wrap:anywhere; }
+.setup-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.setup-account { padding:12px 0; }
+.library-tools { display:flex; gap:12px; flex-wrap:wrap; margin:24px 0; }
+#stream-settings { margin-top:20px; }
+#stream-settings>summary { cursor:pointer; padding:12px 0; }
+#nearby-panel { margin-top:28px; }
+.nearby-console { text-align:left; padding:24px; width:100%; }
+@media(max-width:600px) {
+  #setup-dialog { padding:20px; }
+  #library>.section-heading { align-items:flex-start; gap:16px; flex-direction:column; }
+}

@@ -8,6 +8,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using RemotePlay.Hubs;
 using System.Text;
+using Microsoft.AspNetCore.DataProtection;
+using RemotePlay.Services.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -226,6 +228,18 @@ builder.Services.Configure<RemotePlay.Services.Device.DeviceStatusUpdateConfig>(
 
 // 注册HttpClient
 builder.Services.AddHttpClient();
+builder.Services.AddDataProtection().PersistKeysToFileSystem(new DirectoryInfo("/data/protection-keys")).SetApplicationName("CanvasRemotePlay");
+builder.Services.AddHttpClient<PsnAccountClient>(client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.MaxResponseContentBufferSize = 65536;
+}).RemoveAllLoggers().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<PsnLoginAttempts>();
+builder.Services.AddScoped<PsnAccountStore>();
+builder.Services.AddScoped<RemotePlay.Services.Device.ConsolePairingStore>();
+builder.Services.AddSingleton<PsnNative>();
+builder.Services.AddScoped<PsnAutoPairing>();
 
 // 注册核心服务
 builder.Services.AddSingleton<RemotePlay.Contracts.Services.IDeviceDiscoveryService, RemotePlay.Services.Device.DeviceDiscoveryService>();
@@ -292,7 +306,8 @@ app.Use(async (context, next) =>
     if (path.StartsWith("/api/") &&
         path is not "/api/auth/login" and not "/api/auth/register" and not "/api/auth/session" and not "/api/auth/logout" and not "/api/playstation/bind" and not "/api/playstation/my-devices" &&
         !path.StartsWith("/api/playstation/discover") &&
-        path is not "/api/software/tickets" and not "/api/software/stream" and not "/api/software/active")
+        path is not "/api/software/tickets" and not "/api/software/stream" and not "/api/software/active" &&
+        path is not "/api/psn/login" and not "/api/psn/account" and not "/api/psn/lookup" and not "/api/psn/pair")
     {
         context.Response.StatusCode = 404;
         return;

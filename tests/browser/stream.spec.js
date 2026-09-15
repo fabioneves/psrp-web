@@ -14,6 +14,8 @@ async function register(page, suffix = '') {
 
 test('console discovery shows nearby progress, empty results, errors and selectable results', async ({ page }) => {
   await register(page);
+  await page.locator('#add-console').click();
+  await expect(page.locator('#discover')).toBeEnabled();
   let completeSearch;
   await page.route('**/api/playstation/discover?*', route => new Promise(resolve => {
     completeSearch = async (status, body) => {
@@ -50,12 +52,14 @@ test('console discovery shows nearby progress, empty results, errors and selecta
   await expect(button).toHaveText('Find consoles on this network');
   await page.getByRole('button', { name: 'Living room PS5 · 192.168.1.50' }).click();
   await expect(page.locator('#host-ip')).toHaveValue('192.168.1.50');
-  await expect(page.locator('#account-id')).toBeFocused();
+  await expect(page.locator('#psn-login')).toBeFocused();
   await expect(status).toContainText('Selected Living room PS5');
 });
 
 test('a console IP can be checked directly when broadcast discovery finds nothing', async ({ page }) => {
   await register(page);
+  await page.locator('#add-console').click();
+  await expect(page.locator('#discover')).toBeEnabled();
   const button = page.locator('#check-ip');
   const status = page.locator('#discovery-status');
   await page.route('**/api/playstation/discover?*', route => route.fulfill({ json: [] }));
@@ -87,11 +91,13 @@ test('a console IP can be checked directly when broadcast discovery finds nothin
   await expect(status).toContainText('Found 1 console');
   await page.getByRole('button', { name: 'PS5Pro · 192.0.2.20' }).click();
   await expect(page.locator('#host-ip')).toHaveValue('192.0.2.20');
-  await expect(page.locator('#account-id')).toBeFocused();
+  await expect(page.locator('#psn-login')).toBeFocused();
 });
 
 test('pairing automatically encodes numeric account IDs and accepts existing Base64', async ({ page }) => {
   await register(page);
+  await page.locator('#add-console').click();
+  await page.locator('#manual-pairing > summary').click();
   const submitted = [];
   await page.route('**/api/playstation/bind', route => {
     submitted.push(route.request().postDataJSON());
@@ -102,7 +108,7 @@ test('pairing automatically encodes numeric account IDs and accepts existing Bas
   await page.getByLabel('PlayStation account ID', { exact: true }).fill('72623859790382856');
   await expect(page.locator('#account-id-preview')).toHaveText('Encoded account ID: CAcGBQQDAgE=');
   await page.getByRole('button', { name: 'Pair console', exact: true }).click();
-  await expect(page.locator('#message')).toHaveText('Pairing intercepted for this test.');
+  await expect(page.locator('#psn-status')).toHaveText('Pairing intercepted for this test.');
   expect(submitted[0].accountId).toBe('CAcGBQQDAgE=');
   await page.locator('#account-id').fill('CAcGBQQDAgE=');
   await expect(page.locator('#account-id-preview')).toBeHidden();
@@ -111,7 +117,7 @@ test('pairing automatically encodes numeric account IDs and accepts existing Bas
   expect(submitted[1].accountId).toBe('CAcGBQQDAgE=');
   await page.locator('#account-id').fill('PSN_Online_Name');
   await page.getByRole('button', { name: 'Pair console', exact: true }).click();
-  await expect(page.locator('#message')).toContainText('A PSN online name cannot be encoded');
+  await expect(page.locator('#psn-status')).toContainText('A PSN online name cannot be encoded');
   expect(submitted.length).toBe(2);
 });
 
@@ -274,6 +280,7 @@ test('JavaScript decoder fallback also renders without WebAssembly or native med
 
 test('1080p60 software profile renders with real stereo audio', async ({ page }, testInfo) => {
   await register(page);
+  await page.locator('#stream-settings > summary').click();
   await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('1080p');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
@@ -326,6 +333,7 @@ test('automatic quality responds to sustained CPU pressure and manual apply over
     await route.fulfill({ response, body: script });
   });
   await register(page, '?mainThread=1');
+  await page.locator('#stream-settings > summary').click();
   await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('1080p');
   await page.getByLabel('Automatically adjust quality').check();
   await page.getByRole('button', { name: 'Start test stream' }).click();
@@ -469,6 +477,7 @@ test('audio fallback and automatic video worker fallback remain playable', async
 
 test('lower profiles use the selected dimensions and frame rate', async ({ page }) => {
   await register(page);
+  await page.locator('#stream-settings > summary').click();
   for (const [resolution, fps, dimensions] of [['360p', '30', '640 × 360'], ['540p', '60', '960 × 540']]) {
     await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption(resolution);
     await page.getByRole('combobox', { name: 'Frame rate', exact: true }).selectOption(fps);
