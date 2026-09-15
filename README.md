@@ -107,12 +107,33 @@ and make TCP ports 80/443 reachable. Start it with:
 docker compose -f compose.yaml -f compose.https.yaml up --build -d
 ```
 
-Caddy obtains/renews the certificate and proxies WebSockets. This overlay removes
-the direct HTTP app port and publishes only the proxy. Use it with the default
+Caddy obtains/renews the certificate and proxies WebSockets. This overlay binds
+the direct HTTP app port to loopback for local checks or an existing proxy. Set
+`HTTP_BIND` to a LAN address if you also need direct HTTP access from your LAN.
+Use it with the default
 bridge configuration; the separate host-network override is for LAN discovery.
 No browser-facing UDP media ports, STUN or TURN are required. DNS, routing and
 certificate issuance need your real domain; local validation does not prove the
 vehicle can reach it.
+
+To keep HTTPS enabled with ordinary `docker compose up -d` commands, add
+`COMPOSE_FILE=compose.yaml:compose.https.yaml` to `.env`.
+
+For rootless Docker, use unprivileged host ports, for example `HTTP_PORT=18090`
+and `HTTPS_PORT=18443`. Forward public TCP port **80 to server port 18090** and
+public TCP port **443 to server port 18443**, then open `https://play.example.com/`
+without a port suffix. The DNS record must point directly to the router's public
+IP. Forwarding plain HTTP port 18080 alone does not provide HTTPS or enable
+WebCodecs. If only a nonstandard public port is available, certificate issuance
+and renewal require a separate validation route, such as DNS-provider integration.
+See [Caddy's certificate validation requirements](https://caddyserver.com/docs/automatic-https#acme-challenges).
+
+Check `docker compose ps` and `curl -f https://play.example.com/healthz` after
+forwarding the ports. A healthy proxy container confirms Caddy is running; the
+HTTPS health request also verifies certificate issuance and public routing.
+Certificates persist in the `caddy-data` volume. To disable the HTTPS overlay,
+stop the proxy and remove `COMPOSE_FILE` from `.env`, then run
+`docker compose -f compose.yaml up -d`; app accounts and pairing data are preserved.
 
 If you already run Caddy on the host, a minimal configuration is:
 
