@@ -38,6 +38,47 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
         }
     }
 
+    [HttpPost("sleep")]
+    public async Task<IActionResult> Sleep(WakeRequest request, CancellationToken ct)
+    {
+        Response.Headers.CacheControl = "no-store";
+        var device = await power.FindAsync(User.FindFirstValue(ClaimTypes.NameIdentifier)!, request.HostId, ct);
+        if (device == null) return NotFound(new { message = "Pair this console with your account first." });
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(25));
+        var ownsViewer = false;
+        try
+        {
+            var existing = (await sessions.ListSessionsAsync(timeout.Token)).FirstOrDefault(session => session.HostId == request.HostId);
+            if (existing != null)
+            {
+                if (!await sessions.WaitReadyAsync(existing.Id, TimeSpan.FromSeconds(10), timeout.Token) ||
+                    !await sessions.StandbyAsync(existing.Id, timeout.Token))
+                    return Conflict(new { message = "The console session ended. Try again from your console list." });
+                tickets.RevokeConsole(request.HostId);
+                if (!await active.StopConsoleAsync(request.HostId, timeout.Token))
+                {
+                    try { await streams.StopStreamAsync(existing.Id, timeout.Token); }
+                    finally { await sessions.StopSessionAsync(existing.Id, timeout.Token); }
+                }
+            }
+            else
+            {
+                ownsViewer = await tickets.Viewer.WaitAsync(TimeSpan.FromSeconds(3), timeout.Token);
+                if (!ownsViewer) return Conflict(new { message = "A stream is starting or still active. Wait for it to connect, then choose Put console to sleep." });
+                tickets.RevokeConsole(request.HostId);
+                await power.SleepIdleAsync(device, sessions, timeout.Token);
+            }
+            return Ok(new { message = "Rest mode requested. The console may take a moment to go to sleep." });
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return StatusCode(504, new { message = "The rest-mode request timed out. Refresh the console list before trying again." });
+        }
+        catch (IOException error) { return Conflict(new { message = error.Message }); }
+        finally { if (ownsViewer) tickets.Viewer.Release(); }
+    }
+
     [HttpPost("wake")]
     public async Task<IActionResult> Wake(WakeRequest request, CancellationToken ct)
     {

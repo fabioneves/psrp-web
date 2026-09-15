@@ -39,6 +39,10 @@ static class SessionProtocolTests
                 check(reply.SequenceEqual(new byte[] { 0, 0, 0, 0, 1, 254, 0, 0 }),
                     coalesced ? "control messages coalesced with HTTP headers are retained" : "console heartbeat reply has no payload");
                 if (remoteClose) return;
+                var standby = new byte[8];
+                await stream.ReadExactlyAsync(standby, ct);
+                check(standby.SequenceEqual(new byte[] { 0, 0, 0, 0, 0, 0x50, 0, 0 }),
+                    "standby sends the rest-mode control message before closing the session");
                 var closed = new byte[1];
                 check(await stream.ReadAsync(closed, ct) == 0, "stopping a session closes the console control socket");
             }, ct);
@@ -51,7 +55,11 @@ static class SessionProtocolTests
             }
             else
             {
-                try { await Task.Delay(200, ct); }
+                try
+                {
+                    await Task.Delay(200, ct);
+                    check(await service.StandbyAsync(session.Id, ct), "an active console session accepts a rest-mode request");
+                }
                 finally { await service.StopSessionAsync(session.Id, ct); }
             }
             await console;

@@ -42,6 +42,29 @@ public sealed class ConsolePower(RPContext db, IDeviceDiscoveryService discovery
         }
     }
 
+    public async Task SleepIdleAsync(PairedDevice device, ISessionService sessions, CancellationToken ct)
+    {
+        var found = await discovery.DiscoverDeviceAsync(device.IpAddress!, 1000, ct);
+        ValidateConsole(found, device);
+        if (string.Equals(found?.status, "STANDBY", StringComparison.OrdinalIgnoreCase)) return;
+        if (!Ready(found)) throw new IOException("The console is offline or did not respond. Turn it on before requesting rest mode.");
+        var session = await sessions.StartSessionAsync(device.IpAddress!, new DeviceCredentials
+        {
+            HostId = device.HostId!, HostName = device.HostName!, HostIp = device.IpAddress!,
+            RegistrationKey = Convert.FromHexString(device.RegistKey!), ServerKey = Convert.FromHexString(device.RPKey!)
+        }, device.HostType!, new SessionStartOptions
+        {
+            AutoStartStream = false, AutoConnectController = false, WakeupIfStandby = false
+        }, ct);
+        try
+        {
+            if (!await sessions.WaitReadyAsync(session.Id, TimeSpan.FromSeconds(10), ct) ||
+                !await sessions.StandbyAsync(session.Id, ct))
+                throw new IOException("The console did not accept the rest-mode request. Try connecting first.");
+        }
+        finally { await sessions.StopSessionAsync(session.Id, CancellationToken.None); }
+    }
+
     private static bool Ready(ConsoleInfo? console) => string.Equals(console?.status, "OK", StringComparison.OrdinalIgnoreCase);
 
     private static void ValidateConsole(ConsoleInfo? found, PairedDevice device)
