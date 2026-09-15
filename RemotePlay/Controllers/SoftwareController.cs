@@ -38,7 +38,7 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
         else if (!request.Demo && !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive &&
                 d.Device != null && d.Device.HostId == request.HostId && d.Device.IsRegistered == true, ct))
             return NotFound(new { message = "Pair this console with your account first." });
-        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps);
+        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec);
         Response.Headers.CacheControl = "no-store";
         return Ok(new { ticket });
     }
@@ -93,6 +93,7 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
 }
 
 public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 30000)] int BitrateKbps = 10000,
-    Guid? InputSession = null, string Resolution = "720p", int Fps = 60);
+    Guid? InputSession = null, string Resolution = "720p", int Fps = 60,
+    [Required, RegularExpression("^(mpeg1|h264)$")] string VideoCodec = "mpeg1");
 
 public sealed record WakeRequest([Required, MaxLength(100)] string HostId);

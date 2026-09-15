@@ -222,6 +222,8 @@ test('tickets reject unknown devices, invalid bitrates and replay; socket closur
   const headers = { Authorization: `Bearer ${token}` };
   expect((await request.post('/api/software/tickets', { headers, data: { hostId: 'unowned-console' } })).status()).toBe(404);
   expect((await request.post('/api/software/tickets', { headers, data: { demo: true, bitrateKbps: 999999 } })).status()).toBe(400);
+  expect((await request.post('/api/software/tickets', { headers, data: { demo: true, videoCodec: 'vp9' } })).status()).toBe(400);
+  expect((await request.post('/api/software/tickets', { headers, data: { demo: true, videoCodec: null } })).status()).toBe(400);
   expect((await request.post('/api/playstation/bind', { headers, data: { hostIp: '127.0.0.1' } })).status()).toBe(400);
   const createTicket = async () => (await (await request.post('/api/software/tickets', { headers, data: { demo: true } })).json()).ticket;
   const open = ticket => new Promise(resolve => {

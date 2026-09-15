@@ -21,6 +21,7 @@ if (args.Contains("--psn-storage")) { await PsnStorageTests.RunAsync(Check); ret
 var clock = new TestClock();
 await ConsoleSocketTests.RunAsync(Check);
 await SessionProtocolTests.RunAsync(Check);
+await StreamDisconnectTests.RunAsync(Check);
 await ReorderTests.RunAsync(Check);
 await DiscoveryTests.RunAsync(Check);
 await PsnTests.RunAsync(Check);
@@ -114,6 +115,23 @@ var invalidProfile = false;
 try { VideoProfile.Create("4k", 60); } catch (ArgumentException) { invalidProfile = true; }
 Check(invalidProfile, "unsupported resolution is rejected");
 
+using (var burstReceiver = new SoftwareReceiver(32))
+{
+    for (byte i = 0; i < 20; i++) burstReceiver.OnVideoPacket([2, 0, 0, 0, 1, 0x65, i]);
+    var received = new List<byte>();
+    while (burstReceiver.Packets.TryRead(out var packet)) received.Add(packet[^1]);
+    Check(received.SequenceEqual(Enumerable.Range(0, 20).Select(value => (byte)value)), "native forwarding absorbs a burst of console frames without losing references");
+    for (byte i = 0; i < 33; i++) burstReceiver.OnVideoPacket([2, 0, 0, 0, 1, 0x65, i]);
+    var bounded = false;
+    try { await foreach (var packet in burstReceiver.Packets.ReadAllAsync()) { } }
+    catch (IOException) { bounded = true; }
+    Check(bounded, "native forwarding still fails on a sustained full queue instead of growing indefinitely");
+}
+
+var nativeArgs = SoftwareTranscoder.BuildArguments(10000, "720p", 60, "h264");
+Check(nativeArgs.Contains("copy") && !nativeArgs.Contains("-vf") && !nativeArgs.Contains("mpeg1video"), "native H.264 streams bypass server video decoding and encoding");
+var nativeTicket = tickets.Consume(tickets.Issue("alice", null, true, 10000, videoCodec: "h264"));
+Check(nativeTicket?.VideoCodec == "h264", "ticket preserves the selected video codec");
 var argsList = SoftwareTranscoder.BuildArguments(10000);
 Check(argsList.Contains("none") && argsList.Contains("mpeg1video") && argsList.Contains("-an"), "transcoder is CPU-only MPEG-1 without audio");
 using var ffmpeg = SoftwareTranscoder.Start(["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=60", "-t", "1", "-c:v", "mpeg1video", "-bf", "0", "-f", "mpegts", "pipe:1"]);

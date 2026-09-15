@@ -375,12 +375,6 @@ namespace RemotePlay.Services.Streaming.Core
                 _avHandler?.Stop();
                 }
 
-                // 发送 DISCONNECT
-                if (_cipher != null)
-                {
-                    var disconnectData = ProtoHandler.DisconnectPayload();
-                    await SendDataAsync(disconnectData, channel: 1, flag: 1, proto: true);
-                }
             }
             catch (Exception ex)
             {
@@ -415,6 +409,20 @@ namespace RemotePlay.Services.Streaming.Core
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "⚠️ 等待任务退出时发生异常，继续停止流程");
+                }
+            }
+
+            if (_cipher != null && (_sendLoopTask == null || _sendLoopTask.IsCompleted))
+            {
+                try
+                {
+                    var disconnectData = ProtoHandler.DisconnectPayload();
+                    AdvanceSequence();
+                    await SendPacketInternalAsync(Packet.CreateData(_tsn, 1, 1, disconnectData), disconnectData.Length);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to send console disconnect");
                 }
             }
 
@@ -2860,4 +2868,3 @@ namespace RemotePlay.Services.Streaming.Core
         public const int DATA_ACK_LENGTH = 29;
     }
 }
-

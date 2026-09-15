@@ -361,3 +361,59 @@ inconclusive for unattended session stability and cannot establish the cause of
 the original fullscreen incident. Real-console tests were stopped. Unexpected
 control-socket closure and console-supplied disconnect reasons are now logged for
 future diagnosis; raw handshake headers are no longer logged.
+
+### Optional browser hardware decoding
+
+Video hardware acceleration now defaults on and is saved per browser. A capability
+check selects H.264 with WebCodecs `prefer-hardware`; unsupported contexts use the
+existing MPEG-1 software decoder. Native decoder failures retry in software once
+without disabling the saved preference. The server copies H.264 into MPEG-TS in
+native mode, avoiding decode/scale/encode work. Audio and controller transport are
+shared with software mode. The API validates codec selection and defaults older
+clients to MPEG-1.
+
+A startup burst initially triggered the native decoder's small queue limit. A
+bounded queue now feeds WebCodecs as decoding capacity becomes available, keeping
+encoded reference frames in order. Tests cover burst draining, queue limits and
+cleanup. Latest decoded VideoFrames are closed when replaced or disconnected.
+
+Hardware-path browser tests use real H.264 decoding in Chrome, with a test-only
+adapter that substitutes `prefer-software` after recording the application's
+`prefer-hardware` request: this environment has GPU acceleration disabled. This
+validates H.264 framing, playback, audio, fullscreen, worker delivery, switching
+modes and error fallback, but does not prove a physical GPU decoder was used or
+measure its performance. No server GPU is required.
+
+Final automated checks passed 94 backend assertions, 29 JavaScript tests and 38
+browser tests, including native and software 720p60/1080p60 synthetic playback.
+
+Live testing exposed an eight-frame input queue overflow in native passthrough.
+Native sessions now allow a bounded 32-frame burst; software encoding keeps its
+existing limit. Regression tests verify burst ordering and overflow failure.
+Teardown also previously discarded its own disconnect after cancellation and used
+an invalid payload. It now sends a protobuf disconnect after the sender exits and
+before closing UDP. A loopback regression test verifies this with cancellation
+already requested.
+
+Live testing also found a false stall detection: timing records for frames that
+WebCodecs did not output accumulated until the metadata limit triggered fallback.
+Timing records are now bounded and retired as output advances; a separate
+three-second output watchdog handles actual stalls. A browser regression test
+reproduced the fault by discarding every fifth decoded frame. Another test drops
+all decoded frames and verifies automatic software fallback still works.
+
+The console temporarily returned busy during profile reconnection before accepting
+the retry. These checks do not establish instant reconnect. Native errors are
+logged in the browser console, and stale reconnect messages clear when video
+resumes.
+
+The final public-HTTPS PS5 check completed a minute of 720p fullscreen and a
+minute of 1080p playback after reconnecting. All sampled states stayed on native
+H.264 without decoder fallback. The 12 fullscreen samples measured 55.3–59.6 fps
+(median 59.4); the 12 1080p samples had median 57.5 fps, with one zero-fps interval
+that recovered without reconnecting. This does not establish stutter-free or
+long-session playback. Typical native decode turnaround was about 0.5–0.8 ms at
+720p and 1 ms at 1080p; CPU canvas drawing took about 3 ms and 5 ms respectively.
+These are idle-console measurements using the software WebCodecs test adapter,
+not physical GPU measurements, gameplay benchmarks or input-to-display latency.
+The diagnostic disconnected at completion and left no active app stream.

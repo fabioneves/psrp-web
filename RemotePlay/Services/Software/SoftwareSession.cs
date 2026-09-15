@@ -20,7 +20,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         Guid? sessionId = null;
         Process? generator = null;
         SoftwareTranscoder? transcoder = null;
-        using var receiver = new SoftwareReceiver();
+        using var receiver = new SoftwareReceiver(grant.VideoCodec == "h264" ? 32 : 8);
         using var sendGate = new SemaphoreSlim(1, 1);
         Task[] workers = [];
         ActiveSoftwareStream? published = null;
@@ -28,7 +28,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         {
             await SendStatus(socket, "Connecting", ct);
             var profile = VideoProfile.Create(grant.Resolution, grant.Fps);
-            transcoder = new SoftwareTranscoder(grant.BitrateKbps, grant.Resolution, grant.Fps);
+            transcoder = new SoftwareTranscoder(grant.BitrateKbps, grant.Resolution, grant.Fps, grant.VideoCodec);
             Task feed;
             if (grant.Demo)
             {

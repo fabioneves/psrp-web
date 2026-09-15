@@ -1,4 +1,6 @@
+using Google.Protobuf;
 using Newtonsoft.Json;
+using RemotePlay.Protos;
 using RemotePlay.Utils.Crypto;
 using RemotePlay.Services.Streaming.Controller;
 using System;
@@ -151,7 +153,11 @@ namespace RemotePlay.Services.Streaming.Protocol
         }
 
         public static byte[] DisconnectPayload() =>
-            Encoding.ASCII.GetBytes("DISCONNECT");
+            new TakionMessage
+            {
+                Type = TakionMessage.Types.PayloadType.Disconnect,
+                DisconnectPayload = new DisconnectPayload { Reason = "Client disconnected" }
+            }.ToByteArray();
 
         /// <summary>
         /// 构建 FeedbackState 包（控制器状态）- 默认空闲状态

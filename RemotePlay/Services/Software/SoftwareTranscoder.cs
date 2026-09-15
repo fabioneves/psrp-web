@@ -8,16 +8,22 @@ public sealed class SoftwareTranscoder : IDisposable
     private readonly Process process;
     private readonly Task<string> errors;
 
-    public SoftwareTranscoder(int bitrateKbps, string resolution = "720p", int fps = 60)
+    public SoftwareTranscoder(int bitrateKbps, string resolution = "720p", int fps = 60, string videoCodec = "mpeg1")
     {
-        process = Start(BuildArguments(bitrateKbps, resolution, fps));
+        process = Start(BuildArguments(bitrateKbps, resolution, fps, videoCodec));
         errors = ReadErrorsAsync();
     }
 
-    public static string[] BuildArguments(int bitrateKbps, string resolution = "720p", int fps = 60)
+    public static string[] BuildArguments(int bitrateKbps, string resolution = "720p", int fps = 60, string videoCodec = "mpeg1")
     {
         if (bitrateKbps is < 2000 or > 30000) throw new ArgumentOutOfRangeException(nameof(bitrateKbps));
         var profile = VideoProfile.Create(resolution, fps);
+        if (videoCodec is not ("mpeg1" or "h264")) throw new ArgumentOutOfRangeException(nameof(videoCodec));
+        if (videoCodec == "h264")
+            return ["-hide_banner", "-loglevel", "error", "-probesize", "32768", "-analyzeduration", "0",
+                "-f", "h264", "-r", profile.Fps.ToString(), "-i", "pipe:0", "-an", "-sn", "-dn",
+                "-c:v", "copy", "-f", "mpegts", "-mpegts_flags", "resend_headers", "-omit_video_pes_length", "0",
+                "-muxdelay", "0", "-muxpreload", "0", "-flush_packets", "1", "pipe:1"];
         var threads = int.TryParse(Environment.GetEnvironmentVariable("ENCODER_THREADS"), out var configured)
             ? Math.Clamp(configured, 1, 16).ToString() : "4";
         var decoderThreads = int.TryParse(Environment.GetEnvironmentVariable("DECODER_THREADS"), out var decoded)

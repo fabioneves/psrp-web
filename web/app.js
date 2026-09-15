@@ -1,3 +1,4 @@
+import { supportsNativeVideo } from './native-decoder.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
@@ -17,7 +18,7 @@ const resetInputs = bindInputs($('controls'), message => {
 }, () => playing);
 
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
-let audio = null, quality = null;
+let audio = null, quality = null, forceSoftware = false, activeCodec = 'mpeg1';
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
@@ -25,7 +26,7 @@ const settings = () => ({ mode: $('controller-mode').value, index: $('controller
   invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked });
 const gamepads = pollGamepads(resetInputs.state, () => playing && !document.hidden && document.hasFocus(),
   settings, text => $('controller-status').textContent = text);
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'hardware-acceleration'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -283,7 +284,7 @@ async function play(hostId, title, demo = false, inputSession = null) {
       audio.setDelay(Number($('audio-delay').value));
     } catch (error) { $('audio-status').textContent = error.message; }
   }
-  forceMain = false;
+  forceMain = false; forceSoftware = false;
   await connect();
 }
 async function connect() {
@@ -312,7 +313,13 @@ function reconnect(message, workerFailed = false) {
 async function openStream({ hostId, title, demo, inputSession, profile }) {
   stop(true);
   const current = ++attempt;
-  const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile });
+  const native = !inputSession && !forceSoftware && $('hardware-acceleration').checked && await supportsNativeVideo(profile);
+  if (current !== attempt) return;
+  activeCodec = native ? 'h264' : 'mpeg1';
+  $('acceleration-status').textContent = native ? 'Browser H.264 decoding · hardware preferred.' :
+    $('hardware-acceleration').checked ? (isSecureContext ? 'Using software video; browser acceleration is unavailable for this session.' :
+      'Using software video. Open the HTTPS address to enable browser acceleration.') : 'Software video selected.';
+  const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile, videoCodec: activeCodec });
   if (current !== attempt) return;
   const url = new URL('/api/software/stream', location.href);
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -343,11 +350,11 @@ async function openStream({ hostId, title, demo, inputSession, profile }) {
       worker.onerror = () => { if (attempt === current) reconnect('Switching to the compatibility renderer…', true); };
       const offscreen = canvas.transferControlToOffscreen();
       const audioPort = audio?.workerPort();
-      worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort,
+      worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort, videoCodec: activeCodec,
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {
-      const connection = await startStream(inputSession ? null : canvas, url.href, report);
+      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec);
       if (attempt !== current) { connection.close(); return; }
       stream = connection;
     }
@@ -356,12 +363,18 @@ async function openStream({ hostId, title, demo, inputSession, profile }) {
     updateWakeLock();
     document.activeElement?.blur();
     $('player').scrollIntoView({ block: 'start' });
-  } catch (error) { if (attempt === current) { forceMain = true; stop(true); throw error; } }
+  } catch (error) { if (attempt === current) { if (activeCodec === 'h264') forceSoftware = true; else forceMain = true; stop(true); throw error; } }
 }
 function onStreamMessage(message) {
   if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
   else if (message.type === 'sync') audio?.sync(message.timestamp);
   else if (message.type === 'renderer-error') {
+    if (activeCodec === 'h264') {
+      console.warn('Native video decoder fallback:', message.message);
+      forceSoftware = true;
+      reconnect('Browser video decoding failed. Switching to software video…');
+      return;
+    }
     reconnect('Switching to the compatibility renderer…', true);
   } else if (message.type === 'connected') {
     resetInputs(); gamepads.reset();
@@ -378,7 +391,11 @@ function onStreamMessage(message) {
     $('timing-status').dataset.metrics = JSON.stringify(message);
     $('resolution').textContent = `${message.width} × ${message.height}`;
     $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}`;
-    if (message.totalFrames) { $('connecting').hidden = true; $('stream-status').textContent = 'Playing'; }
+    if (message.totalFrames) {
+      if (!$('connecting').hidden) notify('');
+      $('connecting').hidden = true;
+      $('stream-status').textContent = 'Playing';
+    }
     if ($('auto-quality').checked && !target?.inputSession) {
       const change = quality?.sample(message, performance.now(), !document.hidden);
       if (change) changeProfile(change.profile, change.reason);
@@ -495,3 +512,8 @@ $('apply-profile').onclick = () => {
   quality = new AdaptiveQuality(selectedProfile());
   changeProfile(selectedProfile(), 'Manual profile selected');
 };
+
+$('hardware-acceleration').addEventListener('change', () => {
+  forceSoftware = false;
+  if (target && !target.inputSession) { retry.reset(); reconnect('Applying video acceleration setting…'); }
+});

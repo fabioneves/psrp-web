@@ -98,6 +98,8 @@
       </dialog>
       <details id="stream-settings"><summary>Stream settings</summary>
       <div id="library-profile"><div id="profile-settings">
+      <label class="check"><input id="hardware-acceleration" type="checkbox" checked>Video hardware acceleration</label>
+      <p id="acceleration-status" class="hint" role="status">Uses browser acceleration when available, with automatic software fallback.</p>
       <div class="settings-grid">
       <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>
       <label>Frame rate<select id="fps-profile"><option value="60" selected>60 fps</option><option value="30">30 fps</option></select></label>
@@ -114,8 +116,8 @@
     <section id="player" hidden>
       <div class="player-bar"><div><span class="live-dot" aria-hidden="true"></span><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div><div class="player-actions"><label class="check"><input type="checkbox" id="show-controls" checked>Touch controls</label><button id="fullscreen">Full screen</button><button id="stop" class="danger">Disconnect</button></div></div>
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
-      <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing software video…</div></div>
-      <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Software decoder</span><span id="resolution">1280 × 720 target</span></div>
+      <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing video…</div></div>
+      <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
       <details id="performance-details"><summary>Playback timing and quality</summary>
         <p id="timing-status">Measuring stream timing…</p>
         <p id="render-status"></p>

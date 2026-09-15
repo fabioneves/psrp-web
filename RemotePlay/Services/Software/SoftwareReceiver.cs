@@ -5,9 +5,9 @@ using RemotePlay.Models.PlayStation;
 
 namespace RemotePlay.Services.Software;
 
-public sealed class SoftwareReceiver : IAVReceiver, IDisposable
+public sealed class SoftwareReceiver(int videoQueueCapacity = 8) : IAVReceiver, IDisposable
 {
-    private readonly Channel<byte[]> packets = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(8)
+    private readonly Channel<byte[]> packets = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(videoQueueCapacity)
     {
         FullMode = BoundedChannelFullMode.Wait,
         SingleReader = true

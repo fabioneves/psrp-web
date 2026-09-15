@@ -1,6 +1,6 @@
 # Canvas Remote Play
 
-A Docker-hosted PlayStation Remote Play client with **software decoding and Canvas 2D rendering**. Based on [o1298098/remote-play](https://github.com/o1298098/remote-play), with a canvas playback approach inspired by [Moonlight Web Tesla](https://github.com/Argon2000/moonlight-web-stream-tsla).
+A Docker-hosted PlayStation Remote Play client with **optional browser hardware decoding and a software Canvas 2D fallback**. Based on [o1298098/remote-play](https://github.com/o1298098/remote-play), with a canvas playback approach inspired by [Moonlight Web Tesla](https://github.com/Argon2000/moonlight-web-stream-tsla).
 
 **Default: 1280×720 at 60 fps, 10 Mbps, with stereo audio. Select up to 1080p60.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Touch, keyboard, optional gamepads and second-device input are included.
 
@@ -198,6 +198,29 @@ Enable **Automatically adjust quality** to let playback reduce bitrate for netwo
 During playback, expand **Playback timing and quality** for separate processing costs, queue delays and the actual profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
 The renderer decodes reference frames but draws only the newest pending image on each display tick. It avoids converting frames that would immediately be overwritten. If browser animation callbacks stall during fullscreen or a display change, presentation falls back to a timer without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
+
+## Video hardware acceleration
+
+**Video hardware acceleration** is on by default in Stream settings and saved in
+this browser. Changing it during playback reconnects with the selected mode.
+With it enabled, supported secure browsers use WebCodecs H.264 decoding with
+`prefer-hardware`. The server remuxes the console's H.264 into MPEG-TS without
+video decoding, scaling or re-encoding. Resolution, frame rate and bitrate are
+requested from the console; actual output is reported in playback statistics.
+Console video requests currently cap bitrate at 15 Mbps; higher slider values
+affect only the software MPEG-1 output. Audio and input use the same paths in
+both modes.
+
+Unsupported browsers, ordinary LAN HTTP pages, and failed native decoders fall
+back to the software MPEG-1 canvas path. Use HTTPS (or localhost) for browser
+hardware decoding. Unchecking the option forces the existing software path.
+The preference remains enabled after an automatic fallback so the next Play can
+try acceleration again.
+
+The UI says **hardware preferred** because the browser controls which decoder it
+actually uses: the [WebCodecs specification](https://www.w3.org/TR/webcodecs/#hardware-acceleration)
+defines this as a preference, not a guarantee. No GPU is required on the Docker
+server. H.264 framing follows the [WebCodecs AVC registration](https://www.w3.org/TR/webcodecs-avc-codec-registration/).
 
 ## Audio
 

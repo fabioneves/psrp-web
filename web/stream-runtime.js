@@ -1,13 +1,15 @@
+import { createNativeDecoder } from './native-decoder.js';
 import { createDecoder } from './decoder.js';
 import { now, StreamClock, unpackMedia } from './timing.js';
 
-export async function startStream(canvas, url, report) {
+export async function startStream(canvas, url, report, videoCodec = 'mpeg1') {
   const clock = new StreamClock();
   let videoAgeMs = null, transportMs = null, serverQueueMs = 0;
-  const decoder = canvas ? await createDecoder(canvas, message => {
+  const decoder = canvas ? await (videoCodec === 'h264' ? createNativeDecoder : createDecoder)(canvas, message => {
     report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs });
     serverQueueMs = 0;
   }, {
+    onError(message) { fail(message, 'renderer-error'); },
     onPresent(timestamp) {
       videoAgeMs = clock.age(timestamp);
       report({ type: 'sync', timestamp });
@@ -24,7 +26,7 @@ export async function startStream(canvas, url, report) {
     decoder?.destroy();
     socket.close();
   };
-  const fail = message => { report({ type: 'error', message }); close(); };
+  const fail = (message, type = 'error') => { report({ type, message }); close(); };
   const heartbeat = setInterval(() => {
     if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping', clientTime: now() }));
     if (socket.bufferedAmount > 65536) fail('Input connection is falling behind. Reconnecting…');
@@ -50,7 +52,7 @@ export async function startStream(canvas, url, report) {
           decoder?.write(media.bytes, media.timestamp);
         }
       }
-    } catch (error) { fail(error.message); }
+    } catch (error) { fail(error.message, videoCodec === 'h264' ? 'renderer-error' : 'error'); }
   };
   socket.onerror = () => fail('Stream connection failed. The ticket may have expired or another viewer is connected.');
   socket.onclose = () => { if (!stopped) report({ type: 'closed', message: 'Stream disconnected.' }); close(); };
