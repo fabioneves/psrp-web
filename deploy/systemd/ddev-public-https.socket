@@ -1,0 +1,10 @@
+[Unit]
+Description=Public HTTPS listener for DDEV
+
+[Socket]
+ListenStream=0.0.0.0:443
+Service=ddev-port@8443.service
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

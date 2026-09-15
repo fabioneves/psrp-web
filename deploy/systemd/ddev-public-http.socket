@@ -1,0 +1,10 @@
+[Unit]
+Description=Public HTTP listener for DDEV
+
+[Socket]
+ListenStream=0.0.0.0:80
+Service=ddev-port@8080.service
+NoDelay=true
+
+[Install]
+WantedBy=sockets.target

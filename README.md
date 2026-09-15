@@ -176,6 +176,25 @@ listener. All hostnames share this forwarding rule. Optional public TCP 80 can
 reach DDEV's port 8080. Open `https://play.example.com/` without `:18080`.
 Forwarding public port 443 directly to Caddy would bypass DDEV's other sites.
 
+This server also has standard-port listeners installed from `deploy/systemd/`:
+server TCP 80 forwards to DDEV on 8080, and server TCP 443 forwards to DDEV on
+8443. Router rules may therefore use **80 → `192.0.2.10:80`** and
+**443 → `192.0.2.10:443`**. These must be port-forwarding rules, not just
+firewall allow rules. The systemd listeners start at boot and run their forwarding
+processes as unprivileged dynamic users; DDEV continues running in rootless Docker.
+To install these listeners on a systemd host where ports 80/443 are free:
+
+```sh
+sudo install -m 644 deploy/systemd/* /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now ddev-public-http.socket ddev-public-https.socket
+```
+
+Check them with `systemctl status ddev-public-http.socket ddev-public-https.socket`.
+To remove the listeners, disable both socket units with `systemctl disable --now`,
+then stop `ddev-port@8080.service` and `ddev-port@8443.service`. DDEV still accepts
+direct connections on its original ports 8080/8443.
+
 DDEV's existing wildcard development certificates suppress its own ACME issuance
 for covered hostnames, so this integration uses Caddy for certificate management.
 Verify the public certificate with `curl -f https://play.example.com/healthz` from
