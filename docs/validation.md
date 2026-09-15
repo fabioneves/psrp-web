@@ -189,3 +189,22 @@ against the rebuilt Docker deployment, including 720p60, 1080p60 stereo audio,
 software fallbacks, adaptive profiles and controls. The five public-domain session
 scenarios passed across the focused run and the corrected legacy-fixture rerun.
 Docker reports healthy.
+
+### Direct console discovery
+
+On the rootless Docker deployment, broadcast discovery returned no consoles while
+the direct-IP API found the user's online PS5. A host-side UDP broadcast also
+received a reply, isolating the failure to Docker's broadcast path.
+
+The pairing form now offers **Check IP address** through the existing authenticated
+direct-discovery endpoint. An empty automatic scan points users to that action.
+Both discovery buttons disable during a request; direct lookup reports progress,
+missing input, no response, errors and selectable console results.
+
+Five focused public-domain browser scenarios passed across the run and corrected
+test-locator rerun: automatic discovery feedback, direct lookup with retry, saved
+login, responsive software playback and socket retry cleanup. A separate real
+Chrome check through the public site found the actual PS5, selected its IP and
+focused the account ID field. Pairing and streaming from that console were not
+attempted; they require the user's account ID and Link Device PIN. Docker was
+rebuilt and reports healthy.

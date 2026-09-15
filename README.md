@@ -20,7 +20,7 @@ Open **http://localhost:8080** (or your server's IP and port).
 
 1. Create a local account in the web UI. Login survives page refresh for up to 24 hours; **Sign out** clears the saved session.
 2. Click **Start test stream** to check your browser's software playback.
-3. Pair your PlayStation using its IP address, your Base64 PSN account ID and the console's Link Device PIN. **Find consoles on this network** shows search progress and results beside the button; you can also enter the IP manually.
+3. Pair your PlayStation using its IP address, your Base64 PSN account ID and the console's Link Device PIN. **Find consoles on this network** shows search progress and results beside the button. If the scan finds nothing, enter the console IP and choose **Check IP address** to search directly.
 4. Click **Play**. **Disconnect** ends the Remote Play session and stops its FFmpeg process.
 
 The first build downloads the .NET SDK and FFmpeg and can take a few minutes. PostgreSQL migrations run automatically. Console registrations and accounts persist in `postgres-data`; the generated signing secret persists in `app-data`. There are no GPU device mounts or privileged containers.
@@ -64,7 +64,7 @@ Default Compose uses bridge networking and works with a **manually entered conso
 docker compose -f compose.yaml -f compose.host.yaml up --build -d
 ```
 
-The host-network override requires Compose 2.24.4+ and is intended for rootful Linux. With rootless Docker or Docker Desktop, use the default Compose file and enter the IP manually. If manual discovery fails, check routing/firewalls between Docker and the console; this project does not implement PSN internet traversal between the server and console.
+The host-network override requires Compose 2.24.4+ and is intended for rootful Linux. With rootless Docker or Docker Desktop, use the default Compose file, enter the IP manually and choose **Check IP address**. This sends discovery directly to the console instead of relying on broadcasts. If direct discovery fails, check routing/firewalls between Docker and the console; this project does not implement PSN internet traversal between the server and console.
 
 ### Access from a Tesla browser
 

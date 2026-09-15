@@ -54,6 +54,42 @@ test('console discovery shows nearby progress, empty results, errors and selecta
   await expect(status).toContainText('Selected Living room PS5');
 });
 
+test('a console IP can be checked directly when broadcast discovery finds nothing', async ({ page }) => {
+  await register(page);
+  const button = page.locator('#check-ip');
+  const status = page.locator('#discovery-status');
+  await page.route('**/api/playstation/discover?*', route => route.fulfill({ json: [] }));
+  await page.locator('#discover').click();
+  await expect(status).toContainText('No consoles found by automatic discovery');
+  await button.click();
+  await expect(status).toContainText('Enter the console IP address');
+  await expect(page.locator('#host-ip')).toBeFocused();
+  await page.locator('#host-ip').fill('192.0.2.20');
+  let completeSearch;
+  await page.route('**/api/playstation/discover/192.0.2.20?*', route => new Promise(resolve => {
+    completeSearch = async (code, body) => {
+      await route.fulfill({ status: code, json: body });
+      resolve();
+    };
+  }));
+  await button.click();
+  await expect(status).toContainText('Checking 192.0.2.20');
+  await expect(button).toBeDisabled();
+  await expect(page.locator('#discover')).toBeDisabled();
+  await expect.poll(() => typeof completeSearch).toBe('function');
+  await completeSearch(404, { success: false, errorMessage: 'Device not found' });
+  await expect(status).toContainText('No console responded at 192.0.2.20');
+  await expect(button).toBeEnabled();
+  completeSearch = null;
+  await button.click();
+  await expect.poll(() => typeof completeSearch).toBe('function');
+  await completeSearch(200, { success: true, data: { name: 'PS5Pro', ip: '192.0.2.20' } });
+  await expect(status).toContainText('Found 1 console');
+  await page.getByRole('button', { name: 'PS5Pro · 192.0.2.20' }).click();
+  await expect(page.locator('#host-ip')).toHaveValue('192.0.2.20');
+  await expect(page.locator('#account-id')).toBeFocused();
+});
+
 test('login survives refresh, uses an HttpOnly cookie, and sign-out survives refresh', async ({ page, context }) => {
   await register(page);
   const cookie = (await context.cookies()).find(cookie => cookie.name === 'remote-play-session');

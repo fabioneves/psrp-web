@@ -72,7 +72,7 @@ async function api(path, body) {
     });
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result?.success === false)
-      throw new Error(result?.errorMessage || result?.message || Object.values(result?.errors || {}).flat().join(' ') || `Request failed (${response.status}).`);
+      throw Object.assign(new Error(result?.errorMessage || result?.message || Object.values(result?.errors || {}).flat().join(' ') || `Request failed (${response.status}).`), { status: response.status });
     return result?.data ?? result;
   } finally { clearTimeout(timeout); }
 }
@@ -165,19 +165,30 @@ $('pair-form').onsubmit = event => {
     notify('Console paired. Choose Play to connect.');
   });
 };
-$('discover').onclick = async () => {
-  const discover = $('discover'), status = $('discovery-status');
-  discover.disabled = true;
-  discover.textContent = 'Searching…';
-  discover.setAttribute('aria-busy', 'true');
+$('discover').onclick = () => discoverConsoles();
+$('check-ip').onclick = () => {
+  const hostIp = $('host-ip').value.trim();
+  if (hostIp) return discoverConsoles(hostIp);
+  $('discovery-status').textContent = 'Enter the console IP address, then choose Check IP address.';
+  $('host-ip').focus();
+};
+
+async function discoverConsoles(hostIp = '') {
+  const button = hostIp ? $('check-ip') : $('discover'), status = $('discovery-status');
+  const label = button.textContent;
+  $('discover').disabled = $('check-ip').disabled = true;
+  button.textContent = hostIp ? 'Checking…' : 'Searching…';
+  button.setAttribute('aria-busy', 'true');
   notify('');
   $('discovered').replaceChildren();
-  status.textContent = 'Searching for consoles… This usually takes a few seconds.';
+  status.textContent = hostIp ? `Checking ${hostIp}… This usually takes a few seconds.`
+    : 'Searching for consoles… This usually takes a few seconds.';
   try {
-    const consoles = await api('playstation/discover?timeoutMs=3000');
+    const result = await api(`playstation/discover${hostIp ? '/' + encodeURIComponent(hostIp) : ''}?timeoutMs=3000`);
+    const consoles = hostIp ? [result] : result;
     status.textContent = consoles.length
       ? `Found ${consoles.length} console${consoles.length === 1 ? '' : 's'}. Select one to fill in its IP address.`
-      : 'No consoles found. Check that the console is reachable from this server, or enter its IP address manually.';
+      : 'No consoles found by automatic discovery. Enter the console IP address above and choose Check IP address to search directly.';
     for (const console of consoles) {
       const button = document.createElement('button'); button.type = 'button';
       button.textContent = `${console.name} · ${console.ip}`;
@@ -189,15 +200,17 @@ $('discover').onclick = async () => {
       $('discovered').append(button);
     }
   } catch (error) {
-    status.textContent = error.name === 'AbortError'
-      ? 'Console search timed out. Try again, or enter the console IP address manually.'
-      : `Console search failed: ${error.message} Try again, or enter the console IP address manually.`;
+    if (hostIp && error.status === 404)
+      status.textContent = `No console responded at ${hostIp}. Check the IP address, turn on the console and enable Remote Play, then try again.`;
+    else status.textContent = error.name === 'AbortError'
+      ? 'Console search timed out. Try again, or enter the console IP address and choose Check IP address.'
+      : `Console search failed: ${error.message} Try again, or enter the console IP address and choose Check IP address.`;
   } finally {
-    discover.disabled = false;
-    discover.textContent = 'Find consoles on this network';
-    discover.removeAttribute('aria-busy');
+    $('discover').disabled = $('check-ip').disabled = false;
+    button.textContent = label;
+    button.removeAttribute('aria-busy');
   }
-};
+}
 
 async function play(hostId, title, demo = false, inputSession = null) {
   stop();
