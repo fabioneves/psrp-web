@@ -1,3 +1,4 @@
+import { FramePresenter } from './frame-presenter.js';
 import { LatestFrame } from './latest-frame.js';
 import { createPixelFactory } from './pixels.js';
 
@@ -26,10 +27,8 @@ export async function createDecoder(canvas, report, options = {}) {
   const demuxer = new JSMpeg.Demuxer.TS(settings);
   const latest = new LatestFrame();
   let pixels, image, decoded = 0, drawn = 0, totalFrames = 0, decodeMs = 0, colorMs = 0, drawMs = 0, bytesReceived = 0;
-  let start = performance.now(), pendingPlanes, presentation, stopped = false, savedAt = 0, queueMs = 0, mediaTimestamp = null;
+  let start = performance.now(), pendingPlanes, stopped = false, savedAt = 0, queueMs = 0, mediaTimestamp = null;
   const timestamps = [];
-  const schedule = globalThis.requestAnimationFrame?.bind(globalThis) || (callback => setTimeout(callback, 1000 / 60));
-  const cancel = globalThis.cancelAnimationFrame?.bind(globalThis) || clearTimeout;
   decoder.connect({
     resize(width, height) {
       latest.resize(width, height); pixels = makePixels(width, height);
@@ -44,7 +43,6 @@ export async function createDecoder(canvas, report, options = {}) {
     decoder.write(pts, buffers);
   } });
   const present = () => {
-    presentation = null;
     if (stopped) return;
     const frame = latest.take();
     if (!frame) return;
@@ -54,6 +52,7 @@ export async function createDecoder(canvas, report, options = {}) {
     drawn++; totalFrames++;
     options.onPresent?.(frame.timestamp);
   };
+  const presentation = new FramePresenter(present);
   const timer = setInterval(() => {
     const elapsed = performance.now() - start;
     report({ type: 'stats', fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
@@ -78,10 +77,10 @@ export async function createDecoder(canvas, report, options = {}) {
       if (pendingPlanes) {
         latest.dropped += Math.max(0, count - 1);
         latest.save(...pendingPlanes); savedAt = performance.now();
-        if (presentation == null) presentation = schedule(present);
+        presentation.request();
       }
       decoded += count; decodeMs += performance.now() - before;
     },
-    destroy() { stopped = true; clearInterval(timer); cancel(presentation); decoder.destroy?.(); }
+    destroy() { stopped = true; clearInterval(timer); presentation.destroy(); decoder.destroy?.(); }
   };
 }

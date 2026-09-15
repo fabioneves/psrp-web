@@ -6,6 +6,7 @@ using RemotePlay.Contracts.Services;
 using RemotePlay.Models.Context;
 using RemotePlay.Models.PlayStation;
 using RemotePlay.Services.Streaming.Controller;
+using RemotePlay.Services.Session;
 
 namespace RemotePlay.Services.Software;
 
@@ -80,9 +81,11 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             if (socket.State == WebSocketState.Open)
             {
                 lifetime.Cancel();
+                transcoder?.Dispose();
+                transcoder = null;
                 if (workers.Length > 0) await ObserveWorkers(workers);
                 using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
-                try { await SendStatus(socket, ex is TimeoutException ? ex.Message : "Stream stopped. Check the console, network and server logs, then reconnect.", timeout.Token, true); }
+                try { await SendStatus(socket, ex is TimeoutException or ConsoleHandshakeException ? ex.Message : "Stream stopped. Check the console, network and server logs, then reconnect.", timeout.Token, true); }
                 catch (WebSocketException) { }
                 catch (OperationCanceledException) { }
             }
@@ -103,8 +106,8 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             await ObserveWorkers(workers);
             if (sessionId is { } id)
             {
-                await streams.StopStreamAsync(id);
-                await sessions.StopSessionAsync(id);
+                try { await streams.StopStreamAsync(id); }
+                finally { await sessions.StopSessionAsync(id); }
             }
             if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
             {

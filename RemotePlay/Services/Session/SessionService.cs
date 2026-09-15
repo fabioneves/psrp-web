@@ -31,7 +31,6 @@ namespace RemotePlay.Services.Session
         private const string TYPE_PS5 = "PS5";
         private const string USER_AGENT = "remoteplay Windows";
         private static readonly byte[] DID_PREFIX = new byte[] { 0x00, 0x18, 0x00, 0x00, 0x00, 0x07, 0x00, 0x40, 0x00, 0x80 };
-        private static readonly byte[] HEARTBEAT_RESPONSE = new byte[] { 0x00, 0x00, 0x00, 0x00, 0x01, 0xFE, 0x00, 0x00 };
         private const string OS_TYPE = "Win10.0.0";
 
         public SessionService(
@@ -78,12 +77,11 @@ namespace RemotePlay.Services.Session
             var initPath = $"/sie/{typeSlug}/rp/sess/init";
 
             var initRequest = BuildInitRequest(initPath, hostIp, hostType, credentials);
-            var initResponse = await SendHttpRequestRawAsync(hostIp, RP_PORT, initRequest, keepAlive: false, cancellationToken);
+            var initResponse = await SendHttpRequestRawAsync(hostIp, RP_PORT, initRequest, cancellationToken);
             var rpNonceB64 = GetHeaderValue(initResponse.Headers, "RP-Nonce");
-            _logger.LogInformation("RP-Nonce: {RPNonce}", rpNonceB64);
-            _logger.LogInformation("INIT Response: {InitResponse}", initResponse.Headers);
+            ValidateResponse(initResponse.Headers);
             if (string.IsNullOrEmpty(rpNonceB64))
-                throw new InvalidOperationException("当前主机已被远程连接占用");
+                throw new ConsoleHandshakeException("The console returned an incomplete Remote Play handshake. Wait a few seconds and reconnect.");
             var rpNonce = Convert.FromBase64String(rpNonceB64);
             //var rpNonce = Convert.FromBase64String("T81oBINui9VnsCe3kNwDZA==");
             // 3) 会话密钥派生：根据 HOST 会话密钥与 RP-Key 计算 AES Key 与 rp_iv（rp_nonce）
@@ -95,47 +93,51 @@ namespace RemotePlay.Services.Session
             var ctrlRequest = BuildSessionRequest(ctrlPath, hostIp, hostType, cipher, credentials, options);
             var keepAlive = await ConnectHttpKeepAliveAsync(hostIp, RP_PORT, ctrlRequest, cancellationToken);
 
-            var headerText = keepAlive.HeaderText;
-            var serverTypeHeader = ParseHeader(headerText, "RP-Server-Type");
-            _logger.LogInformation(headerText);
-            if (!string.IsNullOrEmpty(serverTypeHeader))
+            try
             {
-                var stBytes = Convert.FromBase64String(serverTypeHeader);
-                var stDecrypted = cipher.Decrypt(stBytes);
-                var serverType = BitConverter.ToUInt16(stDecrypted, 0); // little-endian ushort
-                _logger.LogInformation("Server Type: {ServerType}", serverType);
+                var headerText = keepAlive.HeaderText;
+                ValidateResponse(headerText);
+                var serverTypeHeader = ParseHeader(headerText, "RP-Server-Type");
+                if (!string.IsNullOrEmpty(serverTypeHeader))
+                {
+                    var stBytes = Convert.FromBase64String(serverTypeHeader);
+                    var stDecrypted = cipher.Decrypt(stBytes);
+                    var serverType = BitConverter.ToUInt16(stDecrypted, 0); // little-endian ushort
+                    _logger.LogInformation("Server Type: {ServerType}", serverType);
+                }
+
+                // 5) 存储会话
+                var session = new RemoteSession
+                {
+                    HostIp = hostIp,
+                    HostType = hostType,
+                    HostId = credentials.HostId,
+                    HostName = credentials.HostName,
+                    HandshakeKey = Array.Empty<byte>(),
+                    Secret = aesKey,
+                    SessionIv = rpIv,
+                    EncCounter = 0,
+                    DecCounter = 0,
+                    VideoKeyPos = 0,
+                    InputKeyPos = 0,
+                    Resolution = options.Resolution ?? _sessionConfig.DefaultResolution,
+                    Fps = options.Fps ?? _sessionConfig.DefaultFps,
+                    Quality = options.Quality ?? _sessionConfig.DefaultQuality,
+                    Bitrate = options.Bitrate,
+                    StreamType = options.StreamType
+                };
+                session.LaunchOptions = StreamLaunchOptionsResolver.Resolve(session);
+
+                _sessions[session.Id] = (session, keepAlive.Client, cipher);
+                _logger.LogInformation("会话已建立: {SessionId}", session.Id);
+
+                // 6) 启动读取循环与心跳处理
+                _autoStartStreamFlags[session.Id] = options.AutoStartStream;
+                _autoConnectControllerFlags[session.Id] = options.AutoConnectController;
+                _ = Task.Run(() => ReceiveLoopAsync(session.Id, keepAlive.Client, cipher, keepAlive.PendingData, CancellationToken.None));
+                return session;
             }
-
-            // 5) 存储会话
-            var session = new RemoteSession
-            {
-                HostIp = hostIp,
-                HostType = hostType,
-                HostId = credentials.HostId,
-                HostName = credentials.HostName,
-                HandshakeKey = Array.Empty<byte>(),
-                Secret = aesKey,
-                SessionIv = rpIv,
-                EncCounter = 0,
-                DecCounter = 0,
-                VideoKeyPos = 0,
-                InputKeyPos = 0,
-                Resolution = options.Resolution ?? _sessionConfig.DefaultResolution,
-                Fps = options.Fps ?? _sessionConfig.DefaultFps,
-                Quality = options.Quality ?? _sessionConfig.DefaultQuality,
-                Bitrate = options.Bitrate,
-                StreamType = options.StreamType
-            };
-            session.LaunchOptions = StreamLaunchOptionsResolver.Resolve(session);
-
-            _sessions[session.Id] = (session, keepAlive.Client, cipher);
-            _logger.LogInformation("会话已建立: {SessionId}", session.Id);
-
-            // 6) 启动读取循环与心跳处理
-            _autoStartStreamFlags[session.Id] = options.AutoStartStream;
-            _autoConnectControllerFlags[session.Id] = options.AutoConnectController;
-            _ = Task.Run(() => ReceiveLoopAsync(session.Id, keepAlive.Client, cipher, CancellationToken.None));
-            return session;
+            catch { keepAlive.Client.Dispose(); throw; }
         }
 
         public async Task<bool> StopSessionAsync(Guid sessionId, CancellationToken cancellationToken = default)
@@ -389,82 +391,66 @@ namespace RemotePlay.Services.Session
 
         private static string ParseHeader(string headersText, string name) => GetHeaderValue(headersText, name);
 
-        private async Task<RawHttpResponse> SendHttpRequestRawAsync(string host, int port, byte[] requestBytes, bool keepAlive, CancellationToken ct)
+        private static void ValidateResponse(string headers)
         {
-            using var client = await ConsoleSocket.ConnectAsync(host, port, ct);
-            using var stream = client.GetStream();
-            await stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct);
-            await stream.FlushAsync(ct);
-
-            var headerBuffer = new List<byte>();
-            var buf = new byte[4096];
-            int headerEnd = -1;
-            while (headerEnd < 0)
+            var status = headers.Split("\r\n", 2)[0];
+            if (status.Split(' ').ElementAtOrDefault(1) == "200") return;
+            var reason = GetHeaderValue(headers, "RP-Application-Reason")?.ToLowerInvariant();
+            var message = reason switch
             {
-                int r = await stream.ReadAsync(buf, 0, buf.Length, ct);
-                if (r <= 0) break;
-                headerBuffer.AddRange(buf.AsSpan(0, r).ToArray());
-                if (headerBuffer.Count >= 4)
+                "80108b10" => "The console is still occupied by a Remote Play session. Wait for it to close and reconnect.",
+                "80108b15" => "The console's Remote Play service reported a crash. Wait for it to recover, or restart the console if it persists.",
+                "80108b09" or "80108b02" => "The console rejected the saved pairing. Pair this console again.",
+                "80108b11" => "The console rejected this Remote Play protocol version.",
+                _ => "The console rejected the Remote Play handshake. Wait a few seconds and reconnect."
+            };
+            throw new ConsoleHandshakeException(message);
+        }
+
+        private async Task<RawHttpResponse> ReadResponseAsync(NetworkStream stream, byte[] requestBytes, CancellationToken ct)
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            deadline.CancelAfter(_sessionConfig.ReadTimeoutMs);
+            try
+            {
+                await stream.WriteAsync(requestBytes, deadline.Token);
+                var bytes = new byte[16384];
+                var count = 0;
+                while (count < bytes.Length)
                 {
-                    for (int i = 0; i <= headerBuffer.Count - 4; i++)
+                    var read = await stream.ReadAsync(bytes.AsMemory(count), deadline.Token);
+                    if (read == 0) throw new ConsoleHandshakeException("The console closed the Remote Play handshake. Wait a few seconds and reconnect.");
+                    var scan = Math.Max(0, count - 3);
+                    count += read;
+                    for (var i = scan; i <= count - 4; i++)
                     {
-                        if (headerBuffer[i] == '\r' && headerBuffer[i + 1] == '\n' && headerBuffer[i + 2] == '\r' && headerBuffer[i + 3] == '\n')
-                        {
-                            headerEnd = i + 4;
-                            break;
-                        }
+                        if (bytes[i] != '\r' || bytes[i + 1] != '\n' || bytes[i + 2] != '\r' || bytes[i + 3] != '\n') continue;
+                        return new RawHttpResponse { Headers = Encoding.ASCII.GetString(bytes, 0, i + 4), Body = bytes[(i + 4)..count] };
                     }
                 }
+                throw new ConsoleHandshakeException("The console returned oversized Remote Play headers.");
             }
-
-            var headers = Encoding.ASCII.GetString(headerBuffer.Take(headerEnd > 0 ? headerEnd : headerBuffer.Count).ToArray());
-            var body = headerBuffer.Skip(headerEnd > 0 ? headerEnd : 0).ToArray();
-            if (!keepAlive)
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
-                return new RawHttpResponse { Headers = headers, Body = body };
+                throw new TimeoutException("The console stopped responding during the Remote Play handshake. Wait a few seconds and reconnect.");
             }
-            // keepAlive 下，由上层使用另一方法获取连接
-            return new RawHttpResponse { Headers = headers, Body = body };
         }
 
-        private sealed class KeepAliveConnection
+        private async Task<RawHttpResponse> SendHttpRequestRawAsync(string host, int port, byte[] requestBytes, CancellationToken ct)
         {
-            public TcpClient Client { get; set; } = null!;
-            public string HeaderText { get; set; } = string.Empty;
+            using var client = await ConsoleSocket.ConnectAsync(host, port, ct);
+            return await ReadResponseAsync(client.GetStream(), requestBytes, ct);
         }
+
+        private sealed record KeepAliveConnection(TcpClient Client, string HeaderText, byte[] PendingData);
 
         private async Task<KeepAliveConnection> ConnectHttpKeepAliveAsync(string host, int port, byte[] requestBytes, CancellationToken ct)
         {
             var client = await ConsoleSocket.ConnectAsync(host, port, ct);
             try
             {
-                var stream = client.GetStream();
-                await stream.WriteAsync(requestBytes, 0, requestBytes.Length, ct);
-                await stream.FlushAsync(ct);
-
-                var headerBuffer = new List<byte>();
-                var buf = new byte[4096];
-                int headerEnd = -1;
-                while (headerEnd < 0)
-                {
-                    int r = await stream.ReadAsync(buf, 0, buf.Length, ct);
-                    if (r <= 0) break;
-                    headerBuffer.AddRange(buf.AsSpan(0, r).ToArray());
-                    if (headerBuffer.Count >= 4)
-                    {
-                        for (int i = 0; i <= headerBuffer.Count - 4; i++)
-                        {
-                            if (headerBuffer[i] == '\r' && headerBuffer[i + 1] == '\n' && headerBuffer[i + 2] == '\r' && headerBuffer[i + 3] == '\n')
-                            {
-                                headerEnd = i + 4;
-                                break;
-                            }
-                        }
-                    }
-                }
-                var headers = Encoding.ASCII.GetString(headerBuffer.Take(headerEnd > 0 ? headerEnd : headerBuffer.Count).ToArray());
-                // 剩余部分属于第一帧数据体，保留在接收循环中继续处理
-                return new KeepAliveConnection { Client = client, HeaderText = headers };
+                var response = await ReadResponseAsync(client.GetStream(), requestBytes, ct);
+                return new KeepAliveConnection(client, response.Headers, response.Body);
             }
             catch { client.Dispose(); throw; }
         }
@@ -482,32 +468,41 @@ namespace RemotePlay.Services.Session
             return buf;
         }
 
-        private async Task ReceiveLoopAsync(Guid sessionId, TcpClient control, SessionCipher cipher, CancellationToken ct)
+        private async Task ReceiveLoopAsync(Guid sessionId, TcpClient control, SessionCipher cipher, byte[] pending, CancellationToken ct)
         {
             var stream = control.GetStream();
+            var offset = 0;
+            async Task ReadControlAsync(byte[] buffer)
+            {
+                var count = Math.Min(buffer.Length, pending.Length - offset);
+                pending.AsSpan(offset, count).CopyTo(buffer);
+                offset += count;
+                if (count < buffer.Length) await stream.ReadExactlyAsync(buffer.AsMemory(count), ct);
+            }
             var header = new byte[8];
             try
             {
                 while (!ct.IsCancellationRequested && control.Connected)
                 {
                     // 读取头部
-                    int read = await ReadExactAsync(stream, header, 0, 8, ct);
-                    if (read <= 0) break;
+                    await ReadControlAsync(header);
                     var payloadLen = BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(0, 4));
                     var msgType = BinaryPrimitives.ReadUInt16BigEndian(header.AsSpan(4, 2));
 
+                    _logger.LogDebug("Control message {Type:X4}, payload {Size}", msgType, payloadLen);
+                    if (payloadLen > 1048576) throw new IOException("Console control message exceeded its size limit.");
                     byte[] payload = Array.Empty<byte>();
                     if (payloadLen > 0)
                     {
                         payload = new byte[payloadLen];
-                        await ReadExactAsync(stream, payload, 0, (int)payloadLen, ct);
+                        await ReadControlAsync(payload);
                         payload = cipher.Decrypt(payload);
                     }
 
                     // 处理心跳与会话ID
                     if (msgType == 0x00FE) // HEARTBEAT_REQUEST
                     {
-                        var resp = BuildMessage(0x01FE, HEARTBEAT_RESPONSE, cipher);
+                        var resp = BuildMessage(0x01FE, Array.Empty<byte>(), cipher);
                         await stream.WriteAsync(resp, 0, resp.Length, ct);
                         await stream.FlushAsync(ct);
                     }
@@ -674,22 +669,10 @@ namespace RemotePlay.Services.Session
             }
             catch (Exception ex)
             {
-                _logger.LogDebug(ex, "会话接收循环异常");
+                if (_sessions.ContainsKey(sessionId)) _logger.LogWarning(ex, "Console control connection ended unexpectedly");
             }
+            finally { control.Dispose(); }
         }
 
-        private static async Task<int> ReadExactAsync(NetworkStream stream, byte[] buffer, int offset, int count, CancellationToken ct)
-        {
-            int readTotal = 0;
-            while (readTotal < count)
-            {
-                int r = await stream.ReadAsync(buffer, offset + readTotal, count - readTotal, ct);
-                if (r <= 0) return readTotal;
-                readTotal += r;
-            }
-            return readTotal;
-        }
     }
 }
-
-

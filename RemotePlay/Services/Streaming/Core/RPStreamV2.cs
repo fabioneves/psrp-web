@@ -1259,7 +1259,7 @@ namespace RemotePlay.Services.Streaming.Core
                         _logger.LogInformation("DISCONNECT received during stream reconnection, ignoring (session preserved)");
                         break;
                     }
-                    _logger.LogWarning("DISCONNECT received from PS5, handling disconnect...");
+                    _logger.LogWarning("Console disconnected stream: {Reason}", message.DisconnectPayload?.Reason);
                     _ = Task.Run(async () => await HandleDisconnectAsync());
                     break;
 

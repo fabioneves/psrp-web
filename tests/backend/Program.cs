@@ -20,6 +20,7 @@ if (args.Contains("--psn-storage")) { await PsnStorageTests.RunAsync(Check); ret
 
 var clock = new TestClock();
 await ConsoleSocketTests.RunAsync(Check);
+await SessionProtocolTests.RunAsync(Check);
 await ReorderTests.RunAsync(Check);
 await DiscoveryTests.RunAsync(Check);
 await PsnTests.RunAsync(Check);

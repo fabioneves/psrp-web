@@ -487,3 +487,48 @@ test('lower profiles use the selected dimensions and frame rate', async ({ page 
     await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
   }
 });
+
+for (const renderer of ['worker', 'mainThread']) {
+  test(`${renderer} playback survives repeated fullscreen transitions and reconnects`, async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await register(page, renderer === 'mainThread' ? '?mainThread=1' : '');
+    await page.getByRole('button', { name: 'Start test stream' }).click();
+    await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+    const frames = async () => Number(await page.locator('#fps').getAttribute('data-frames'));
+    for (let i = 0; i < 4; i++) {
+      const before = await frames();
+      await page.locator('#fullscreen').click();
+      await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(i % 2 === 0);
+      await expect.poll(frames).toBeGreaterThan(before + 30);
+    }
+    await page.locator('#fullscreen').click();
+    await page.locator('#stop').click();
+    await expect.poll(() => page.evaluate(() => !!document.fullscreenElement)).toBe(false);
+    await page.getByRole('button', { name: 'Start test stream' }).click();
+    await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+    await page.locator('#stop').click();
+    expect(errors).toEqual([]);
+  });
+}
+
+test('worker playback recovers when browser animation callbacks stop', async ({ page }) => {
+  await register(page);
+  let tickets = 0;
+  page.on('request', request => { if (request.url().includes('/api/software/tickets')) tickets++; });
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+  await expect(page.locator('#engine')).toContainText('worker');
+  const frames = () => page.locator('#fps').getAttribute('data-frames').then(Number);
+  const worker = page.workers().find(worker => worker.url().endsWith('/stream-worker.js'));
+  expect(worker).toBeTruthy();
+  await worker.evaluate(() => {
+    self.requestAnimationFrame = () => 1;
+    self.cancelAnimationFrame = () => {};
+  });
+  const before = await frames();
+  await page.locator('#fullscreen').click();
+  await expect.poll(frames).toBeGreaterThan(before + 100);
+  expect(tickets).toBe(1);
+  await page.locator('#stop').click();
+});

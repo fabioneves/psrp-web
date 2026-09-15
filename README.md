@@ -197,7 +197,7 @@ Enable **Automatically adjust quality** to let playback reduce bitrate for netwo
 
 During playback, expand **Playback timing and quality** for separate processing costs, queue delays and the actual profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
-The renderer decodes reference frames but draws only the newest pending image on each display tick. It avoids converting frames that would immediately be overwritten. See [measured results, timing limits and benchmark commands](docs/optimization.md).
+The renderer decodes reference frames but draws only the newest pending image on each display tick. It avoids converting frames that would immediately be overwritten. If browser animation callbacks stall during fullscreen or a display change, presentation falls back to a timer without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
 ## Audio
 

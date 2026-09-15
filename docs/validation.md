@@ -325,3 +325,39 @@ The broader browser run passed 26 checks but its 1080p60 synthetic check sampled
 assertion was relaxed. Final backend tests passed 75 assertions, and the database
 integration run passed 11 assertions. The initial rate variation remains a
 reminder that brief desktop measurements are not a sustained performance guarantee.
+
+### Fullscreen and reconnect investigation
+
+The reported freeze/reconnect failure exposed two console protocol faults. The
+TCP heartbeat reply included an eight-byte payload instead of the empty reply
+used by Chiaki. The control handshake also discarded bytes received after the
+HTTP header terminator, potentially losing the first control message. Regression
+tests reproduce both conditions with a local fake console; they now pass. Header
+reads have a size limit and deadline, rejected handshakes release their sockets,
+and busy/crashed/incomplete responses produce distinct browser messages.
+
+The software renderer now falls back to a 60 Hz timer if an animation callback
+has not arrived within 100 ms. Pending frames remain bounded to the latest frame;
+this recovery does not open another console connection. Stream error cleanup
+kills the transcoder before waiting for its pipe workers to exit.
+
+Before the changes, a real public-URL PS5 session ran in fullscreen for a minute,
+with mostly 44–60 presented fps and a brief zero-throughput interval near the end;
+playback resumed. That test did not reproduce a permanent fullscreen freeze or
+establish the cause of the user's original incident.
+
+Updated regression results: 88 backend assertions, 26 JavaScript unit tests, and
+31 browser tests passed. Browser coverage includes repeated native fullscreen
+entry/exit in both worker and main-thread rendering, disconnecting from fullscreen
+and starting again, and deliberately suppressing worker animation callbacks after
+playback begins. The latter continued displaying frames using the same stream
+ticket. The full run also passed the 720p60, 1080p60/audio, controller, authentication,
+and setup checks with GPU/video/canvas acceleration disabled in Chrome.
+
+A subsequent public-URL PS5 run showed 50–60 fps samples during most of a minute
+in fullscreen, then stalled; the reconnect attempt reported the console occupied.
+The user confirmed the console was being used at that time. This run is therefore
+inconclusive for unattended session stability and cannot establish the cause of
+the original fullscreen incident. Real-console tests were stopped. Unexpected
+control-socket closure and console-supplied disconnect reasons are now logged for
+future diagnosis; raw handshake headers are no longer logged.
