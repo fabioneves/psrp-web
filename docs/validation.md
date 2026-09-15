@@ -223,3 +223,22 @@ The versions follow the [Chiaki-ng discovery definitions](https://github.com/str
 All 46 backend assertions passed. A real Chrome session through the public domain
 left the IP field empty, clicked **Find consoles on this network**, and found the
 online PS5. This verifies the automatic button itself, not the direct-IP fallback.
+
+### Automatic account-ID encoding
+
+The pairing form accepts numeric PSN account IDs and existing Base64 IDs. Numeric
+values are converted in the browser using exact unsigned 64-bit arithmetic, then
+eight little-endian bytes are Base64-encoded, matching the
+[Chiaki-ng account-ID format](https://github.com/streetpea/chiaki-ng/blob/main/scripts/psn-account-id.py).
+The form previews the encoded value. Online names, overflow and malformed Base64
+are rejected before pairing; this feature does not look up accounts by online name.
+
+Unit tests cover a value above JavaScript's safe integer range, the maximum
+unsigned 64-bit value, byte order, existing Base64 and invalid inputs. Browser
+coverage inspects the pairing request to confirm that numeric and encoded input
+produce the same account ID, and that an online name makes no pairing request.
+
+Validation after deploying both changes: all 46 backend assertions, 24 JavaScript
+tests and 22 browser/API tests passed. Public-domain checks passed for encoding
+and saved login, in addition to the real automatic-discovery check. The rebuilt
+Docker deployment is healthy.

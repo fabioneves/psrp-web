@@ -20,7 +20,7 @@ Open **http://localhost:8080** (or your server's IP and port).
 
 1. Create a local account in the web UI. Login survives page refresh for up to 24 hours; **Sign out** clears the saved session.
 2. Click **Start test stream** to check your browser's software playback.
-3. Pair your PlayStation using its IP address, your Base64 PSN account ID and the console's Link Device PIN. **Find consoles on this network** shows search progress and results beside the button. If the scan finds nothing, enter the console IP and choose **Check IP address** to search directly.
+3. Pair your PlayStation using its IP address, your numeric or Base64 PSN account ID and the console's Link Device PIN. Numeric IDs are encoded automatically. **Find consoles on this network** shows search progress and results beside the button. If the scan finds nothing, enter the console IP and choose **Check IP address** to search directly.
 4. Click **Play**. **Disconnect** ends the Remote Play session and stops its FFmpeg process.
 
 The first build downloads the .NET SDK and FFmpeg and can take a few minutes. PostgreSQL migrations run automatically. Console registrations and accounts persist in `postgres-data`; the generated signing secret persists in `app-data`. There are no GPU device mounts or privileged containers.
@@ -55,7 +55,7 @@ The Docker server must be able to reach the console on your home network. The br
 - **PS5:** enable Remote Play in Settings → System → Remote Play; use Link Device for the PIN.
 - **PS4:** enable Remote Play in Settings → Remote Play Connection Settings; use Add Device for the PIN.
 - For wake from rest mode, enable the console's network connection and network wake options. Sony documents these in its [Remote Play setup guide](https://www.playstation.com/en-us/support/games/playstation-remote-play-on-pc-and-mac/).
-- The account ID is the **Base64 encoding of your numeric PSN account ID**, not your online name or password. Use your existing Chiaki account ID, or obtain it with [Chiaki-ng's account ID script](https://github.com/streetpea/chiaki-ng/blob/main/scripts/psn-account-id.py). This app does not need your PSN password.
+- Paste your **numeric PSN account ID** and the browser will encode it automatically, showing the Base64 value before pairing. Existing Base64 IDs from Chiaki also work. This is not your online name or password; username lookup is not included. If you do not have the ID, obtain it with [Chiaki-ng's account ID script](https://github.com/streetpea/chiaki-ng/blob/main/scripts/psn-account-id.py). This app does not need your PSN password.
 - Pairing requires a fresh PIN from the console even if another local user already paired it. Access to a stream is checked against the signed-in user's paired devices.
 
 Default Compose uses bridge networking. To enable **automatic network discovery**

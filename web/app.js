@@ -4,6 +4,7 @@ import { Reconnect } from './reconnect.js';
 import { AudioOutput } from './audio.js';
 import { startStream } from './stream-runtime.js';
 import { AdaptiveQuality } from './adaptive.js';
+import { encodeAccountId } from './account-id.js';
 
 const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
@@ -156,10 +157,22 @@ async function refresh() {
   }
 }
 $('refresh').onclick = () => run($('refresh'), refresh);
+$('account-id').oninput = () => {
+  const value = $('account-id').value.trim(), preview = $('account-id-preview');
+  preview.hidden = true;
+  try {
+    const encoded = encodeAccountId(value);
+    if (encoded !== value) {
+      preview.textContent = `Encoded account ID: ${encoded}`;
+      preview.hidden = false;
+    }
+  } catch {}
+};
 $('pair-form').onsubmit = event => {
   event.preventDefault();
   run(event.submitter, async () => {
-    await api('playstation/bind', { hostIp: $('host-ip').value.trim(), accountId: $('account-id').value.trim(), pin: $('pin').value });
+    const accountId = encodeAccountId($('account-id').value);
+    await api('playstation/bind', { hostIp: $('host-ip').value.trim(), accountId, pin: $('pin').value });
     $('pin').value = '';
     await refresh();
     notify('Console paired. Choose Play to connect.');

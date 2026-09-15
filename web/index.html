@@ -62,7 +62,9 @@
           <button type="button" id="discover" class="quiet" aria-describedby="discovery-status" aria-controls="discovered">Find consoles on this network</button>
           <p id="discovery-status" class="hint" role="status" aria-live="polite" aria-atomic="true"></p>
           <div id="discovered"></div>
-          <label>PlayStation account ID (Base64)<input id="account-id" required placeholder="Your encoded numeric account ID" autocomplete="off"></label>
+          <label>PlayStation account ID<input id="account-id" required maxlength="20" placeholder="Numeric ID or Base64" autocomplete="off" aria-describedby="account-id-hint account-id-preview"></label>
+          <p id="account-id-hint" class="hint">Paste your numeric PSN account ID or its Base64 value. Numeric IDs are encoded automatically; this is not your PSN online name.</p>
+          <p id="account-id-preview" class="hint" role="status" aria-live="polite" hidden></p>
           <label>Link Device PIN<input id="pin" required inputmode="numeric" pattern="[0-9]{8}" maxlength="8" placeholder="8 digits" autocomplete="off"></label>
           <button class="primary" type="submit">Pair console</button>
         </form>

@@ -90,6 +90,31 @@ test('a console IP can be checked directly when broadcast discovery finds nothin
   await expect(page.locator('#account-id')).toBeFocused();
 });
 
+test('pairing automatically encodes numeric account IDs and accepts existing Base64', async ({ page }) => {
+  await register(page);
+  const submitted = [];
+  await page.route('**/api/playstation/bind', route => {
+    submitted.push(route.request().postDataJSON());
+    return route.fulfill({ status: 400, json: { message: 'Pairing intercepted for this test.' } });
+  });
+  await page.locator('#host-ip').fill('192.168.1.50');
+  await page.locator('#pin').fill('12345678');
+  await page.getByLabel('PlayStation account ID', { exact: true }).fill('72623859790382856');
+  await expect(page.locator('#account-id-preview')).toHaveText('Encoded account ID: CAcGBQQDAgE=');
+  await page.getByRole('button', { name: 'Pair console', exact: true }).click();
+  await expect(page.locator('#message')).toHaveText('Pairing intercepted for this test.');
+  expect(submitted[0].accountId).toBe('CAcGBQQDAgE=');
+  await page.locator('#account-id').fill('CAcGBQQDAgE=');
+  await expect(page.locator('#account-id-preview')).toBeHidden();
+  await page.getByRole('button', { name: 'Pair console', exact: true }).click();
+  await expect.poll(() => submitted.length).toBe(2);
+  expect(submitted[1].accountId).toBe('CAcGBQQDAgE=');
+  await page.locator('#account-id').fill('PSN_Online_Name');
+  await page.getByRole('button', { name: 'Pair console', exact: true }).click();
+  await expect(page.locator('#message')).toContainText('A PSN online name cannot be encoded');
+  expect(submitted.length).toBe(2);
+});
+
 test('login survives refresh, uses an HttpOnly cookie, and sign-out survives refresh', async ({ page, context }) => {
   await register(page);
   const cookie = (await context.cookies()).find(cookie => cookie.name === 'remote-play-session');
