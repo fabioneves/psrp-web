@@ -1,0 +1,21 @@
+services:
+  remote-play:
+    ports: !reset []
+  proxy:
+    image: caddy:2-alpine
+    ports:
+      - "${HTTPS_PORT:-443}:443"
+      - "${HTTP_PORT:-80}:80"
+    environment:
+      REMOTE_PLAY_DOMAIN: ${REMOTE_PLAY_DOMAIN:?Set REMOTE_PLAY_DOMAIN to your public DNS hostname}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      remote-play:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  caddy-data:
+  caddy-config:

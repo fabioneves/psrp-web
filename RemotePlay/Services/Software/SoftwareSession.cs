@@ -10,7 +10,7 @@ using RemotePlay.Services.Streaming.Controller;
 namespace RemotePlay.Services.Software;
 
 public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStreamingService streams,
-    IControllerService controller, ILogger<SoftwareSession> logger)
+    IControllerService controller, ActiveSoftwareStreams active, ILogger<SoftwareSession> logger)
 {
     public async Task RunAsync(WebSocket socket, StreamTicket grant, CancellationToken aborted)
     {
@@ -20,16 +20,19 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         Process? generator = null;
         SoftwareTranscoder? transcoder = null;
         using var receiver = new SoftwareReceiver();
+        using var sendGate = new SemaphoreSlim(1, 1);
         Task[] workers = [];
+        ActiveSoftwareStream? published = null;
         try
         {
             await SendStatus(socket, "Connecting", ct);
-            transcoder = new SoftwareTranscoder(grant.BitrateKbps);
+            var profile = VideoProfile.Create(grant.Resolution, grant.Fps);
+            transcoder = new SoftwareTranscoder(grant.BitrateKbps, grant.Resolution, grant.Fps);
             Task feed;
             if (grant.Demo)
             {
                 generator = SoftwareTranscoder.Start(["-hide_banner", "-loglevel", "error", "-re",
-                    "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=60", "-an", "-c:v", "libx264",
+                    "-f", "lavfi", "-i", $"testsrc2=size={profile.Width}x{profile.Height}:rate={profile.Fps}", "-an", "-c:v", "libx264",
                     "-preset", "ultrafast", "-tune", "zerolatency", "-threads", "2", "-g", "60",
                     "-b:v", "8000k", "-pix_fmt", "yuv420p", "-f", "h264", "pipe:1"]);
                 feed = transcoder.FeedAsync(generator.StandardOutput.BaseStream, ct);
@@ -46,7 +49,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                     ServerKey = Convert.FromHexString(device.RPKey!)
                 }, device.HostType!, new SessionStartOptions
                 {
-                    Resolution = "720p", Fps = "60", Bitrate = "10000", StreamType = "1",
+                    Resolution = grant.Resolution, Fps = grant.Fps.ToString(), Bitrate = Math.Min(grant.BitrateKbps, 15000).ToString(), StreamType = "1",
                     AutoStartStream = false, AutoConnectController = false
                 }, ct);
                 sessionId = session.Id;
@@ -62,7 +65,11 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 feed = transcoder.FeedAsync(receiver, ct);
             }
             await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct);
-            workers = [feed, transcoder.SendAsync(socket, ct), ReceiveAsync(socket, sessionId, ct)];
+            var input = new SoftwareInputRouter(controller, sessionId);
+            published = new ActiveSoftwareStream(grant, input, ct);
+            active.Set(published);
+            workers = [feed, transcoder.SendAsync(socket, ct, sendGate), input.ReceiveAsync(socket, ct),
+                SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)];
             var completed = await Task.WhenAny(workers);
             await completed;
         }
@@ -83,6 +90,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         finally
         {
             await lifetime.CancelAsync();
+            if (published != null) active.Remove(published);
             receiver.Dispose();
             transcoder?.Dispose();
             if (generator != null)
@@ -117,49 +125,29 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = error ? "error" : "status", message }),
             WebSocketMessageType.Text, true, ct);
 
-    private async Task ReceiveAsync(WebSocket socket, Guid? sessionId, CancellationToken ct)
+    private static async Task SendAudioAsync(WebSocket socket, SoftwareReceiver receiver, bool demo,
+        SemaphoreSlim sendGate, CancellationToken ct)
     {
-        var buffer = new byte[2048];
-        var pressed = new HashSet<FeedbackEvent.ButtonType>();
-        var lastHeartbeat = Stopwatch.StartNew();
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(20));
+        long sample = 0;
         while (!ct.IsCancellationRequested)
         {
-            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            timeout.CancelAfter(TimeSpan.FromSeconds(10));
-            var result = await socket.ReceiveAsync(buffer.AsMemory(), timeout.Token);
-            if (result.MessageType == WebSocketMessageType.Close) return;
-            if (!result.EndOfMessage || result.MessageType != WebSocketMessageType.Text)
-                throw new IOException("Invalid input message.");
-            var input = JsonSerializer.Deserialize<InputMessage>(buffer.AsSpan(0, result.Count), JsonOptions)
-                ?? throw new IOException("Empty input message.");
-            if (input.Type == "ping") { lastHeartbeat.Restart(); continue; }
-            if (lastHeartbeat.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("Browser heartbeat expired.");
-            if (sessionId is not { } id) continue;
-            switch (input.Type)
+            byte[] packet;
+            if (demo)
             {
-                case "button" when Enum.TryParse<FeedbackEvent.ButtonType>(input.Button, out var button) && Enum.IsDefined(button):
-                    if (input.Pressed ? pressed.Add(button) : pressed.Remove(button))
-                    {
-                        await controller.ButtonAsync(id, button, input.Pressed ? IControllerService.ButtonAction.PRESS : IControllerService.ButtonAction.RELEASE, ct: ct);
-                        if (button == FeedbackEvent.ButtonType.L2) await controller.SetTriggersAsync(id, l2: input.Pressed ? 1 : 0, ct: ct);
-                        if (button == FeedbackEvent.ButtonType.R2) await controller.SetTriggersAsync(id, r2: input.Pressed ? 1 : 0, ct: ct);
-                    }
-                    break;
-                case "stick" when input.Stick is "left" or "right" && float.IsFinite(input.X) && float.IsFinite(input.Y):
-                    await controller.StickAsync(id, input.Stick, point: (Math.Clamp(input.X, -1, 1), Math.Clamp(input.Y, -1, 1)), ct: ct);
-                    break;
-                case "reset":
-                    foreach (var held in pressed) await controller.ButtonAsync(id, held, IControllerService.ButtonAction.RELEASE, ct: ct);
-                    pressed.Clear();
-                    await controller.StickAsync(id, "left", point: (0, 0), ct: ct);
-                    await controller.StickAsync(id, "right", point: (0, 0), ct: ct);
-                    await controller.SetTriggersAsync(id, 0, 0, ct);
-                    break;
-                default: throw new IOException("Unknown input command.");
+                if (!await timer.WaitForNextTickAsync(ct)) return;
+                var samples = new float[960 * 2];
+                for (var i = 0; i < 960; i++, sample++)
+                    samples[i * 2] = samples[i * 2 + 1] = (float)(0.1 * Math.Sin(sample * 2 * Math.PI * 440 / 48000));
+                packet = SoftwareReceiver.PcmPacket(samples, 48000, 2);
             }
+            else packet = await receiver.AudioPackets.ReadAsync(ct);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(1));
+            await sendGate.WaitAsync(timeout.Token);
+            try { await socket.SendAsync(packet, WebSocketMessageType.Binary, true, timeout.Token); }
+            finally { sendGate.Release(); }
         }
     }
 
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
-    private sealed record InputMessage(string Type, string? Button, bool Pressed, string? Stick, float X, float Y);
 }

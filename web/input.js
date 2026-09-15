@@ -3,18 +3,23 @@ export class InputState {
     this.send = send;
     this.sources = new Map();
     this.buttons = new Set();
+    this.pad = null;
+    this.triggers = { l2: 0, r2: 0 };
     this.sticks = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
   }
   hold(source, command) { this.sources.set(source, command); this.update(); }
   release(source) { this.sources.delete(source); this.update(); }
+  gamepad(snapshot) { this.pad = snapshot; this.update(); }
   reset() {
     this.sources.clear(); this.buttons.clear();
+    this.pad = null;
+    this.triggers = { l2: 0, r2: 0 };
     this.sticks = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
     this.send({ type: 'reset' });
   }
   update() {
-    const buttons = new Set();
-    const sticks = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
+    const buttons = new Set(this.pad?.buttons);
+    const sticks = { left: { ...this.pad?.left || { x: 0, y: 0 } }, right: { ...this.pad?.right || { x: 0, y: 0 } } };
     for (const command of this.sources.values()) {
       const [kind, name, value] = command.split(':');
       if (kind === 'button') buttons.add(name);
@@ -30,6 +35,12 @@ export class InputState {
         this.send({ type: 'stick', stick, x, y });
         this.sticks[stick] = { x, y };
       }
+    }
+    const l2 = buttons.has('L2') ? 1 : this.pad?.l2 || 0;
+    const r2 = buttons.has('R2') ? 1 : this.pad?.r2 || 0;
+    if (l2 !== this.triggers.l2 || r2 !== this.triggers.r2) {
+      this.triggers = { l2, r2 };
+      this.send({ type: 'triggers', l2, r2 });
     }
   }
 }
@@ -86,5 +97,6 @@ export function bindInputs(container, send, isPlaying) {
   window.addEventListener('keyup', event => state.release(`key:${event.code}`));
   window.addEventListener('blur', reset);
   document.addEventListener('visibilitychange', () => { if (document.hidden) reset(); });
+  reset.state = state;
   return reset;
 }

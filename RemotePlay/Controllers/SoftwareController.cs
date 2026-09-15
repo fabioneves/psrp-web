@@ -9,18 +9,32 @@ using RemotePlay.Services.Software;
 namespace RemotePlay.Controllers;
 
 [ApiController, Authorize, Route("api/software")]
-public sealed class SoftwareController(StreamTickets tickets, RPContext db, SoftwareSession runner) : ControllerBase
+public sealed class SoftwareController(StreamTickets tickets, RPContext db, SoftwareSession runner, ActiveSoftwareStreams active) : ControllerBase
 {
     [HttpPost("tickets")]
     public async Task<IActionResult> Ticket(StreamRequest request, CancellationToken ct)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier)!;
-        if (!request.Demo && !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive &&
+        VideoProfile.Create(request.Resolution, request.Fps);
+        if (request.InputSession is { } session)
+        {
+            if (active.Find(userId, session) == null) return NotFound(new { message = "This stream is no longer running on your account." });
+        }
+        else if (!request.Demo && !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive &&
                 d.Device != null && d.Device.HostId == request.HostId && d.Device.IsRegistered == true, ct))
             return NotFound(new { message = "Pair this console with your account first." });
-        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps);
+        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps);
         Response.Headers.CacheControl = "no-store";
         return Ok(new { ticket });
+    }
+
+    [HttpGet("active")]
+    public IActionResult Active()
+    {
+        Response.Headers.CacheControl = "no-store";
+        var stream = active.Find(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        return new JsonResult(stream == null ? null : new { sessionId = stream.Id, stream.Grant.HostId,
+            stream.Grant.Demo, stream.InputClients });
     }
 
     [AllowAnonymous, HttpGet("stream")]
@@ -37,6 +51,18 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
             Response.StatusCode = 401;
             return;
         }
+        if (grant.InputSession is { } inputSession)
+        {
+            var stream = active.Find(grant.UserId, inputSession);
+            if (stream == null || !stream.TryAttach()) { Response.StatusCode = 409; return; }
+            try
+            {
+                using var socket = await HttpContext.WebSockets.AcceptWebSocketAsync();
+                await stream.ReceiveAsync(socket, ct);
+            }
+            finally { stream.Detach(); }
+            return;
+        }
         if (!await tickets.Viewer.WaitAsync(0, ct))
         {
             Response.StatusCode = 409;
@@ -51,4 +77,5 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
     }
 }
 
-public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 20000)] int BitrateKbps = 10000);
+public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 30000)] int BitrateKbps = 10000,
+    Guid? InputSession = null, string Resolution = "720p", int Fps = 60);

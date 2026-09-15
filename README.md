@@ -2,11 +2,11 @@
 
 A Docker-hosted PlayStation Remote Play client with **software decoding and Canvas 2D rendering**. Based on [o1298098/remote-play](https://github.com/o1298098/remote-play), with a canvas playback approach inspired by [Moonlight Web Tesla](https://github.com/Argon2000/moonlight-web-stream-tsla).
 
-**Default: 1280×720 at 60 fps, 10 Mbps, no audio.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Touch buttons and keyboard controls are included.
+**Default: 1280×720 at 60 fps, 10 Mbps, with stereo audio. Select up to 1080p60.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Touch, keyboard, optional gamepads and second-device input are included.
 
 The synthetic video pipeline has been tested at 60 fps in desktop Chromium with GPU acceleration disabled. **A real PlayStation and Tesla browser have not been tested here.** See [validation and performance](docs/validation.md).
 
-![Software-decoded 720p60 stream](docs/images/software-stream.png)
+![Software-decoded 1080p60 stream with audio](docs/images/1080p60-audio.png)
 
 ## Run
 
@@ -65,7 +65,22 @@ The host-network override requires Compose 2.24.4+ and is intended for rootful L
 
 Use a domain and HTTPS reverse proxy reachable by the vehicle. The Moonlight reference reports restrictions on raw IP/local-network access in Tesla browsers. That behavior varies by vehicle/browser version; this implementation still needs testing on the target Tesla.
 
-The proxy must forward WebSocket upgrades to the same app port and allow long-lived connections. A minimal Caddy configuration, when Caddy runs on the Docker host:
+A Docker HTTPS overlay is included (Compose 2.24.4+). Set
+`REMOTE_PLAY_DOMAIN=play.example.com` in `.env`, point that DNS name at your server,
+and make TCP ports 80/443 reachable. Start it with:
+
+```sh
+docker compose -f compose.yaml -f compose.https.yaml up --build -d
+```
+
+Caddy obtains/renews the certificate and proxies WebSockets. This overlay removes
+the direct HTTP app port and publishes only the proxy. Use it with the default
+bridge configuration; the separate host-network override is for LAN discovery.
+No browser-facing UDP media ports, STUN or TURN are required. DNS, routing and
+certificate issuance need your real domain; local validation does not prove the
+vehicle can reach it.
+
+If you already run Caddy on the host, a minimal configuration is:
 
 ```caddyfile
 play.example.com {
@@ -83,14 +98,16 @@ flowchart LR
     RP -->|H.264| CPU[FFmpeg CPU decode and MPEG-1 encode]
     CPU -->|MPEG-TS over WebSocket| DEC[JSMpeg WASM / JS decoder]
     DEC --> CANVAS[Canvas 2D putImageData]
-    UI[Touch / keyboard] -->|WebSocket input| RP
+    RP -->|Opus| PCM[Server CPU audio decoder]
+    PCM -->|Stereo PCM over WebSocket| AUDIO[Web Audio output]
+    UI[Touch / keyboard / gamepads] -->|WebSocket input| RP
 ```
 
-Canvas rendering by itself does not force software video decoding. The Moonlight fork receives already-decoded WebRTC frames. Here, FFmpeg explicitly uses `-hwaccel none`, and the browser decodes MPEG-1 in WebAssembly (or JavaScript), then converts pixels and writes them with `putImageData`. No HTML video element, browser media decoder, WebRTC session, WebGL renderer or audio output is created.
+Canvas rendering by itself does not force software video decoding. The Moonlight fork receives already-decoded WebRTC frames. Here, FFmpeg explicitly uses `-hwaccel none`, and the browser decodes MPEG-1 in WebAssembly (or JavaScript), then converts pixels and writes them with `putImageData`. No HTML video element, browser media decoder, WebRTC session, WebGL renderer is created. Audio is decoded on the server and played through Web Audio.
 
 The browser uses an OffscreenCanvas worker where supported. A main-thread Canvas 2D fallback supports browsers without that capability; `?mainThread=1` forces it for diagnosis. Assets, including the decoder, are served locally with no runtime CDN dependency.
 
-**Tradeoffs:** MPEG-1 requires more bandwidth than H.264 and adds a lossy encode step and CPU processing on the server. 720p60 is a requested stream format and performance target, not a guarantee on every CPU. The 6–20 Mbps setting trades picture quality against bandwidth and decoding work. It does not lower the requested resolution or frame rate.
+**Tradeoffs:** MPEG-1 requires more bandwidth than H.264 and adds a lossy encode step and CPU processing on the server. 720p60 is a requested stream format and performance target, not a guarantee on every CPU. Resolution (360p/540p/720p/1080p), frame rate (30/60) and video bitrate (3–30 Mbps in the UI) are selectable independently. A lower resolution reduces browser CPU work more directly than a lower bitrate.
 
 The test pattern travels through a real H.264 encoder, the production CPU transcoder, WebSocket transport and browser decoder. Its metrics are decoded/rendered fps, decode + pixel conversion/draw time per frame, and received bitrate. They do not measure display scanout or end-to-end controller latency.
 
@@ -100,8 +117,79 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 - Keyboard: arrows = D-pad; WASD = left stick; IJKL = right stick; X/C/Z/V = cross/circle/square/triangle; Q/E = L1/R1; 1/3 = L2/R2; 2/4 = L3/R3; Enter = Options; Backspace = Share; Space = PS; T = touchpad click.
 - Input resets on focus loss, hidden tabs and disconnect. Opposing directions cancel; simultaneous touch and keyboard holds work together.
 - One active viewer/session per server. Stop it before connecting another viewer. An abandoned connection expires after missed heartbeats.
-- No audio, microphone, rumble, motion sensing, physical Gamepad API or touchpad gestures. Direction buttons provide full stick deflection; triggers provide released/fully-pressed states. Some games require features beyond these controls.
+- Optional gamepads supply analog sticks/triggers and positional PlayStation buttons. Tesla virtual-controller face swaps, source preference, manual index selection and dead zones are configurable. Polling detects devices even without browser connection events; only one local gamepad is selected to suppress mirrored input.
+- No microphone, rumble, motion sensing or touchpad gestures. Touch direction buttons provide full stick deflection. Some games require features beyond these controls.
 - No native PSN login or console-to-server relay/TURN. The server connects directly to the paired console.
+
+## Profiles and server performance
+
+| Profile | Resolution | Default video bitrate | Frame rates |
+|---|---|---|---|
+| Low bandwidth | 640 × 360 | 3 Mbps | 30 / 60 |
+| Balanced on slower browsers | 960 × 540 | 6 Mbps | 30 / 60 |
+| Default | 1280 × 720 | 10 Mbps | 30 / 60 |
+| Full HD | 1920 × 1080 | 20 Mbps | 30 / 60 |
+
+The selected resolution and frame rate are requested from the console and used
+by the server encoder. Actual console output depends on its model/firmware and
+network. The browser displays the transcoded output dimensions. This does not
+prove the console supplied that native resolution. HDR/HEVC output is not exposed
+by this software MPEG-1 path.
+
+`ENCODER_THREADS=4` controls FFmpeg's CPU decoder/encoder thread count (1–16).
+Increase it only if server measurements show encoding cannot keep up. The server
+handles H.264 decode, scaling, MPEG-1 encode, Opus decode and audio conversion.
+The browser still has to decode MPEG-1 and draw pixels; a powerful server cannot
+remove that client CPU cost. Video runs in a worker where available, and audio
+can flow directly from that worker to the audio thread without main-thread
+scheduling. No one-second TV buffer is added to game video.
+
+Bookmarks accept `?resolution=1080p&fps=60&bitrate=20000`, `controllerMode=auto`,
+`controllerIndex=0`, `teslaSwap=on` and `mainThread=1`. Launch overrides do not
+change saved controller preferences. Settings apply on the next Play/test launch.
+
+## Audio
+
+Console Opus packets are decoded on the server to signed 16-bit PCM. The browser
+uses Web Audio's gain/compressor output pattern, informed by the sibling IPTV
+player, with an AudioWorklet jitter buffer where available. This audio path uses
+no browser codec decoder. Stereo at 48 kHz adds about **1.54 Mbps** before overhead,
+separate from the displayed video bitrate.
+
+Audio starts with Play. If autoplay is blocked, tap **Enable sound** or the player.
+Use **Mute**, **Volume**, and the **40/120/240 ms audio buffer** selector. The default
+is 120 ms; larger values tolerate more jitter but add sound delay. HTTPS enables
+AudioWorklet in browsers requiring a secure context; a scheduled Web Audio
+fallback handles browsers without it. Browser UI stalls can interrupt that fallback.
+No HTML audio/video element is needed.
+
+Unlike the IPTV player's one-second audio lead, this buffer favors interactive
+latency. Audio/video alignment depends on the console, transcoding, network and
+browser output latency; it has not been calibrated on real hardware. The demo
+includes a low-volume 440 Hz tone, and audio statistics report decoded sample
+activity, queued time and underruns. They do not measure the physical speakers.
+
+## Use a phone as the controller
+
+1. Start the stream on the Tesla/viewer.
+2. Open the same server on a second device and sign into the **same account**.
+3. Choose **Attach input only** in the console library.
+4. Use touch, keyboard or a connected gamepad. Video and sound stay on the viewer.
+
+Up to four input clients can attach. They share one PlayStation controller, with
+button ownership preserved across clients; the strongest stick displacement and
+highest trigger pressure win. Detaching resets only that client's controls.
+Connections and tickets are tied to the active session and account. The viewer
+shows the attached-device count. A viewer disconnect closes its input clients;
+clients retry while the same console stream reconnects.
+
+Connection failures retry up to five times with a fresh ticket and exponential
+backoff. Disconnect cancels retries. A failed video worker switches automatically
+to main-thread rendering. Fullscreen has a viewport fallback; screen wake lock is
+optional and depends on browser support.
+
+See the [Tesla feature audit](docs/tesla-parity.md) for the complete mapping to the
+Moonlight fork and the architecture-specific exclusions.
 
 ## Development and verification
 

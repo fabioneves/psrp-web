@@ -1,4 +1,6 @@
 using System.Threading.Channels;
+using System.Buffers.Binary;
+using Concentus;
 using RemotePlay.Models.PlayStation;
 
 namespace RemotePlay.Services.Software;
@@ -11,6 +13,16 @@ public sealed class SoftwareReceiver : IAVReceiver, IDisposable
         SingleReader = true
     });
     private readonly object sync = new();
+    private readonly object audioSync = new();
+    private readonly Channel<byte[]> audioPackets = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(32)
+    {
+        FullMode = BoundedChannelFullMode.DropOldest,
+        SingleReader = true
+    });
+    private IOpusDecoder? opus;
+    private float[] pcmSamples = [];
+    private int audioRate = 48000, audioChannels = 2;
+    public ChannelReader<byte[]> AudioPackets => audioPackets.Reader;
     private byte[] header = [];
     private bool waitingForIdr = true;
     public ChannelReader<byte[]> Packets => packets.Reader;
@@ -21,6 +33,20 @@ public sealed class SoftwareReceiver : IAVReceiver, IDisposable
         {
             header = videoHeader.ToArray();
             waitingForIdr = true;
+        }
+        if (audioHeader.Length >= 10)
+        {
+            var rate = BinaryPrimitives.ReadInt32BigEndian(audioHeader.AsSpan(2, 4));
+            var channels = audioHeader[0];
+            if (channels is < 1 or > 2 || rate is not (8000 or 12000 or 16000 or 24000 or 48000))
+                throw new IOException("Unsupported console audio format.");
+            lock (audioSync)
+            {
+                opus?.Dispose();
+                audioRate = rate; audioChannels = channels;
+                pcmSamples = new float[rate * 120 / 1000 * channels];
+                opus = OpusCodecFactory.CreateDecoder(rate, channels);
+            }
         }
     }
 
@@ -64,7 +90,37 @@ public sealed class SoftwareReceiver : IAVReceiver, IDisposable
         if (!string.Equals(codec, "h264", StringComparison.OrdinalIgnoreCase) && !string.Equals(codec, "avc", StringComparison.OrdinalIgnoreCase))
             packets.Writer.TryComplete(new IOException("The console must supply H.264 for software streaming."));
     }
-    public void OnAudioPacket(byte[] packet) { }
-    public void SetAudioCodec(string codec) { }
-    public void Dispose() => packets.Writer.TryComplete();
+    public void OnAudioPacket(byte[] packet)
+    {
+        if (packet.Length <= 1 || packet[0] != 1 || packet.Length > 65536) return;
+        lock (audioSync)
+        {
+            if (opus == null) return;
+            var count = opus.Decode(packet.AsSpan(1), pcmSamples.AsSpan(), pcmSamples.Length / audioChannels, false);
+            if (count > 0) audioPackets.Writer.TryWrite(PcmPacket(pcmSamples.AsSpan(0, count * audioChannels), audioRate, audioChannels));
+        }
+    }
+
+    public static byte[] PcmPacket(ReadOnlySpan<float> samples, int rate, int channels)
+    {
+        var result = new byte[12 + samples.Length * 2];
+        "PCM1"u8.CopyTo(result);
+        BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(4), rate);
+        BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(8), channels);
+        for (var i = 0; i < samples.Length; i++)
+            BinaryPrimitives.WriteInt16LittleEndian(result.AsSpan(12 + i * 2), (short)(Math.Clamp(samples[i], -1, 1) * 32767));
+        return result;
+    }
+
+    public void SetAudioCodec(string codec)
+    {
+        if (!string.Equals(codec, "opus", StringComparison.OrdinalIgnoreCase))
+            audioPackets.Writer.TryComplete(new IOException("The console must supply Opus audio."));
+    }
+    public void Dispose()
+    {
+        packets.Writer.TryComplete();
+        audioPackets.Writer.TryComplete();
+        lock (audioSync) { opus?.Dispose(); opus = null; }
+    }
 }

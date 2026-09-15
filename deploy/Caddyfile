@@ -1,0 +1,3 @@
+{$REMOTE_PLAY_DOMAIN} {
+    reverse_proxy remote-play:8080
+}

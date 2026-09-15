@@ -22,7 +22,7 @@
         <p class="eyebrow">YOUR CONSOLE. YOUR BROWSER.</p>
         <h1>Press play.<br>Leave the hardware behind.</h1>
         <p>Connect to your PlayStation with a browser. Software video, a canvas screen, and controls at your fingertips.</p>
-        <div class="spec-row"><span>720p / 60 fps target</span><span>No GPU required</span><span>Silent playback</span></div>
+        <div class="spec-row"><span>720p / 60 fps target</span><span>No GPU required</span><span>Stereo audio</span></div>
       </div>
       <form id="auth-form" class="panel">
         <p class="eyebrow">WELCOME BACK</p>
@@ -38,13 +38,18 @@
 
     <section id="library" hidden>
       <div class="section-heading"><div><p class="eyebrow">READY WHEN YOU ARE</p><h1>Your consoles</h1></div><button id="refresh">Refresh</button></div>
+      <section id="attach-panel" class="panel" hidden>
+        <h2>Stream running on another screen</h2>
+        <p>Attach this device as a controller. The other screen keeps playing.</p>
+        <button id="attach-input" class="primary">Attach input only</button>
+      </section>
       <div class="library-grid">
         <div>
           <div id="devices" class="device-list"></div>
           <section class="panel benchmark">
             <span class="eyebrow">CHECK YOUR BROWSER</span>
-            <h2>Try a 720p60 test stream</h2>
-            <p>Measure software playback before connecting a console. The moving test pattern uses the same video pipeline.</p>
+            <h2>Try a test stream</h2>
+            <p>Measure software playback before connecting a console. The moving test pattern and tone use your selected profile.</p>
             <button id="demo">Start test stream <span aria-hidden="true">↗</span></button>
           </section>
         </div>
@@ -59,13 +64,41 @@
           <button class="primary" type="submit">Pair console</button>
         </form>
       </div>
-      <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · highest quality</option></select></label>
+      <div class="settings-grid">
+      <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>
+      <label>Frame rate<select id="fps-profile"><option value="60" selected>60 fps</option><option value="30">30 fps</option></select></label>
+      <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="3000">3 Mbps · low bandwidth</option><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · high quality</option><option value="30000">30 Mbps · 1080p quality</option></select></label>
+      </div>
+      <p class="hint">1080p depends on console support and browser CPU. Start with 720p60 and use the test stream to compare profiles.</p>
     </section>
 
     <section id="player" hidden>
       <div class="player-bar"><div><span class="live-dot" aria-hidden="true"></span><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div><div class="player-actions"><label class="check"><input type="checkbox" id="show-controls" checked>Touch controls</label><button id="fullscreen">Full screen</button><button id="stop" class="danger">Disconnect</button></div></div>
+      <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing software video…</div></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Software decoder</span><span id="resolution">1280 × 720 target</span></div>
+      <div id="audio-controls" class="settings-grid">
+        <button id="enable-audio">Enable sound</button>
+        <label class="check"><input id="mute" type="checkbox">Mute</label>
+        <label>Volume<input id="volume" type="range" min="0" max="1" step="0.05" value="1"></label>
+        <label>Audio buffer<select id="audio-delay"><option value="40">40 ms · lowest delay</option><option value="120" selected>120 ms · balanced</option><option value="240">240 ms · tolerate stalls</option></select></label>
+      </div>
+      <p id="audio-status" role="status">Sound starts with playback; a tap may be required.</p>
+      <p id="controller-status" role="status"></p>
+      <p id="attached-status" role="status"></p>
+      <details class="controller-settings"><summary>Controller and display settings</summary>
+        <div class="settings-grid">
+          <label>Controller source<select id="controller-mode"><option value="auto">Automatic · prefer physical</option><option value="physical">Physical only</option><option value="virtual">Tesla virtual only</option></select></label>
+          <label>Controller index<input id="controller-index" type="number" min="0" max="31" placeholder="Automatic"></label>
+          <label>Tesla face-button swap<select id="controller-swap"><option value="auto">Automatic</option><option value="on">On · Nintendo layout</option><option value="off">Off</option></select></label>
+          <label>Stick dead zone<select id="dead-zone"><option value="0.08">8%</option><option value="0.12" selected>12%</option><option value="0.2">20%</option></select></label>
+          <label class="check"><input id="invert-ab" type="checkbox">Swap Cross / Circle</label>
+          <label class="check"><input id="invert-xy" type="checkbox">Swap Square / Triangle</label>
+          <label class="check"><input id="keep-awake" type="checkbox" checked>Keep screen awake</label>
+        </div>
+        <p class="hint">Press a controller button to expose it to the browser. Select an index if several controllers are connected. Controller access depends on browser permissions; use HTTPS if blocked.</p>
+        <p id="browser-diagnostics" class="hint"></p>
+      </details>
       <div id="controls" class="controls" aria-label="Touch controller">
         <div><span class="control-label">D-PAD</span><div class="pad">
           <button class="north" data-command="button:UP" aria-label="D-pad up">↑</button><button class="west" data-command="button:LEFT" aria-label="D-pad left">←</button><button class="east" data-command="button:RIGHT" aria-label="D-pad right">→</button><button class="south" data-command="button:DOWN" aria-label="D-pad down">↓</button>
@@ -85,6 +118,6 @@
     </section>
     <p id="message" role="status" aria-live="polite" hidden></p>
   </main>
-  <footer><span>CANVAS REMOTE PLAY</span><span>Independent software · PS4 & PS5 · No audio</span></footer>
+  <footer><span>CANVAS REMOTE PLAY</span><span>Independent software · PS4 & PS5 · Software video and audio</span></footer>
 </body>
 </html>

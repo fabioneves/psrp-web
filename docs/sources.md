@@ -17,9 +17,14 @@
 
 - Source: https://github.com/Argon2000/moonlight-web-stream-tsla
 - Inspected revision: `88a1e0d2a963e07aa53f8e2229567c60234f158d`
-- Relevant source: `moonlight-web/web-server/web/stream/canvas.ts`.
-- Inspected for its MediaStreamTrackProcessor, Canvas2D, worker and immediate
-  drawing approaches. No source code from that repository was copied.
+- Relevant source: `moonlight-web/web-server/web/stream/canvas.ts`, `gamepad.ts`,
+  `input.ts`, `input_stream.ts`, `freeze_watch.ts` and the README.
+- Independent implementation of the relevant behavior: canvas software output,
+  Tesla controller fingerprints/swaps, device selection, polling, input attachment
+  and retry semantics. Standard button positions follow the
+  [W3C Gamepad specification](https://w3c.github.io/gamepad/).
+- A feature-by-feature mapping is in `tesla-parity.md`; the WebRTC implementation
+  itself is not included here.
 
 ## JSMpeg
 
@@ -48,3 +53,20 @@
   https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html .
 
 This is an independent project, not affiliated with Sony, PlayStation or Tesla.
+
+## IPTV audio reference
+
+The user's sibling `iptv-player` workspace was inspected at revision
+`e6e2fbf599d7d70be795b05d6c4256db2862395a`, specifically
+`packages/player/src/web-audio-output.ts`, `autoplay.ts`, `software-player.ts`,
+`canvas-player.ts`, and `docs/web-software-player.md`. The gain/compressor output
+pattern and user-gesture audio recovery inform this implementation. Its one-second
+TV audio lead and browser WebCodecs decode are not copied into the game pipeline.
+The sibling project was not modified.
+
+Audio packets use the already-included Concentus 2.2.2 CPU Opus decoder. Browser
+output is Web Audio/AudioWorklet, with no additional npm dependency.
+
+HTTPS overlay configuration follows Caddy's
+[reverse proxy documentation](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
+and [automatic HTTPS documentation](https://caddyserver.com/docs/automatic-https).

@@ -47,8 +47,7 @@ display refresh rate, game image quality or controller-to-photon latency.
 - JavaScript fallback with WebAssembly unavailable and native media constructors
   made to throw if called.
 
-Final checks: 19 backend assertions, 3 input unit tests and 5 browser/API tests
-passed. NuGet's transitive vulnerability audit and npm's dependency audit reported
+The initial release passed 19 backend assertions, 3 input unit tests and 5 browser/API tests. NuGet's transitive vulnerability audit and npm's dependency audit reported
 no known vulnerable packages at validation time. Existing upstream compiler
 warnings remain; no warning suppressions were added.
 
@@ -64,6 +63,41 @@ support validated, test both the target PS4/PS5 firmware and actual Tesla browse
    the console session and FFmpeg processes terminate cleanly.
 5. Test the real remote network/domain/HTTPS path and check input latency.
 
-The application requests 720p60 and never silently switches to hardware decoding.
-A browser CPU that cannot sustain this workload will need a lower bitrate or a
-future alternative software codec path; no universal 720p60 guarantee is made.
+The application requests the selected profile and never silently switches to hardware decoding.
+A browser CPU that cannot sustain the workload can select a lower resolution/frame
+rate; no universal 720p60 or 1080p60 guarantee is made.
+
+## Tesla controls, audio and Full HD update
+
+The 1080p60 synthetic run measured **60.1 fps**, **6.9 ms per decoded/drawn frame**,
+and **20.7 Mbps video** with GPU acceleration disabled. The audio worklet reported
+about **109 ms queued** and **zero underruns** in the captured run. Stereo PCM adds
+approximately 1.54 Mbps. Audio sample RMS exceeded 0.01; this establishes decoded
+signal activity, not sound from physical Tesla speakers.
+
+The test waits for more than 600 video frames and separately blocks the browser
+main thread for 500 ms. Audio underruns did not increase, because PCM travels
+from the WebSocket worker directly to the audio worklet. This does not guarantee
+continuity through longer network interruptions or on different hardware.
+
+Additional automated coverage:
+
+- Real generated Opus packets through the console receiver to signed stereo PCM.
+- Analog trigger pressure, clamping, and per-device input ownership on detach.
+- Tesla Nintendo wrapper swaps, manual overrides, mirrored-device selection,
+  duplicate IDs at distinct indexes, dead zone and disconnected-device reset.
+- Same-account input-only attachment, video continuity, cross-account rejection,
+  four-client cap, cancellation when the viewer ends, and stale-session tickets.
+- Real 360p30, 540p60 and 1080p60 outputs, plus the existing 720p60 test.
+- Connection retry with a fresh ticket, retry cancellation and worker fallback.
+- Web Audio scheduling fallback, PCM validation and bounded jitter-buffer behavior.
+- Mobile input-only layout, browser capability diagnostics and audio controls.
+- Docker HTTPS overlay parses; Caddy validates its configuration. Public DNS,
+  certificate issuance and the Tesla network route require deployment-specific testing.
+
+The updated suite passed 29 backend assertions, 10 JavaScript unit tests and
+12 browser/API tests. Tests use synthetic media and simulated gamepad snapshots;
+physical controllers, PlayStation playback, speaker output and A/V alignment still
+require target-device acceptance. No test authenticates to PSN or modifies a console.
+
+![Software 1080p60 with audio](images/1080p60-audio.png)

@@ -4,8 +4,8 @@
   "type": "module",
   "scripts": {
     "build:decoder": "node scripts/build-decoder.mjs",
-    "test": "node --test tests/input.test.mjs && playwright test",
-    "test:unit": "node --test tests/input.test.mjs"
+    "test": "node --test tests/*.test.mjs && playwright test",
+    "test:unit": "node --test tests/*.test.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.58.2"

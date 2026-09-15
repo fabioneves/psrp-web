@@ -5,6 +5,8 @@ using System.Buffers.Binary;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using RemotePlay.Services.Auth;
+using Concentus;
+using Concentus.Enums;
 
 static void Check(bool value, string message)
 {
@@ -21,6 +23,24 @@ token = tickets.Issue("alice", null, true, 10000);
 clock.Now = clock.Now.AddSeconds(31);
 Check(tickets.Consume(token) == null, "expired ticket is rejected");
 Check(tickets.Consume("unknown") == null, "unknown ticket is rejected");
+
+var inputs = new SoftwareInputState();
+var viewer = Guid.NewGuid();
+var phone = Guid.NewGuid();
+inputs.Apply(viewer, new("button", "CROSS", true));
+inputs.Apply(phone, new("button", "CROSS", true));
+var held = inputs.Apply(phone, new("reset"));
+Check(held.Buttons.Contains(RemotePlay.Services.Streaming.Controller.FeedbackEvent.ButtonType.CROSS), "detaching a phone preserves the viewer's held button");
+Check(inputs.Apply(viewer, new("reset")).Buttons.Count == 0, "last input owner releases its button");
+held = inputs.Apply(phone, new("triggers", L2: 0.4f, R2: 2));
+Check(held.L2 == 0.4f && held.R2 == 1 && held.Buttons.Count == 2, "analog triggers clamp and set protocol button flags");
+inputs.Apply(viewer, new("stick", Stick: "left", X: 0.2f));
+inputs.Apply(phone, new("stick", Stick: "left", X: 0.7f));
+Check(inputs.Apply(phone, new("reset")).Left.X == 0.2f, "detaching restores another source's analog stick");
+var invalidInput = false;
+try { inputs.Apply(phone, new("stick", Stick: "left", X: float.NaN)); }
+catch (IOException) { invalidInput = true; }
+Check(invalidInput, "nonfinite analog input is rejected");
 
 using var receiver = new SoftwareReceiver();
 receiver.OnStreamInfo([0, 0, 1, 0x67, 5], []);
@@ -40,6 +60,27 @@ var faulted = false;
 try { await foreach (var packet in slow.Packets.ReadAllAsync()) { } }
 catch (IOException) { faulted = true; }
 Check(faulted, "overload terminates instead of silently corrupting reference frames");
+
+using var audioReceiver = new SoftwareReceiver();
+var audioHeader = new byte[14];
+audioHeader[0] = 2; audioHeader[1] = 16;
+BinaryPrimitives.WriteInt32BigEndian(audioHeader.AsSpan(2), 48000);
+BinaryPrimitives.WriteInt32BigEndian(audioHeader.AsSpan(6), 960);
+audioReceiver.OnStreamInfo([], audioHeader);
+using var encoder = OpusCodecFactory.CreateEncoder(48000, 2, OpusApplication.OPUS_APPLICATION_AUDIO);
+var sine = new float[1920];
+for (var i = 0; i < 960; i++) sine[i * 2] = sine[i * 2 + 1] = (float)(0.2 * Math.Sin(i * 2 * Math.PI * 440 / 48000));
+var encodedAudio = new byte[4000];
+var encodedSize = encoder.Encode(sine, 960, encodedAudio, encodedAudio.Length);
+audioReceiver.OnAudioPacket([1, .. encodedAudio.AsSpan(0, encodedSize)]);
+Check(audioReceiver.AudioPackets.TryRead(out var pcm) && pcm.Length == 3852 && pcm.AsSpan(0, 4).SequenceEqual("PCM1"u8), "real Opus frames decode to stereo PCM transport");
+Check(pcm!.Skip(12).Any(value => value != 0), "decoded Opus contains audible samples");
+var fullHd = SoftwareTranscoder.BuildArguments(20000, "1080p", 60);
+Check(fullHd.Contains("scale=1920:1080:flags=fast_bilinear"), "1080p60 config reaches the CPU encoder");
+Check(VideoProfile.Create("540p", 30).Width == 960, "540p30 console profile resolves correctly");
+var invalidProfile = false;
+try { VideoProfile.Create("4k", 60); } catch (ArgumentException) { invalidProfile = true; }
+Check(invalidProfile, "unsupported resolution is rejected");
 
 var argsList = SoftwareTranscoder.BuildArguments(10000);
 Check(argsList.Contains("none") && argsList.Contains("mpeg1video") && argsList.Contains("-an"), "transcoder is CPU-only MPEG-1 without audio");

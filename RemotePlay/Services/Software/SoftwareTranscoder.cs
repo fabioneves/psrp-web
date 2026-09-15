@@ -8,20 +8,23 @@ public sealed class SoftwareTranscoder : IDisposable
     private readonly Process process;
     private readonly Task<string> errors;
 
-    public SoftwareTranscoder(int bitrateKbps)
+    public SoftwareTranscoder(int bitrateKbps, string resolution = "720p", int fps = 60)
     {
-        process = Start(BuildArguments(bitrateKbps));
+        process = Start(BuildArguments(bitrateKbps, resolution, fps));
         errors = ReadErrorsAsync();
     }
 
-    public static string[] BuildArguments(int bitrateKbps)
+    public static string[] BuildArguments(int bitrateKbps, string resolution = "720p", int fps = 60)
     {
-        if (bitrateKbps is < 2000 or > 20000) throw new ArgumentOutOfRangeException(nameof(bitrateKbps));
-        return ["-hide_banner", "-loglevel", "error", "-hwaccel", "none", "-threads", "2",
+        if (bitrateKbps is < 2000 or > 30000) throw new ArgumentOutOfRangeException(nameof(bitrateKbps));
+        var profile = VideoProfile.Create(resolution, fps);
+        var threads = int.TryParse(Environment.GetEnvironmentVariable("ENCODER_THREADS"), out var configured)
+            ? Math.Clamp(configured, 1, 16).ToString() : "4";
+        return ["-hide_banner", "-loglevel", "error", "-hwaccel", "none", "-threads", threads,
             "-fflags", "+nobuffer", "-flags", "low_delay", "-probesize", "32768", "-analyzeduration", "0",
-            "-f", "h264", "-r", "60", "-i", "pipe:0", "-an", "-sn", "-dn",
-            "-vf", "scale=1280:720:flags=fast_bilinear", "-c:v", "mpeg1video", "-threads", "2",
-            "-r", "60", "-b:v", $"{bitrateKbps}k", "-maxrate", $"{bitrateKbps}k", "-bufsize", $"{bitrateKbps}k",
+            "-f", "h264", "-r", profile.Fps.ToString(), "-i", "pipe:0", "-an", "-sn", "-dn",
+            "-vf", $"scale={profile.Width}:{profile.Height}:flags=fast_bilinear", "-c:v", "mpeg1video", "-threads", threads,
+            "-r", profile.Fps.ToString(), "-b:v", $"{bitrateKbps}k", "-maxrate", $"{bitrateKbps}k", "-bufsize", $"{bitrateKbps}k",
             "-bf", "0", "-g", "15", "-pix_fmt", "yuv420p", "-f", "mpegts",
             "-muxdelay", "0", "-muxpreload", "0", "-flush_packets", "1", "pipe:1"];
     }
@@ -61,7 +64,7 @@ public sealed class SoftwareTranscoder : IDisposable
         return recent;
     }
 
-    public async Task SendAsync(WebSocket socket, CancellationToken ct)
+    public async Task SendAsync(WebSocket socket, CancellationToken ct, SemaphoreSlim? sendGate = null)
     {
         var buffer = new byte[188 * 64];
         while (true)
@@ -71,7 +74,9 @@ public sealed class SoftwareTranscoder : IDisposable
             var count = await process.StandardOutput.BaseStream.ReadAsync(buffer, timeout.Token);
             if (count == 0) throw new IOException($"FFmpeg stopped: {await errors}");
             timeout.CancelAfter(TimeSpan.FromSeconds(1));
-            await socket.SendAsync(buffer.AsMemory(0, count), WebSocketMessageType.Binary, true, timeout.Token);
+            if (sendGate != null) await sendGate.WaitAsync(timeout.Token);
+            try { await socket.SendAsync(buffer.AsMemory(0, count), WebSocketMessageType.Binary, true, timeout.Token); }
+            finally { sendGate?.Release(); }
         }
     }
 

@@ -25,6 +25,7 @@ services:
       Database__User: remoteplay
       Database__Password: ${DB_PASSWORD:-remoteplay-local}
       JWT__Secret: ${JWT_SECRET:-}
+      ENCODER_THREADS: ${ENCODER_THREADS:-4}
     volumes:
       - app-data:/data
     depends_on:
