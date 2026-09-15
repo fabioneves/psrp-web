@@ -72,7 +72,7 @@ namespace RemotePlay.Controllers
             {
                 _logger.LogInformation("开始设备发现，超时时间: {TimeoutMs}ms", timeoutMs ?? 2000);
 
-                var consoles = await _remotePlayService.DiscoverDevicesAsync(timeoutMs);
+                var consoles = await _remotePlayService.DiscoverDevicesAsync(timeoutMs, HttpContext.RequestAborted);
 
                 return Ok(new ApiSuccessResponse<object>
                 {

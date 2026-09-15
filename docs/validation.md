@@ -208,3 +208,18 @@ Chrome check through the public site found the actual PS5, selected its IP and
 focused the account ID field. Pairing and streaming from that console were not
 attempted; they require the user's account ID and Link Device PIN. Docker was
 rebuilt and reports healthy.
+
+### Automatic discovery through rootless Docker
+
+Directed LAN broadcasts also failed from the container. Automatic discovery now
+uses bounded unicast probes when `DISCOVERY_SUBNETS` is configured. This deployment
+uses its host LAN, `192.168.1.0/24`, without hardcoding a console IP. Normal broadcast
+discovery remains the default for deployments without that setting.
+
+Backend regression coverage includes range normalization, duplicate/invalid scope,
+network/broadcast exclusions, concurrent UDP scans, malformed/duplicate replies,
+actual sender addresses, cancellation, and PS4/PS5 protocol versions and ports.
+The versions follow the [Chiaki-ng discovery definitions](https://github.com/streetpea/chiaki-ng/blob/main/lib/include/chiaki/discovery.h).
+All 46 backend assertions passed. A real Chrome session through the public domain
+left the IP field empty, clicked **Find consoles on this network**, and found the
+online PS5. This verifies the automatic button itself, not the direct-IP fallback.

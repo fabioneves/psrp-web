@@ -17,6 +17,7 @@ static void Check(bool value, string message)
 }
 
 var clock = new TestClock();
+await DiscoveryTests.RunAsync(Check);
 var browserRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
 browserRequest.Host = new Microsoft.AspNetCore.Http.HostString("play.example.test");
 Check(!BrowserSession.IsSameOrigin(browserRequest), "session restoration requires an explicit browser request header");

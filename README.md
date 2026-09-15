@@ -58,13 +58,38 @@ The Docker server must be able to reach the console on your home network. The br
 - The account ID is the **Base64 encoding of your numeric PSN account ID**, not your online name or password. Use your existing Chiaki account ID, or obtain it with [Chiaki-ng's account ID script](https://github.com/streetpea/chiaki-ng/blob/main/scripts/psn-account-id.py). This app does not need your PSN password.
 - Pairing requires a fresh PIN from the console even if another local user already paired it. Access to a stream is checked against the signed-in user's paired devices.
 
-Default Compose uses bridge networking and works with a **manually entered console IP**. Broadcast discovery usually cannot cross the Docker bridge. On rootful Linux Docker, enable LAN broadcast discovery with:
+Default Compose uses bridge networking. To enable **automatic network discovery**
+when Docker cannot forward LAN broadcasts, set your LAN subnet in `.env` and
+recreate the service:
+
+```dotenv
+DISCOVERY_SUBNETS=192.168.1.0/24
+```
+
+```sh
+docker compose up --build -d
+```
+
+**Find consoles on this network** then probes the configured LAN directly; no
+console IP needs to be entered. Use your actual LAN subnet. The setting accepts
+up to four comma-separated private IPv4 CIDRs, `/24` through `/30`, with at most
+1,016 addresses total. Searches send PS4 and PS5 discovery requests only, share a
+bounded timeout and deduplicate replies. Container interfaces cannot reliably
+reveal the host's LAN, so this setting must be supplied for rootless Docker.
+
+With no subnet configured, discovery uses broadcasts. On rootful Linux Docker,
+enable LAN broadcast discovery with:
 
 ```sh
 docker compose -f compose.yaml -f compose.host.yaml up --build -d
 ```
 
-The host-network override requires Compose 2.24.4+ and is intended for rootful Linux. With rootless Docker or Docker Desktop, use the default Compose file, enter the IP manually and choose **Check IP address**. This sends discovery directly to the console instead of relying on broadcasts. If direct discovery fails, check routing/firewalls between Docker and the console; this project does not implement PSN internet traversal between the server and console.
+The host-network override requires Compose 2.24.4+ and is intended for rootful
+Linux. With rootless Docker or Docker Desktop, use the default Compose file with
+`DISCOVERY_SUBNETS`. **Check IP address** remains available for a single known
+console. If direct discovery fails, check routing/firewalls between Docker and
+the console; this project does not implement PSN internet traversal between the
+server and console.
 
 ### Access from a Tesla browser
 

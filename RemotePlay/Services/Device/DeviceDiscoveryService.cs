@@ -24,14 +24,18 @@ namespace RemotePlay.Services.Device
         private const int PS4_DDP_PORT = 987;
         private const int PS5_DDP_PORT = 9302;
         private readonly SemaphoreSlim _discoverySemaphore = new(1, 1);
+        private readonly IReadOnlySet<IPAddress> _subnetHosts;
 
-        public DeviceDiscoveryService(ILogger<DeviceDiscoveryService> logger)
+        public DeviceDiscoveryService(ILogger<DeviceDiscoveryService> logger, IConfiguration configuration)
         {
             _logger = logger;
+            _subnetHosts = DiscoverySubnets.Parse(configuration["DISCOVERY_SUBNETS"]);
         }
 
         public async Task<List<ConsoleInfo>> DiscoverDevicesAsync(int timeoutMs = 2000, CancellationToken cancellationToken = default)
         {
+            if (_subnetHosts.Count > 0)
+                return await DiscoverSubnetsAsync(timeoutMs, cancellationToken);
             var discoveredDevices = new List<ConsoleInfo>();
             var discoveryTasks = new List<Task<List<ConsoleInfo>>>();
 
@@ -65,6 +69,63 @@ namespace RemotePlay.Services.Device
             }
 
             return discoveredDevices;
+        }
+
+        private async Task<List<ConsoleInfo>> DiscoverSubnetsAsync(int timeoutMs, CancellationToken cancellationToken)
+        {
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(Math.Clamp(timeoutMs, 100, 10000));
+            using var client = new UdpClient(new IPEndPoint(IPAddress.Any, 0));
+            var devices = new Dictionary<string, ConsoleInfo>();
+            var requests = new[]
+            {
+                (Port: PS5_DDP_PORT, Bytes: CreateDiscoveryRequest()),
+                (Port: PS4_DDP_PORT, Bytes: Encoding.ASCII.GetBytes("SRCH * HTTP/1.1\ndevice-discovery-protocol-version:00020020\n"))
+            };
+
+            async Task SendAsync()
+            {
+                try
+                {
+                    foreach (var host in _subnetHosts)
+                    {
+                        foreach (var request in requests)
+                        {
+                            try { await client.SendAsync(request.Bytes, new IPEndPoint(host, request.Port), deadline.Token); }
+                            catch (SocketException ex) { _logger.LogDebug(ex, "Discovery probe failed for {Host}:{Port}", host, request.Port); }
+                        }
+                        await Task.Delay(1, deadline.Token);
+                    }
+                }
+                catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+            }
+
+            async Task ReceiveAsync()
+            {
+                try
+                {
+                    while (!deadline.IsCancellationRequested)
+                    {
+                        UdpReceiveResult response;
+                        try { response = await client.ReceiveAsync(deadline.Token); }
+                        catch (SocketException ex)
+                        {
+                            _logger.LogDebug(ex, "Discovery reply socket error");
+                            continue;
+                        }
+                        if (!_subnetHosts.Contains(response.RemoteEndPoint.Address) ||
+                            response.RemoteEndPoint.Port is not PS4_DDP_PORT and not PS5_DDP_PORT) continue;
+                        var device = ParseDeviceResponse(response.Buffer, response.RemoteEndPoint);
+                        if (device != null) devices[device.Uuid] = device;
+                    }
+                }
+                catch (OperationCanceledException) when (deadline.IsCancellationRequested) { }
+            }
+
+            await Task.WhenAll(ReceiveAsync(), SendAsync());
+            cancellationToken.ThrowIfCancellationRequested();
+            _logger.LogInformation("Subnet discovery checked {Hosts} addresses and found {Count} consoles", _subnetHosts.Count, devices.Count);
+            return devices.Values.ToList();
         }
 
         public async Task<ConsoleInfo?> DiscoverDeviceAsync(
