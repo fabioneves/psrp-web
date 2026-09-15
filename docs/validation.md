@@ -148,3 +148,18 @@ The existing 24-hour token expiration remains in effect.
 Validation passed: 34 backend assertions, 20 JavaScript unit tests and all 17
 browser/API tests, including the existing software video/audio and input flows.
 Docker was rebuilt and the health endpoint reports ready.
+
+### Saved-session compatibility follow-up
+
+A regression reproduced a successful login with no saved cookie when an older,
+already-open client omitted the new session header. Same-origin legacy login
+requests now receive the cookie; session restore/logout keep their stricter request
+checks. The compatibility test gives the old script its own ETag and verifies that
+reload fetches the updated client and restores the saved login. A separate test
+covers visible feedback when saved-session readback fails.
+
+Validation: 36 backend assertions and 20 unit tests passed. All 19 browser/API
+scenarios passed across the full run and the focused session rerun. An additional
+real Chrome check through a local HTTPS proxy confirmed Secure/HttpOnly/Strict
+cookie creation, restoration after reload, and sign-out after reload. The user's
+specific URL/browser path still needs confirmation if the issue persists there.

@@ -107,6 +107,15 @@ $('auth-form').onsubmit = event => {
     $('password').value = '';
     showAccount();
     await refresh();
+    const signedInToken = token;
+    try {
+      const saved = await api('auth/session');
+      if (token === signedInToken && saved.token !== signedInToken)
+        notify('Signed in for this page only: the browser did not retain your saved login. Allow cookies for this site, then sign in again.');
+    } catch {
+      if (token === signedInToken)
+        notify('Signed in, but saved login could not be verified. Refreshing may require signing in again.');
+    }
   });
 };
 $('logout').onclick = () => run($('logout'), async () => {

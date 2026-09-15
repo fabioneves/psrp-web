@@ -4,9 +4,15 @@ public static class BrowserSession
 {
     public const string CookieName = "remote-play-session";
 
-    public static bool IsSameOrigin(HttpRequest request)
+    public static bool IsSameOrigin(HttpRequest request) =>
+        request.Headers["X-Remote-Play-Session"] == "1" && HasSameOrigin(request);
+
+    public static bool CanPersistLogin(HttpRequest request) => HasSameOrigin(request) &&
+        (request.Headers["X-Remote-Play-Session"] == "1" || request.Headers.Origin.Count > 0 ||
+         request.Headers["Sec-Fetch-Site"] == "same-origin");
+
+    private static bool HasSameOrigin(HttpRequest request)
     {
-        if (request.Headers["X-Remote-Play-Session"] != "1") return false;
         var site = request.Headers["Sec-Fetch-Site"].ToString();
         if (site.Length > 0 && site is not "same-origin" and not "none") return false;
         var origin = request.Headers.Origin.ToString();

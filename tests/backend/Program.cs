@@ -27,8 +27,13 @@ var cookieOptions = BrowserSession.Options(browserRequest);
 Check(BrowserSession.IsSameOrigin(browserRequest) && cookieOptions.HttpOnly && cookieOptions.Secure &&
     cookieOptions.SameSite == Microsoft.AspNetCore.Http.SameSiteMode.Strict && cookieOptions.Path == "/api/auth",
     "HTTPS browser sessions use scoped HttpOnly Secure SameSite cookies behind the proxy");
+browserRequest.Headers.Remove("X-Remote-Play-Session");
+Check(BrowserSession.CanPersistLogin(browserRequest) && !BrowserSession.IsSameOrigin(browserRequest),
+    "older same-origin login pages receive a cookie without relaxing session endpoint protection");
+browserRequest.Headers["X-Remote-Play-Session"] = "1";
 browserRequest.Headers.Origin = "https://other.example.test";
 Check(!BrowserSession.IsSameOrigin(browserRequest), "another origin cannot restore or clear a browser session");
+Check(!BrowserSession.CanPersistLogin(browserRequest), "cross-origin logins do not set a saved session cookie");
 browserRequest.Headers.Origin = "https://play.example.test";
 browserRequest.Headers["Sec-Fetch-Site"] = "same-site";
 Check(!BrowserSession.IsSameOrigin(browserRequest), "same-site cross-origin session requests are rejected");

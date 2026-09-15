@@ -156,7 +156,7 @@ automatic changes. Profile changes therefore briefly interrupt media.
 
 ## Browser login persistence
 
-Browser login requests opt into a host-only `remote-play-session` cookie scoped to
+Same-origin browser login requests receive a host-only `remote-play-session` cookie scoped to
 `/api/auth`, with HttpOnly, SameSite=Strict, and the JWT's existing expiration. HTTPS
 logins set Secure, including the same-origin HTTPS request through the Caddy proxy.
 Local HTTP deployment remains supported. The token is not saved to web storage.
@@ -168,8 +168,11 @@ hidden while restoration runs. This endpoint does not renew the expiration.
 `POST /api/auth/logout` clears the saved cookie before the page clears its token.
 Both endpoints use no-store responses and require an explicit browser-session
 header; cross-origin Origin and Fetch Metadata values are rejected independently
-of CORS configuration. Login sets a cookie only for an accepted browser-session
-request. Normal API authorization continues to require bearer tokens or stream
+of CORS configuration. Login also recognizes same-origin browser requests from older open pages that
+do not send the new session header. Restoration and sign-out still require that
+header. After login, the client checks that the saved token can be read back and
+reports a retention failure beside the page status. HTML and JavaScript responses
+use no-cache so browsers revalidate application updates. Normal API authorization continues to require bearer tokens or stream
 tickets; the cookie is not an alternative credential for console control APIs.
 
 Sign-out ends this browser's saved login; it does not revoke separately issued

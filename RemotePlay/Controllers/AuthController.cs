@@ -107,7 +107,7 @@ namespace RemotePlay.Controllers
                 }
 
                 Response.Headers.CacheControl = "no-store";
-                if (BrowserSession.IsSameOrigin(Request))
+                if (BrowserSession.CanPersistLogin(Request))
                     Response.Cookies.Append(BrowserSession.CookieName, response.Token,
                         BrowserSession.Options(Request, new DateTimeOffset(response.ExpiresAt)));
 

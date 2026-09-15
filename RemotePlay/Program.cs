@@ -271,6 +271,8 @@ var staticFileOptions = new StaticFileOptions
     OnPrepareResponse = ctx =>
     {
         var path = ctx.Context.Request.Path.Value ?? "";
+        if (path.EndsWith(".html", StringComparison.OrdinalIgnoreCase) || path.EndsWith(".js", StringComparison.OrdinalIgnoreCase))
+            ctx.Context.Response.Headers.CacheControl = "no-cache";
         
         // 设置 HLS 文件的 MIME 类型和缓存头
         if (path.EndsWith(".ts", StringComparison.OrdinalIgnoreCase))

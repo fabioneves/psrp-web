@@ -74,6 +74,26 @@ test('login survives refresh, uses an HttpOnly cookie, and sign-out survives ref
   await expect(page.locator('#library')).toBeHidden();
 });
 
+test('an already-open login page saves its session before loading the updated client', async ({ page, context }) => {
+  await page.route('**/app.js', async route => {
+    const response = await route.fetch();
+    const script = (await response.text()).replace("'X-Remote-Play-Session': '1', ", '');
+    await route.fulfill({ response, headers: { ...response.headers(), etag: '"legacy-client"' }, body: script });
+  });
+  await register(page);
+  expect((await context.cookies()).some(cookie => cookie.name === 'remote-play-session')).toBe(true);
+  await page.unroute('**/app.js');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Your consoles', exact: true })).toBeVisible();
+});
+
+test('login reports when the saved session is not retained', async ({ page }) => {
+  await page.route('**/api/auth/session', route => route.fulfill({ json: { token: null } }));
+  await register(page);
+  await expect(page.locator('#message')).toContainText('browser did not retain your saved login');
+  await expect(page.locator('#library')).toBeVisible();
+});
+
 test('invalid saved sessions return to sign-in and cross-origin session requests are rejected', async ({ page, context, baseURL }) => {
   await register(page);
   const headers = { 'X-Remote-Play-Session': '1', Origin: 'https://untrusted.example' };
