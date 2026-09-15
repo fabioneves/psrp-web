@@ -2,19 +2,27 @@ import { FramePresenter } from './frame-presenter.js';
 
 export const nativeConfig = codec => ({ codec, hardwareAcceleration: 'prefer-hardware', optimizeForLatency: true });
 
-export async function supportsNativeVideo(profile, platform = globalThis, videoCodec = 'h264') {
-  if (typeof platform.VideoDecoder?.isConfigSupported !== 'function') return false;
+export async function nativeVideoConfig(profile, platform = globalThis, videoCodec = 'h264') {
+  if (typeof platform.VideoDecoder?.isConfigSupported !== 'function') return null;
   const sizes = { '360p': [640, 360], '540p': [960, 540], '720p': [1280, 720], '1080p': [1920, 1080] };
   const [codedWidth, codedHeight] = sizes[profile.resolution];
-  let timer;
-  try {
-    const result = await Promise.race([
-      platform.VideoDecoder.isConfigSupported({ ...nativeConfig(videoCodec === 'h265' ? 'hev1.1.6.L123.B0' : 'avc1.64002a'), codedWidth, codedHeight }),
-      new Promise(resolve => { timer = setTimeout(() => resolve({ supported: false }), 2000); })
-    ]);
-    return result.supported;
-  } catch { return false; }
-  finally { clearTimeout(timer); }
+  for (const hardwareAcceleration of ['prefer-hardware', 'no-preference']) {
+    let timer;
+    const config = { ...nativeConfig(videoCodec === 'h265' ? 'hev1.1.6.L123.B0' : 'avc1.64002a'), codedWidth, codedHeight, hardwareAcceleration };
+    try {
+      const result = await Promise.race([
+        platform.VideoDecoder.isConfigSupported(config),
+        new Promise(resolve => { timer = setTimeout(() => resolve({ supported: false }), 2000); })
+      ]);
+      if (result.supported) return config;
+    } catch {}
+    finally { clearTimeout(timer); }
+  }
+  return null;
+}
+
+export async function supportsNativeVideo(profile, platform = globalThis, videoCodec = 'h264') {
+  return !!await nativeVideoConfig(profile, platform, videoCodec);
 }
 
 export async function selectVideoCodec(preferred, profile, failed = new Set(), hostType = null, platform = globalThis) {
@@ -90,6 +98,8 @@ export class NativeDecodeQueue {
 export function createNativeDecoder(canvas, report, options = {}) {
   const hevc = options.videoCodec === 'h265';
   const label = hevc ? 'H.265' : 'H.264';
+  const hardwareAcceleration = options.hardwareAcceleration || 'prefer-hardware';
+  const engine = `${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware preferred' : 'browser decoding'}`;
   const parameters = new Map();
   const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
   if (!context) throw new Error('This browser does not support video drawing.');
@@ -145,7 +155,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     const info = hevc ? h265Info(data) : h264Info(data);
     for (const parameter of info.parameters || []) parameters.set(parameter.type, parameter.data);
     if (info.codec && info.codec !== configuration) {
-      decoder.configure(nativeConfig(info.codec));
+      decoder.configure({ ...nativeConfig(info.codec), hardwareAcceleration });
       configuration = info.codec;
       waitingForKey = true;
     }
@@ -171,7 +181,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
       decodeMs: drawn ? (decodeMs + drawMs) / drawn : 0, codecMs: 0, nativeDecodeMs: decoded ? decodeMs / decoded : 0,
       colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: dropped,
       pixelEngine: 'Browser', mbps: bytesReceived * 8 / elapsed / 1000, totalFrames,
-      width: canvas.width, height: canvas.height, engine: `${label} · hardware preferred` });
+      width: canvas.width, height: canvas.height, engine });
     decoded = drawn = bytesReceived = decodeMs = drawMs = 0; start = performance.now();
   }, 1000);
   return {

@@ -14,7 +14,7 @@ self.onmessage = async ({ data }) => {
         if (message.type === 'audio' && audioPort) audioPort.postMessage(message, [message.bytes]);
         else if (message.type === 'audio') postMessage(message, [message.bytes]);
         else postMessage(message);
-      }, data.videoCodec);
+      }, data.videoCodec, data.hardwareAcceleration);
       postMessage({ type: 'ready' });
     } else if (data.type === 'audio-enabled') {
       audioEnabled = data.enabled;

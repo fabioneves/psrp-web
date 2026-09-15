@@ -202,3 +202,23 @@ test('real HEVC transport reaches a stubbed WebCodecs boundary with codec config
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
   await page.locator('#stop').click();
 });
+
+test('H.264 stays native when Chrome can decode it without a hardware preference', async ({ page }) => {
+  await page.addInitScript(() => {
+    const Native = VideoDecoder;
+    window.VideoDecoder = class extends Native {
+      static isConfigSupported(config) {
+        if (config.hardwareAcceleration === 'prefer-hardware') return Promise.resolve({ supported: false });
+        return Native.isConfigSupported(config);
+      }
+    };
+  });
+  await register(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#engine')).toContainText('H.264 · browser decoding', { timeout: 30000 });
+  await expect(page.locator('#video-mode-status')).toContainText('hardware preference unavailable');
+  await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(120);
+  await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
+  await expect(page.locator('#video-mode')).toHaveValue('h264');
+  await page.locator('#stop').click();
+});

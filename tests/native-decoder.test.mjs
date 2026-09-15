@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { h264Info, h265Info, supportsNativeVideo, selectVideoCodec, NativeDecodeQueue } from '../web/native-decoder.js';
+import { h264Info, h265Info, supportsNativeVideo, nativeVideoConfig, selectVideoCodec, NativeDecodeQueue } from '../web/native-decoder.js';
 
 test('H.264 detects three/four byte Annex B start codes, SPS profile and IDR frames', () => {
   assert.deepEqual(h264Info(Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 1, 101, 128])),
@@ -61,4 +61,16 @@ test('native decode queues network bursts in order and drains when the decoder i
   queue.push(99);
   assert.equal(queue.items.length, 0);
   assert.equal(decoder.ondequeue, null);
+});
+
+test('browser H.264 remains available when the GPU preference is unsupported', async () => {
+  const seen = [];
+  const platform = { VideoDecoder: { isConfigSupported: async config => {
+    seen.push(config.hardwareAcceleration);
+    return { supported: config.hardwareAcceleration === 'no-preference' };
+  } } };
+  const config = await nativeVideoConfig({ resolution: '1080p' }, platform);
+  assert.equal(config.hardwareAcceleration, 'no-preference');
+  assert.deepEqual(seen, ['prefer-hardware', 'no-preference']);
+  assert.equal(await selectVideoCodec('h264', { resolution: '1080p' }, new Set(), 'PS5', platform), 'h264');
 });

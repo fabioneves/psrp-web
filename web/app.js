@@ -1,4 +1,4 @@
-import { selectVideoCodec } from './native-decoder.js';
+import { selectVideoCodec, nativeVideoConfig } from './native-decoder.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
@@ -20,6 +20,7 @@ const resetInputs = bindInputs($('controls'), message => {
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
 let audio = null, quality = null, activeCodec = 'mpeg1';
 const failedCodecs = new Set();
+let decoderFailure = '';
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
@@ -303,7 +304,7 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
       audio.setDelay(Number($('audio-delay').value));
     } catch (error) { $('audio-status').textContent = error.message; }
   }
-  forceMain = false; failedCodecs.clear();
+  forceMain = false; failedCodecs.clear(); decoderFailure = '';
   await connect();
 }
 async function connect() {
@@ -334,12 +335,14 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   const current = ++attempt;
   const preferred = $('video-mode').value;
   const codec = inputSession ? 'mpeg1' : await selectVideoCodec(preferred, profile, failedCodecs, hostType);
+  const native = codec === 'mpeg1' ? null : await nativeVideoConfig(profile, globalThis, codec);
+  const hardwareAcceleration = native?.hardwareAcceleration || 'prefer-hardware';
   if (current !== attempt) return;
   activeCodec = codec;
   const label = { mpeg1: 'Canvas software video', h264: 'H.264', h265: 'H.265' }[codec];
   $('video-mode-status').textContent = codec === preferred
-    ? (codec === 'mpeg1' ? 'Canvas software video selected.' : `${label} · hardware decoding preferred.`)
-    : `Using ${label}; the selected mode is unavailable for this browser or console.${!isSecureContext ? ' Open the HTTPS address for browser decoding.' : ''}`;
+    ? (codec === 'mpeg1' ? 'Canvas software video selected.' : `${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware decoding preferred' : 'browser decoding; hardware preference unavailable'}.`)
+    : `Using ${label}; ${decoderFailure || 'the selected mode is unavailable for this browser or console'}.${!isSecureContext ? ' Open the HTTPS address for browser decoding.' : ''}`;
   const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile, videoCodec: activeCodec });
   if (current !== attempt) return;
   const url = new URL('/api/software/stream', location.href);
@@ -372,11 +375,11 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
       worker.onerror = () => { if (attempt === current) reconnect('Switching to the compatibility renderer…', true); };
       const offscreen = canvas.transferControlToOffscreen();
       const audioPort = audio?.workerPort();
-      worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort, videoCodec: activeCodec,
+      worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort, videoCodec: activeCodec, hardwareAcceleration,
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {
-      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec);
+      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration);
       if (attempt !== current) { connection.close(); return; }
       stream = connection;
     }
@@ -394,6 +397,7 @@ function onStreamMessage(message) {
   else if (message.type === 'renderer-error') {
     if (activeCodec !== 'mpeg1') {
       console.warn('Native video decoder fallback:', message.message);
+      decoderFailure = message.message;
       failedCodecs.add(activeCodec);
       reconnect('Browser video decoding failed. Trying the next supported video mode…');
       return;
@@ -537,6 +541,6 @@ $('apply-profile').onclick = () => {
 };
 
 $('video-mode').addEventListener('change', () => {
-  failedCodecs.clear();
+  failedCodecs.clear(); decoderFailure = '';
   if (target && !target.inputSession) { retry.reset(); reconnect('Applying video mode…'); }
 });

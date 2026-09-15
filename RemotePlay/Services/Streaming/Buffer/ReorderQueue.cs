@@ -55,7 +55,7 @@ namespace RemotePlay.Services.Streaming.Buffer
 
         // thresholds for behavior
         private readonly int _maxBufferFrames;   // recommended 8
-        private readonly uint _maxResetGap;      // if needed > this, reject or rebase conservatively
+        private readonly uint _maxResetGap;
 
         private readonly object _lock = new object();
 
@@ -133,22 +133,15 @@ namespace RemotePlay.Services.Streaming.Buffer
                 uint endSeq = MaskSeq(_baseSeq + (uint)_countSlots);
                 uint needed = SequenceDistance(endSeq, MaskSeq(seq + 1u));
 
-                // if needed gap is absurdly large, reject instead of expanding/resetting
                 if (needed > _maxResetGap)
-                {
-                    // extreme gap: reject and log
-                    _logger.LogWarning("ReorderQueue: extreme needed gap {Gap} > maxResetGap, rejecting seq {Seq}", needed, seq);
-                    _drop?.Invoke(item);
-                    _dropped++;
-                    return;
-                }
+                    _logger.LogWarning("Video packet sequence advanced by {Gap}; resynchronizing at {Sequence}", needed, seq);
 
-                // limit growth: if needed would push beyond configured max buffer, drop oldest slots (Begin) to make room
                 if (_countSlots + needed > _maxBufferFrames)
                 {
-                    // free up minimal slots from begin (drop oldest) to make room
                     uint shrink = (uint)(_countSlots + needed - _maxBufferFrames);
                     FreeFromBegin(shrink);
+                    endSeq = MaskSeq(_baseSeq + (uint)_countSlots);
+                    needed = SequenceDistance(endSeq, MaskSeq(seq + 1u));
                 }
 
                 // ensure internal capacity (simple expand but bounded)
@@ -309,6 +302,8 @@ namespace RemotePlay.Services.Streaming.Buffer
                 _countSlots--;
                 freed++;
             }
+            _baseSeq = MaskSeq(_baseSeq + n - freed);
+            _dropped += n - freed;
         }
 
         private void DrainReadyPackets()

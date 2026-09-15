@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 async function register(page, suffix = '') {
+  await page.addInitScript(() => localStorage.setItem('remote-play:video-mode', 'mpeg1'));
   await page.goto('/' + suffix);
   await page.getByRole('button', { name: 'Create a local account' }).click();
   const name = `test_${Date.now()}`;

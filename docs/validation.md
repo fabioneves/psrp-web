@@ -469,3 +469,43 @@ reconnection in one check. Later attempts still received console-busy responses
 while the server had no active viewer. Repeated reliable real-console reconnects
 remain unverified; the final sequence-number correction has protocol regression
 coverage but needs another live check once the console accepts a session.
+
+
+### Canvas packet-loss freeze and browser H.264 fallback
+
+Live PS5 Canvas playback reproduced a zero-video interval while its WebSocket
+remained open. Server logs showed the video reorder queue rejecting thousands of
+successive packets after a forward sequence jump. Its overflow path only advanced
+over allocated slots, then checked capacity with a stale gap size. Its larger-gap
+path rejected all new packets without advancing, preventing recovery.
+
+The queue now advances across missing slots, recomputes required capacity and
+retains a bounded window of recent packets. Packet gaps can reach VideoReceiver,
+which already requests a replacement keyframe. Regression cases cover moderate
+and large gaps, a buffered older packet, 16-bit sequence wrap, late arrivals, and
+both eight-packet and production 192-packet windows. The regression failed on the
+previous code at a 500-packet jump and passes with the fix.
+
+A separate two-minute 720p60 software Canvas test retained video and nonzero audio
+throughout, using GPU-disabled Chrome and the real FFmpeg pipeline. Live PS5
+checks exposed the packet-gap fault but were interrupted by explicit disconnects;
+a continuous post-fix Tesla session has not been measured. The Tesla browser,
+with touch and keyboard input, remains the primary performance target.
+
+Native capability detection now tries `no-preference` if `prefer-hardware` is
+unsupported, retaining H.264 when Chrome can decode it without the GPU preference.
+A real Chrome H.264 playback test rejects hardware requests, then verifies decoded
+frames and nonzero audio with no-preference. This does not prove performance on
+the user's Mac or Tesla. Codec errors remain visible beneath the mode selector.
+
+Final checks passed 127 backend assertions, 32 JavaScript tests and 46 browser
+tests. Browser regressions ran against a separate diagnostic container so they
+did not reserve the production console viewer slot. The deployment health check
+passed. No active viewer or console-control TCP connection remained afterward.
+The separately reported PS5 busy state is not claimed resolved by the queue fix.
+
+The user's current address is http://192.0.2.10:18080/ on Chrome/macOS. This is
+an insecure context: native WebCodecs is unavailable there regardless of codec
+selection, so Canvas is expected. Native modes need trusted HTTPS or localhost;
+using the public HTTPS proxy from the LAN can add route latency. The isolated
+Chrome tests do not establish Tesla throughput or end-to-end controller latency.

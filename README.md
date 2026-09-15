@@ -2,7 +2,7 @@
 
 A Docker-hosted PlayStation Remote Play client with **optional browser hardware decoding and a software Canvas 2D fallback**. Based on [o1298098/remote-play](https://github.com/o1298098/remote-play), with a canvas playback approach inspired by [Moonlight Web Tesla](https://github.com/Argon2000/moonlight-web-stream-tsla).
 
-**Default: 1280×720 at 60 fps, 10 Mbps, with stereo audio. Select up to 1080p60.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Touch, keyboard, optional gamepads and second-device input are included.
+**Default: 1280×720 at 60 fps, 10 Mbps, with stereo audio. Select up to 1080p60.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Tesla is the primary browser target, using touch buttons and keyboard input. Optional gamepads and second-device input are also included.
 
 The synthetic video pipeline has been tested at 60 fps in desktop Chromium with GPU acceleration disabled. **Brief real PS5 streaming checks passed; a Tesla browser has not been tested here.** See [validation and performance](docs/validation.md).
 
@@ -209,13 +209,16 @@ The renderer decodes reference frames but draws only the newest pending image on
 | H.264 · browser decoding (default) | Copy H.264 into MPEG-TS | WebCodecs decoding and Canvas 2D |
 | H.265 · PS5, browser decoding | Request PS5 HEVC SDR, copy into MPEG-TS | WebCodecs HEVC decoding and Canvas 2D |
 
-H.264 and H.265 request `prefer-hardware`. The browser decides which decoder it
+H.264 and H.265 first request `prefer-hardware`. If that is unsupported, the app
+tries browser decoding with `no-preference` before changing codecs or using Canvas.
+The playback label reports which request was accepted. The browser decides which decoder it
 uses; this is a [WebCodecs preference](https://www.w3.org/TR/webcodecs/#hardware-acceleration),
 not a guarantee. Neither native mode decodes or re-encodes video on the server.
 Audio and input work in all three modes. No server GPU is required.
 
 Unsupported H.265 falls back to H.264, then Canvas. PS4 skips H.265. Native decoder
 failures also fall back, while retaining the saved selection for the next Play.
+The status beneath Video mode retains the decoder error when a failure caused the fallback.
 Use HTTPS or localhost for WebCodecs; ordinary LAN HTTP uses Canvas. Changing modes
 while playing reconnects. An older disabled hardware-acceleration preference
 migrates to Canvas automatically.
