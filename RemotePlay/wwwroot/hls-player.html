@@ -1,0 +1,1745 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PlayStation Remote Play - HLS Player</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        video {
+            width: 100%;
+            height: auto;
+            display: block;
+            min-height: 400px;
+        }
+
+        .video-placeholder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #666;
+            text-align: center;
+            font-size: 1.2em;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #333;
+            font-size: 0.9em;
+            margin-bottom: 4px;
+        }
+
+        input[type="text"] {
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: border-color 0.3s;
+            height: 44px;
+            box-sizing: border-box;
+        }
+
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #11998e;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        button {
+            min-width: 150px;
+            padding: 12px 30px;
+            font-size: 1em;
+            font-weight: 600;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            height: 44px;
+            box-sizing: border-box;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(235, 51, 73, 0.4);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .status {
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .status-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .status-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-label {
+            font-weight: 600;
+            color: #666;
+        }
+
+        .status-value {
+            color: #333;
+            font-family: 'Courier New', monospace;
+        }
+
+        .status-connected {
+            color: #11998e;
+            font-weight: 600;
+        }
+
+        .status-disconnected {
+            color: #eb3349;
+            font-weight: 600;
+        }
+
+        .logs {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-entry {
+            padding: 5px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .log-entry:last-child {
+            border-bottom: none;
+        }
+
+        .log-info {
+            color: #4fc3f7;
+        }
+
+        .log-success {
+            color: #81c784;
+        }
+
+        .log-error {
+            color: #e57373;
+        }
+
+        .log-warning {
+            color: #ffb74d;
+        }
+
+        .url-input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .url-input-group input[type="text"] {
+            flex: 1;
+        }
+
+        .url-input-group button {
+            flex-shrink: 0;
+            white-space: nowrap;
+        }
+
+        .controller-section {
+            padding: 20px;
+            background: #f5f5f5;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+
+        .controller-wrapper {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .controller-shoulder-row {
+            display: flex;
+            gap: 10px;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        .controller-center-space {
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .controller-main-area {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        .controller-left,
+        .controller-right {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controller-dpad-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controller-dpad {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .controller-dpad-row {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .controller-face-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .controller-face-row {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .controller-function-row {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        .controller-btn {
+            min-width: 60px;
+            height: 60px;
+            padding: 10px 20px;
+            font-size: 1.2em;
+            font-weight: 600;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .controller-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            border-color: #11998e;
+        }
+
+        .controller-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+
+        .controller-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .controller-btn-small {
+            min-width: 80px;
+            height: 44px;
+            font-size: 0.9em;
+            padding: 8px 15px;
+        }
+
+        .controller-btn-shoulder {
+            min-width: 70px;
+            height: 50px;
+            font-size: 0.85em;
+            padding: 8px 15px;
+            background: linear-gradient(135deg, #8e9eab 0%, #eef2f3 100%);
+        }
+
+        .controller-btn-dpad {
+            min-width: 50px;
+            height: 50px;
+            font-size: 1.2em;
+            padding: 8px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .controller-btn-face {
+            min-width: 70px;
+            height: 70px;
+            font-size: 1.5em;
+            padding: 10px;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            border-radius: 50%;
+        }
+
+        .controller-btn-function {
+            min-width: 90px;
+            height: 40px;
+            font-size: 0.75em;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+
+            .controls {
+                gap: 15px;
+            }
+
+            .button-group {
+                flex-direction: column;
+            }
+
+            button {
+                min-width: 100%;
+                width: 100%;
+            }
+
+            .url-input-group {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .url-input-group input[type="text"] {
+                width: 100%;
+            }
+
+            .url-input-group button {
+                width: 100%;
+            }
+
+            .controller-btn {
+                min-width: 50px;
+                height: 50px;
+                font-size: 1em;
+            }
+
+            .controller-btn-small {
+                min-width: 70px;
+                height: 40px;
+                font-size: 0.8em;
+            }
+
+            .controller-main-area {
+                flex-direction: column;
+                gap: 20px;
+            }
+
+            .controller-shoulder-row {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .controller-center-space {
+                display: none;
+            }
+
+            .controller-btn-shoulder {
+                min-width: 60px;
+                height: 45px;
+                font-size: 0.75em;
+            }
+
+            .controller-btn-dpad {
+                min-width: 45px;
+                height: 45px;
+                font-size: 1em;
+            }
+
+            .controller-btn-face {
+                min-width: 60px;
+                height: 60px;
+                font-size: 1.2em;
+            }
+
+            .controller-btn-function {
+                min-width: 80px;
+                height: 38px;
+                font-size: 0.7em;
+            }
+        }
+    </style>
+    <!-- HLS.js 库用于播放 HLS 流 -->
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <!-- SignalR 库用于低延迟控制器输入 -->
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.0/dist/browser/signalr.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📺 PlayStation Remote Play</h1>
+            <p>HLS 流媒体播放器</p>
+        </div>
+
+        <div class="content">
+            <div class="controller-section" id="authSection">
+                <h3 style="margin-bottom: 15px; color: #333;">🔐 身份验证</h3>
+                <div class="input-group">
+                    <label for="authTokenInput">JWT Token</label>
+                    <div class="url-input-group">
+                        <input type="password" id="authTokenInput" placeholder="粘贴 Bearer Token，或直接输入 JWT 字符串">
+                        <button class="btn-primary" onclick="saveAuthToken()">保存</button>
+                        <button class="btn-danger" onclick="clearAuthToken()">清除</button>
+                    </div>
+                    <small id="authTokenStatus" style="color: #666; font-size: 0.85em;">
+                        当前未配置 Token。
+                    </small>
+                </div>
+            </div>
+
+            <div class="video-container">
+                <video id="hlsVideo" controls autoplay playsinline></video>
+                <div class="video-placeholder" id="placeholder">
+                    等待播放...
+                </div>
+            </div>
+
+            <div class="controller-section">
+                <h3 style="margin-bottom: 15px; color: #333;">🎮 PS5 控制器</h3>
+                <div style="margin-bottom: 15px; padding: 10px; background: #fff; border-radius: 5px; font-size: 0.9em; color: #666;">
+                    <strong>⌨️ 键盘映射：</strong>
+                    <span style="margin-left: 10px;">WASD/方向键 = 方向键</span>
+                    <span style="margin-left: 10px;">空格 = ✕</span>
+                    <span style="margin-left: 10px;">Enter = ○</span>
+                    <span style="margin-left: 10px;">Shift = □</span>
+                    <span style="margin-left: 10px;">Ctrl = △</span>
+                    <span style="margin-left: 10px;">Q = L1</span>
+                    <span style="margin-left: 10px;">E = R1</span>
+                    <span style="margin-left: 10px;">Z = L2</span>
+                    <span style="margin-left: 10px;">C = R2</span>
+                    <span style="margin-left: 10px;">Tab = OPTIONS</span>
+                    <span style="margin-left: 10px;">Backspace = SHARE</span>
+                    <span style="margin-left: 10px;">Esc = PS</span>
+                </div>
+                <div class="controller-wrapper">
+                    <!-- 肩键区域 -->
+                    <div class="controller-shoulder-row">
+                        <button class="controller-btn controller-btn-shoulder" data-button="L1" title="L1">L1</button>
+                        <button class="controller-btn controller-btn-shoulder" data-button="L2" title="L2">L2</button>
+                        <div class="controller-center-space"></div>
+                        <button class="controller-btn controller-btn-shoulder" data-button="R1" title="R1">R1</button>
+                        <button class="controller-btn controller-btn-shoulder" data-button="R2" title="R2">R2</button>
+                    </div>
+                    
+                    <!-- 主要控制区域 -->
+                    <div class="controller-main-area">
+                        <!-- 左侧：方向键 -->
+                        <div class="controller-left">
+                            <div class="controller-dpad-container">
+                                <div class="controller-dpad">
+                                    <button class="controller-btn controller-btn-dpad" data-button="UP" title="上">↑</button>
+                                    <div class="controller-dpad-row">
+                                        <button class="controller-btn controller-btn-dpad" data-button="LEFT" title="左">←</button>
+                                        <button class="controller-btn controller-btn-dpad" data-button="DOWN" title="下">↓</button>
+                                        <button class="controller-btn controller-btn-dpad" data-button="RIGHT" title="右">→</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 右侧：主要按钮 -->
+                        <div class="controller-right">
+                            <div class="controller-face-buttons">
+                                <button class="controller-btn controller-btn-face" data-button="TRIANGLE" title="三角键">△</button>
+                                <div class="controller-face-row">
+                                    <button class="controller-btn controller-btn-face" data-button="SQUARE" title="方块键">□</button>
+                                    <button class="controller-btn controller-btn-face" data-button="CROSS" title="叉键">✕</button>
+                                    <button class="controller-btn controller-btn-face" data-button="CIRCLE" title="圆圈键">○</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 功能键区域 -->
+                    <div class="controller-function-row">
+                        <button class="controller-btn controller-btn-function" data-button="OPTIONS" title="选项">OPTIONS</button>
+                        <button class="controller-btn controller-btn-function" data-button="SHARE" title="分享">SHARE</button>
+                        <button class="controller-btn controller-btn-function" data-button="PS" title="PS 键">PS</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="controls">
+                <div class="input-group">
+                    <label for="hostId">主机 ID (Host ID)</label>
+                    <div class="url-input-group">
+                        <input type="text" id="hostId" placeholder="输入主机 ID，将自动启动 HLS 流">
+                        <button class="btn-primary" id="connectBtn" onclick="connectAndPlay()">
+                            🔌 连接并播放
+                        </button>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="hlsUrl">或直接输入 HLS 流地址 (完整 URL 或 Session ID)</label>
+                    <div class="url-input-group">
+                        <input type="text" id="hlsUrl" placeholder="输入 HLS URL 或 Session ID">
+                        <button class="btn-primary" id="playBtn" onclick="playStream()">
+                            ▶️ 播放
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="button-group">
+                <button class="btn-danger" id="stopBtn" onclick="stopStream()" disabled>
+                    ⏹️ 停止
+                </button>
+                <button class="btn-success" id="refreshBtn" onclick="refreshStream()" disabled>
+                    🔄 刷新
+                </button>
+            </div>
+
+            <div class="status">
+                <h3 style="margin-bottom: 15px; color: #333;">📊 播放状态</h3>
+                <div class="status-item">
+                    <span class="status-label">当前流地址:</span>
+                    <span class="status-value" id="currentUrl">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">播放状态:</span>
+                    <span class="status-value status-disconnected" id="playbackState">未播放</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">HLS.js 状态:</span>
+                    <span class="status-value" id="hlsState">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">视频就绪:</span>
+                    <span class="status-value" id="videoReady">-</span>
+                </div>
+                <div class="status-item">
+                    <span class="status-label">错误信息:</span>
+                    <span class="status-value" id="errorInfo">-</span>
+                </div>
+            </div>
+
+            <div>
+                <h3 style="margin-bottom: 15px; color: #333;">📝 日志</h3>
+                <div class="logs" id="logs"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const AUTH_STORAGE_KEY = 'remoteplay.authToken';
+        let authToken = localStorage.getItem(AUTH_STORAGE_KEY) || '';
+        let warnedAuthMissing = false;
+
+        function getAuthToken() {
+            return authToken?.trim() || '';
+        }
+
+        function setAuthToken(token) {
+            authToken = (token || '').trim();
+            if (authToken) {
+                localStorage.setItem(AUTH_STORAGE_KEY, authToken);
+            } else {
+                localStorage.removeItem(AUTH_STORAGE_KEY);
+            }
+            warnedAuthMissing = false;
+            updateAuthTokenStatus();
+        }
+
+        function updateAuthTokenStatus() {
+            const statusEl = document.getElementById('authTokenStatus');
+            const inputEl = document.getElementById('authTokenInput');
+            if (!statusEl || !inputEl) {
+                return;
+            }
+            if (authToken) {
+                statusEl.textContent = `Token 已保存（长度 ${authToken.length}）`;
+                statusEl.style.color = '#11998e';
+                inputEl.value = authToken;
+            } else {
+                statusEl.textContent = '当前未配置 Token。';
+                statusEl.style.color = '#666';
+                inputEl.value = '';
+            }
+        }
+
+        function saveAuthToken() {
+            const input = document.getElementById('authTokenInput');
+            setAuthToken(input?.value || '');
+            if (authToken) {
+                log('✅ Token 已保存', 'success');
+            } else {
+                log('✅ Token 已清空', 'info');
+            }
+        }
+
+        function clearAuthToken() {
+            setAuthToken('');
+            log('✅ Token 已清空', 'info');
+        }
+
+        function authorizedFetch(url, options = {}) {
+            const headers = new Headers(options.headers || {});
+            const token = getAuthToken();
+            if (token) {
+                headers.set('Authorization', `Bearer ${token}`);
+                warnedAuthMissing = false;
+            } else if (!warnedAuthMissing) {
+                log('⚠️ 尚未设置 JWT Token，请在“身份验证”中配置', 'warning');
+                warnedAuthMissing = true;
+            }
+            return fetch(url, { ...options, headers });
+        }
+
+        const KEYFRAME_REFRESH_INTERVAL_MS = 10000; // 10 秒刷新一次关键帧
+        let keyframeRefreshTimer = null;
+
+        function stopKeyframeRefresh() {
+            if (keyframeRefreshTimer) {
+                clearInterval(keyframeRefreshTimer);
+                keyframeRefreshTimer = null;
+            }
+        }
+
+        function startKeyframeRefresh(sessionId) {
+            stopKeyframeRefresh();
+            if (!sessionId) {
+                return;
+            }
+
+            keyframeRefreshTimer = setInterval(() => {
+                requestKeyframe(sessionId, { silent: true });
+            }, KEYFRAME_REFRESH_INTERVAL_MS);
+        }
+
+        // 主动请求关键帧（适用于 HLS/RemotePlay 会话）
+        async function requestKeyframe(sessionId, options = {}) {
+            if (!sessionId) {
+                return;
+            }
+
+            const { silent = false } = options;
+
+            try {
+                if (!silent) {
+                    log(`🎯 请求关键帧: ${sessionId}`, 'info');
+                }
+                const response = await authorizedFetch(`/api/Streaming/session/${sessionId}/keyframe`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    log(`❌ 请求关键帧失败: ${response.status} ${errorText}`, 'error');
+                    return;
+                }
+
+                const result = await response.json().catch(() => null);
+                if (result?.success) {
+                    if (!silent) {
+                        log('✅ 关键帧请求已发送', 'success');
+                    }
+                } else {
+                    const message = result?.errorMessage || result?.message || '未知错误';
+                    log(`⚠️ 关键帧请求返回非成功状态: ${message}`, 'warning');
+                }
+            } catch (error) {
+                log(`❌ 请求关键帧出现异常: ${error.message}`, 'error');
+            }
+        }
+
+        let hls = null;
+        let currentStreamUrl = null;
+        let currentSessionId = null; // 当前会话 ID，用于控制器
+        const video = document.getElementById('hlsVideo');
+        
+        // SignalR 连接（用于低延迟控制器输入）
+        let controllerConnection = null;
+        let controllerConnected = false;
+
+        function log(message, type = 'info') {
+            const logsDiv = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const timestamp = new Date().toLocaleTimeString();
+            entry.textContent = `[${timestamp}] ${message}`;
+            logsDiv.appendChild(entry);
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+            console.log(`[${type.toUpperCase()}] ${message}`);
+        }
+
+        function updateStatus(field, value, isConnected = null) {
+            const element = document.getElementById(field);
+            if (element) {
+                element.textContent = value || '-';
+                if (isConnected !== null && field === 'playbackState') {
+                    element.className = isConnected ? 'status-value status-connected' : 'status-value status-disconnected';
+                }
+            }
+        }
+
+        function normalizeHlsUrl(input) {
+            if (!input || !input.trim()) {
+                return null;
+            }
+
+            const trimmed = input.trim();
+
+            // 如果已经是完整的 URL，直接返回
+            if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+                return trimmed;
+            }
+
+            // 如果是 Session ID，构建完整的 HLS URL
+            const baseUrl = window.location.origin;
+            return `${baseUrl}/hls/${trimmed}/index.m3u8`;
+        }
+
+        async function connectAndPlay() {
+            try {
+                const hostId = document.getElementById('hostId').value.trim();
+                if (!hostId) {
+                    alert('请输入主机 ID');
+                    return;
+                }
+
+                log(`开始连接主机: ${hostId}...`, 'info');
+                updateStatus('playbackState', '连接中...', false);
+                updateStatus('errorInfo', '-');
+
+                // 禁用按钮
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('hostId').disabled = true;
+
+                // 1. 启动会话
+                log('正在启动会话...', 'info');
+                const startSessionResponse = await authorizedFetch(`/api/PlayStation/start-session?hostId=${encodeURIComponent(hostId)}`, {
+                    method: 'POST'
+                });
+
+                if (!startSessionResponse.ok) {
+                    throw new Error(`启动会话失败: ${startSessionResponse.statusText}`);
+                }
+
+                const startSessionResult = await startSessionResponse.json();
+                if (!startSessionResult.success) {
+                    throw new Error(`启动会话失败: ${startSessionResult.errorMessage || '未知错误'}`);
+                }
+
+                const sessionId = startSessionResult.data?.id;
+                if (!sessionId) {
+                    throw new Error('会话启动成功，但未返回会话 ID');
+                }
+
+                log(`✅ 会话启动成功: ${sessionId}`, 'success');
+                updateStatus('currentUrl', `Session: ${sessionId}`);
+                
+                // 保存 sessionId 用于控制器
+                currentSessionId = sessionId;
+                
+                // 连接 SignalR 控制器（低延迟）
+                await connectControllerSignalR(sessionId);
+
+                // 2. 等待流启动（会话可能已自动启动流，但需要等待一下）
+                log('等待流启动...', 'info');
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 等待 5 秒
+
+                // 3. 确保流已启动
+              /*  log('检查流状态...', 'info');
+                const startStreamResponse = await authorizedFetch(`/api/PlayStation/start-stream?sessionId=${sessionId}&test=false`, {
+                    method: 'POST'
+                });
+                
+                if (startStreamResponse.ok) {
+                    const startStreamResult = await startStreamResponse.json();
+                    if (startStreamResult.success) {
+                        log('✅ 流已启动', 'success');
+                        // 再等待一下，让流稳定
+                        await new Promise(resolve => setTimeout(resolve, 1000));
+                    } else {
+                        log('⚠️ 流启动可能失败，继续尝试...', 'warning');
+                    }
+                }*/
+
+                // 4. 启动 HLS 流
+                log('正在启动 HLS 流...', 'info');
+                const shareHlsParams = new URLSearchParams({
+                    sessionId: sessionId,
+                    segmentTime: '1', 
+                    listSize: '6',
+                    enableAudio: 'false',
+                    useTcp: 'true',
+                    enableVideo: 'true'
+                });
+                const shareHlsResponse = await authorizedFetch(`/api/PlayStation/share-hls?${shareHlsParams.toString()}`, {
+                    method: 'POST'
+                });
+
+                if (!shareHlsResponse.ok) {
+                    throw new Error(`启动 HLS 流失败: ${shareHlsResponse.statusText}`);
+                }
+
+                const shareHlsResult = await shareHlsResponse.json();
+                if (!shareHlsResult.success) {
+                    const errorMsg = shareHlsResult.errorMessage || '未知错误';
+                    log(`⚠️ 首次尝试启动 HLS 流失败: ${errorMsg}`, 'warning');
+                    
+                    // 如果失败，等待 3 秒后重试一次
+                    log('等待 3 秒后重试...', 'info');
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    const retryResponse = await authorizedFetch(`/api/PlayStation/share-hls?${shareHlsParams.toString()}`, {
+                        method: 'POST'
+                    });
+                    
+                    if (!retryResponse.ok) {
+                        throw new Error(`启动 HLS 流失败: ${retryResponse.statusText}`);
+                    }
+                    
+                    const retryResult = await retryResponse.json();
+                    if (!retryResult.success) {
+                        const retryErrorMsg = retryResult.errorMessage || '未知错误';
+                        throw new Error(`启动 HLS 流失败（重试后）: ${retryErrorMsg}`);
+                    }
+                    
+                    // 使用重试结果
+                    const retryHlsUrl = retryResult.data?.url;
+                    if (!retryHlsUrl) {
+                        const baseUrl = window.location.origin;
+                        const constructedUrl = `${baseUrl}/hls/${sessionId.replace(/-/g, '')}/index.m3u8`;
+                        log(`✅ HLS 流启动成功（重试），使用构建的 URL: ${constructedUrl}`, 'success');
+                        document.getElementById('hlsUrl').value = sessionId.replace(/-/g, '');
+                        await playStreamUrl(constructedUrl);
+                        return;
+                    } else {
+                        log(`✅ HLS 流启动成功（重试）: ${retryHlsUrl}`, 'success');
+                        document.getElementById('hlsUrl').value = retryHlsUrl;
+                        await playStreamUrl(retryHlsUrl);
+                        return;
+                    }
+                }
+
+                const hlsUrl = shareHlsResult.data?.url;
+                if (!hlsUrl) {
+                    // 如果没有返回 URL，根据 sessionId 构建 URL
+                    const baseUrl = window.location.origin;
+                    const constructedUrl = `${baseUrl}/hls/${sessionId.replace(/-/g, '')}/index.m3u8`;
+                    log(`✅ HLS 流启动成功，使用构建的 URL: ${constructedUrl}`, 'success');
+                    
+                    // 设置 URL 并开始播放
+                    document.getElementById('hlsUrl').value = sessionId.replace(/-/g, '');
+                    await playStreamUrl(constructedUrl);
+                } else {
+                    log(`✅ HLS 流启动成功: ${hlsUrl}`, 'success');
+                    
+                    // 设置 URL 并开始播放
+                    document.getElementById('hlsUrl').value = hlsUrl;
+                    await playStreamUrl(hlsUrl);
+                }
+
+            } catch (error) {
+                log(`❌ 连接失败: ${error.message}`, 'error');
+                updateStatus('errorInfo', error.message);
+                updateStatus('playbackState', '连接失败', false);
+                
+                // 恢复按钮状态
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('hostId').disabled = false;
+            }
+        }
+
+        // 从 HLS URL 中提取 sessionId（返回 GUID 格式）
+        function extractSessionIdFromUrl(url) {
+            if (!url) return null;
+            
+            // 先尝试匹配 GUID 格式（带连字符）
+            // 格式: /hls/{guid-format}/index.m3u8 或 /hls/{guid-format}
+            const guidMatch = url.match(/\/hls\/([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})(?:\/|$)/i);
+            if (guidMatch && guidMatch[1]) {
+                return guidMatch[1].toLowerCase(); // 返回标准 GUID 格式（小写）
+            }
+            
+            // 如果 URL 中的 sessionId 是32位十六进制字符串（无连字符），转换为 GUID 格式
+            // 格式: /hls/{32-hex-characters}/index.m3u8 或 /hls/{32-hex-characters}
+            const hexMatch = url.match(/\/hls\/([a-f0-9]{32})(?:\/|$)/i);
+            if (hexMatch && hexMatch[1]) {
+                const hex = hexMatch[1].toLowerCase();
+                // 将32位十六进制字符串转换为 GUID 格式: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+                return `${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20, 32)}`;
+            }
+            
+            return null;
+        }
+
+        async function playStreamUrl(hlsUrl) {
+            // 尝试从 URL 中提取 sessionId（在停止之前保存）
+            const extractedSessionId = extractSessionIdFromUrl(hlsUrl);
+            
+            // 调用现有的播放逻辑
+            currentStreamUrl = hlsUrl;
+            updateStatus('currentUrl', hlsUrl);
+            updateStatus('playbackState', '连接中...', false);
+            updateStatus('hlsState', '初始化中...');
+            updateStatus('errorInfo', '-');
+
+            // 停止当前播放（这会清除 sessionId，所以需要在之后重新设置）
+            const savedSessionId = currentSessionId; // 保存当前的 sessionId
+            stopStream();
+            
+            // 恢复或设置 sessionId
+            if (extractedSessionId) {
+                currentSessionId = extractedSessionId;
+                log(`✅ 从 URL 中提取会话 ID: ${extractedSessionId}`, 'success');
+                // 连接 SignalR 控制器（如果从 URL 提取到 sessionId）
+                await connectControllerSignalR(extractedSessionId);
+                await requestKeyframe(extractedSessionId);
+                startKeyframeRefresh(extractedSessionId);
+            } else if (savedSessionId) {
+                currentSessionId = savedSessionId; // 恢复之前保存的 sessionId
+                // 连接 SignalR 控制器
+                await connectControllerSignalR(savedSessionId);
+                await requestKeyframe(savedSessionId);
+                startKeyframeRefresh(savedSessionId);
+            }
+
+            // 强制使用 HLS.js
+            if (Hls.isSupported()) {
+                log('✅ 使用 HLS.js 播放', 'info');
+                
+                // 如果已有 HLS 实例，先销毁
+                if (hls) {
+                    hls.destroy();
+                    hls = null;
+                }
+                
+                hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    backBufferLength: 90,
+                    maxBufferLength: 30,
+                    maxMaxBufferLength: 60,
+                    maxBufferSize: 60 * 1000 * 1000,
+                    maxBufferHole: 0.5,
+                    startLevel: -1,
+                    capLevelToPlayerSize: true,
+                    debug: true,
+                    // 实时直播配置：从最新位置开始播放（使用基于片段数量的配置）
+                    liveSyncDurationCount: 3, // 保持 3 个片段的延迟（更接近实时）
+                    liveMaxLatencyDurationCount: Infinity, // 允许无限延迟（总是跟随最新内容）
+                    xhrSetup: function(xhr, url) {
+                        xhr.withCredentials = false;
+                    }
+                });
+
+                hls.loadSource(hlsUrl);
+                hls.attachMedia(video);
+
+                setupHlsEvents();
+            } else {
+                log('❌ 浏览器不支持 HLS 播放', 'error');
+                updateStatus('errorInfo', '浏览器不支持 HLS');
+                alert('您的浏览器不支持 HLS 播放，请使用 Safari 或支持 HLS.js 的浏览器');
+                return;
+            }
+
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('stopBtn').disabled = false;
+            document.getElementById('refreshBtn').disabled = false;
+            document.getElementById('hlsUrl').disabled = false;
+        }
+
+        function playStream() {
+            try {
+                const input = document.getElementById('hlsUrl').value.trim();
+                if (!input) {
+                    alert('请输入 HLS URL 或 Session ID');
+                    return;
+                }
+
+                const hlsUrl = normalizeHlsUrl(input);
+                if (!hlsUrl) {
+                    alert('无效的 URL 或 Session ID');
+                    return;
+                }
+
+                log(`开始播放: ${hlsUrl}`, 'info');
+                playStreamUrl(hlsUrl);
+
+            } catch (error) {
+                log(`❌ 播放失败: ${error.message}`, 'error');
+                updateStatus('errorInfo', error.message);
+                updateStatus('playbackState', '播放失败', false);
+                document.getElementById('playBtn').disabled = false;
+            }
+        }
+
+        function setupVideoEvents() {
+            video.onloadedmetadata = () => {
+                log('✅ 视频元数据已加载', 'success');
+                updateStatus('videoReady', '是');
+                document.getElementById('placeholder').style.display = 'none';
+            };
+
+            video.oncanplay = () => {
+                log('✅ 视频可以播放', 'success');
+                updateStatus('playbackState', '正在播放', true);
+            };
+
+            video.onplay = () => {
+                log('▶️ 开始播放', 'success');
+                updateStatus('playbackState', '正在播放', true);
+            };
+
+            video.onpause = () => {
+                log('⏸️ 已暂停', 'warning');
+                updateStatus('playbackState', '已暂停', false);
+            };
+
+            video.onended = () => {
+                log('⏹️ 播放结束', 'warning');
+                updateStatus('playbackState', '播放结束', false);
+            };
+
+            video.onerror = (e) => {
+                log(`❌ 视频播放错误: ${video.error?.message || '未知错误'}`, 'error');
+                updateStatus('errorInfo', video.error?.message || '未知错误');
+                updateStatus('playbackState', '播放错误', false);
+            };
+
+            video.onwaiting = () => {
+                log('⏳ 缓冲中...', 'warning');
+                updateStatus('playbackState', '缓冲中...', false);
+            };
+
+            video.onplaying = () => {
+                log('▶️ 播放中', 'success');
+                updateStatus('playbackState', '正在播放', true);
+            };
+        }
+
+        function setupHlsEvents() {
+            hls.on(Hls.Events.MEDIA_ATTACHED, () => {
+                log('✅ HLS.js 已附加到视频元素', 'success');
+                updateStatus('hlsState', '已附加');
+            });
+
+            hls.on(Hls.Events.MANIFEST_PARSED, (event, data) => {
+                log(`✅ 清单已解析，共 ${data.levels.length} 个质量级别`, 'success');
+                updateStatus('hlsState', `清单已解析 (${data.levels.length} 个级别)`);
+                updateStatus('videoReady', '是');
+                document.getElementById('placeholder').style.display = 'none';
+                
+                // 实时直播：立即跳到最新位置开始播放
+                if (hls.media) {
+                    // 等待一小段时间确保清单完全加载
+                    setTimeout(() => {
+                        if (hls.liveSyncPosition !== null) {
+                            // 跳到最新的同步位置（实时直播位置）
+                            hls.media.currentTime = hls.liveSyncPosition;
+                            log(`🎬 已跳到实时直播位置: ${hls.liveSyncPosition.toFixed(2)}秒`, 'info');
+                        } else if (hls.media.duration && isFinite(hls.media.duration)) {
+                            // 如果无法获取同步位置，跳到末尾（接近实时）
+                            hls.media.currentTime = hls.media.duration;
+                            log(`🎬 已跳到末尾位置（实时）: ${hls.media.duration.toFixed(2)}秒`, 'info');
+                        }
+                    }, 100);
+                }
+            });
+
+            hls.on(Hls.Events.LEVEL_SWITCHED, (event, data) => {
+                log(`🔄 切换到质量级别: ${data.level}`, 'info');
+            });
+
+            hls.on(Hls.Events.FRAG_LOADED, (event, data) => {
+                log(`📦 片段已加载: ${data.frag.url}`, 'info');
+            });
+
+            hls.on(Hls.Events.FRAG_PARSED, () => {
+                // 片段解析完成
+            });
+
+            // 实时直播：定期检查并跳到最新位置（如果需要）
+            hls.on(Hls.Events.FRAG_CHANGED, (event, data) => {
+                // 片段切换时，确保播放位置跟随最新内容
+                if (hls.media && hls.liveSyncPosition !== null) {
+                    const currentTime = hls.media.currentTime;
+                    const liveSyncPos = hls.liveSyncPosition;
+                    // 如果播放位置落后实时位置超过 5 秒，自动跳到最新位置
+                    if (liveSyncPos - currentTime > 5) {
+                        hls.media.currentTime = liveSyncPos;
+                        log(`🎬 自动跳到最新位置: ${liveSyncPos.toFixed(2)}秒 (延迟: ${(liveSyncPos - currentTime).toFixed(2)}秒)`, 'info');
+                    }
+                }
+            });
+
+            hls.on(Hls.Events.ERROR, (event, data) => {
+                if (data.fatal) {
+                    log(`❌ HLS 致命错误: ${data.type} - ${data.details}`, 'error');
+                    updateStatus('errorInfo', `${data.type}: ${data.details}`);
+                    updateStatus('hlsState', '错误');
+                    
+                    switch (data.type) {
+                        case Hls.ErrorTypes.NETWORK_ERROR:
+                            log('🔄 尝试恢复网络错误...', 'warning');
+                            hls.startLoad();
+                            break;
+                        case Hls.ErrorTypes.MEDIA_ERROR:
+                            log('🔄 尝试恢复媒体错误...', 'warning');
+                            hls.recoverMediaError();
+                            break;
+                        default:
+                            log('❌ 无法恢复的错误', 'error');
+                            stopStream();
+                            break;
+                    }
+                } else {
+                    log(`⚠️ HLS 警告: ${data.type} - ${data.details}`, 'warning');
+                }
+            });
+
+            hls.on(Hls.Events.BUFFER_APPENDED, () => {
+                // 缓冲已追加
+            });
+
+            setupVideoEvents();
+        }
+
+        async function stopStream() {
+            if (hls) {
+                hls.destroy();
+                hls = null;
+                log('已停止 HLS 播放', 'warning');
+            }
+
+            video.pause();
+            video.src = '';
+            video.srcObject = null;
+
+            document.getElementById('placeholder').style.display = 'block';
+
+            updateStatus('currentUrl', '-');
+            updateStatus('playbackState', '未播放', false);
+            updateStatus('hlsState', '-');
+            updateStatus('videoReady', '-');
+            updateStatus('errorInfo', '-');
+
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('stopBtn').disabled = true;
+            document.getElementById('refreshBtn').disabled = true;
+            document.getElementById('hlsUrl').disabled = false;
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('hostId').disabled = false;
+
+            stopKeyframeRefresh();
+
+            currentStreamUrl = null;
+            currentSessionId = null; // 清除 sessionId
+            
+            // 断开 SignalR 连接
+            await disconnectControllerSignalR();
+        }
+        
+        // 连接 SignalR 控制器
+        async function connectControllerSignalR(sessionId) {
+            try {
+                const token = getAuthToken();
+                if (!token) {
+                    log('❌ 未检测到 JWT Token，无法建立 SignalR 连接', 'error');
+                    return;
+                }
+
+                if (controllerConnection) {
+                    await disconnectControllerSignalR();
+                }
+                
+                log('🔌 正在连接 SignalR 控制器...', 'info');
+                controllerConnection = new signalR.HubConnectionBuilder()
+                    .withUrl('/hubs/controller', {
+                        accessTokenFactory: () => getAuthToken() || ''
+                    })
+                    .build();
+                
+                // 注册事件
+                controllerConnection.on('ControllerConnected', (success) => {
+                    log(`✅ 控制器已通过 SignalR 连接: ${success}`, 'success');
+                    controllerConnected = true;
+                });
+                
+                controllerConnection.on('ControllerStarted', (success) => {
+                    log(`✅ 控制器已启动: ${success}`, 'success');
+                });
+                
+                controllerConnection.on('Error', (message) => {
+                    log(`❌ SignalR 错误: ${message}`, 'error');
+                });
+                
+                controllerConnection.onclose(() => {
+                    log('⚠️ SignalR 连接已关闭', 'warning');
+                    controllerConnected = false;
+                });
+                
+                await controllerConnection.start();
+                log('✅ SignalR 连接已建立', 'success');
+                
+                // 连接控制器到会话
+                await controllerConnection.invoke('ConnectController', sessionId);
+                
+                // 启动控制器
+                await controllerConnection.invoke('StartController', sessionId);
+                
+            } catch (error) {
+                log(`❌ SignalR 连接失败: ${error.message}`, 'error');
+                controllerConnection = null;
+                controllerConnected = false;
+            }
+        }
+        
+        // 断开 SignalR 控制器
+        async function disconnectControllerSignalR() {
+            if (controllerConnection) {
+                try {
+                    if (currentSessionId) {
+                        await controllerConnection.invoke('DisconnectController', currentSessionId);
+                    }
+                    await controllerConnection.stop();
+                    log('✅ SignalR 连接已断开', 'info');
+                } catch (error) {
+                    log(`⚠️ 断开 SignalR 连接时出错: ${error.message}`, 'warning');
+                }
+                controllerConnection = null;
+                controllerConnected = false;
+            }
+        }
+
+        // 控制器按钮处理函数（使用 SignalR 低延迟）
+        // action: 'press', 'release', 'tap'
+        async function sendControllerButton(buttonName, action = 'tap') {
+            // 如果 currentSessionId 为空，尝试从当前流 URL 中提取
+            if (!currentSessionId && currentStreamUrl) {
+                const extractedSessionId = extractSessionIdFromUrl(currentStreamUrl);
+                if (extractedSessionId) {
+                    currentSessionId = extractedSessionId;
+                    log(`✅ 从当前流 URL 中提取会话 ID: ${extractedSessionId}`, 'success');
+                }
+            }
+            
+            if (!currentSessionId) {
+                log('❌ 没有活动的会话，无法发送控制器命令', 'error');
+                alert('请先连接并启动流\n\n如果已连接，请尝试刷新页面或重新连接');
+                return;
+            }
+
+            // 如果 SignalR 未连接，尝试连接
+            if (!controllerConnection || !controllerConnected) {
+                log('⚠️ SignalR 未连接，尝试重新连接...', 'warning');
+                await connectControllerSignalR(currentSessionId);
+                if (!controllerConnection || !controllerConnected) {
+                    log('❌ SignalR 连接失败，使用 HTTP API 作为备用', 'error');
+                    // 备用方案：使用 HTTP API
+                    await sendControllerButtonHTTP(buttonName, action);
+                    return;
+                }
+            }
+
+            try {
+                const startTime = performance.now();
+                const delayMs = action === 'tap' ? 100 : 0;
+                await controllerConnection.invoke('Button', currentSessionId, buttonName, action, delayMs);
+                const endTime = performance.now();
+                const latency = (endTime - startTime).toFixed(2);
+                log(`✅ 控制器命令已发送 (SignalR): ${buttonName} [${action}] - 延迟: ${latency}ms`, 'success');
+            } catch (error) {
+                log(`❌ SignalR 发送失败: ${error.message}，尝试使用 HTTP API`, 'error');
+                // 备用方案：使用 HTTP API
+                await sendControllerButtonHTTP(buttonName, action);
+            }
+        }
+        
+        // HTTP API 备用方案
+        async function sendControllerButtonHTTP(buttonName, action = 'tap') {
+            try {
+                const response = await authorizedFetch('/api/PlayStation/controller/button', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: currentSessionId,
+                        button: buttonName,
+                        action: action,
+                        delayMs: action === 'tap' ? 200 : 0
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const result = await response.json();
+                if (result.success) {
+                    log(`✅ 控制器命令已发送 (HTTP): ${buttonName} [${action}]`, 'success');
+                } else {
+                    log(`⚠️ 控制器命令失败: ${result.errorMessage || '未知错误'}`, 'warning');
+                }
+            } catch (error) {
+                log(`❌ HTTP API 发送失败: ${error.message}`, 'error');
+            }
+        }
+        
+        // 跟踪当前按下的按钮（用于长按）
+        const pressedButtons = new Map(); // buttonName -> { pressTimer, releaseTimer }
+
+        // 初始化控制器按钮事件
+        function initControllerButtons() {
+            const controllerButtons = document.querySelectorAll('.controller-btn[data-button]');
+            log(`初始化控制器按钮: 找到 ${controllerButtons.length} 个按钮`, 'info');
+            
+            if (controllerButtons.length === 0) {
+                log(`⚠️ 未找到任何控制器按钮，请检查 HTML 结构`, 'warning');
+                return;
+            }
+            
+            controllerButtons.forEach((btn, index) => {
+                const buttonName = btn.getAttribute('data-button');
+                if (!buttonName) {
+                    log(`⚠️ 按钮 ${index} 没有 data-button 属性`, 'warning');
+                    return;
+                }
+                
+                // 添加点击事件（轻按，快速按下并释放）
+                btn.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    log(`🎮 点击按钮: ${buttonName}`, 'info');
+                    sendControllerButton(buttonName, 'tap');
+                    
+                    // 添加视觉反馈
+                    const originalTransform = btn.style.transform;
+                    btn.style.transform = 'scale(0.95)';
+                    setTimeout(() => {
+                        btn.style.transform = originalTransform || '';
+                    }, 100);
+                }, false);
+                
+                // 添加鼠标按下事件（长按开始）
+                btn.addEventListener('mousedown', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    this.style.opacity = '0.7';
+                    this.style.transform = 'scale(0.95)';
+                    
+                    // 如果已经在按下状态，先释放
+                    if (pressedButtons.has(buttonName)) {
+                        const existing = pressedButtons.get(buttonName);
+                        if (existing.pressTimer) {
+                            clearTimeout(existing.pressTimer);
+                        }
+                        if (existing.releaseTimer) {
+                            clearTimeout(existing.releaseTimer);
+                        }
+                        // 先发送释放
+                        sendControllerButton(buttonName, 'release');
+                    }
+                    
+                    // 发送按下事件
+                    sendControllerButton(buttonName, 'press');
+                    
+                    // 记录按下状态
+                    pressedButtons.set(buttonName, {
+                        pressTimer: null,
+                        releaseTimer: null,
+                        button: this
+                    });
+                    
+                    log(`🎮 按钮按下: ${buttonName} (长按模式)`, 'info');
+                }, false);
+                
+                // 添加鼠标释放事件（长按结束）
+                btn.addEventListener('mouseup', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    this.style.opacity = '1';
+                    this.style.transform = '';
+                    
+                    // 如果按钮在按下状态，发送释放
+                    if (pressedButtons.has(buttonName)) {
+                        sendControllerButton(buttonName, 'release');
+                        pressedButtons.delete(buttonName);
+                        log(`🎮 按钮释放: ${buttonName}`, 'info');
+                    }
+                }, false);
+                
+                // 鼠标离开时也释放
+                btn.addEventListener('mouseleave', function(e) {
+                    this.style.opacity = '1';
+                    this.style.transform = '';
+                    
+                    // 如果按钮在按下状态，发送释放
+                    if (pressedButtons.has(buttonName)) {
+                        sendControllerButton(buttonName, 'release');
+                        pressedButtons.delete(buttonName);
+                        log(`🎮 按钮离开释放: ${buttonName}`, 'info');
+                    }
+                }, false);
+                
+                // 触摸事件支持（移动设备）
+                btn.addEventListener('touchstart', function(e) {
+                    e.preventDefault();
+                    this.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                }, false);
+                
+                btn.addEventListener('touchend', function(e) {
+                    e.preventDefault();
+                    this.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                }, false);
+                
+                log(`✅ 已绑定按钮: ${buttonName} (支持长按)`, 'info');
+            });
+            
+            log(`✅ 控制器按钮初始化完成，共绑定 ${controllerButtons.length} 个按钮`, 'success');
+        }
+
+        function refreshStream() {
+            if (!currentStreamUrl) {
+                log('没有正在播放的流', 'warning');
+                return;
+            }
+
+            log('正在刷新流...', 'info');
+            const url = currentStreamUrl;
+            stopStream();
+
+            // 短暂延迟后重新播放
+            setTimeout(() => {
+                document.getElementById('hlsUrl').value = url.includes('/hls/') 
+                    ? url.split('/hls/')[1].split('/')[0] 
+                    : url;
+                playStream();
+            }, 500);
+        }
+
+        // 支持 Enter 键播放
+        document.getElementById('hlsUrl').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                playStream();
+            }
+        });
+
+        // 支持 Enter 键连接
+        document.getElementById('hostId').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                connectAndPlay();
+            }
+        });
+
+        // 键盘映射配置
+        const keyboardMapping = {
+            // 方向键
+            'KeyW': 'UP',
+            'ArrowUp': 'UP',
+            'KeyS': 'DOWN',
+            'ArrowDown': 'DOWN',
+            'KeyA': 'LEFT',
+            'ArrowLeft': 'LEFT',
+            'KeyD': 'RIGHT',
+            'ArrowRight': 'RIGHT',
+            // 主要按钮
+            'Space': 'CROSS',      // 空格 = ✕
+            'Enter': 'CIRCLE',     // Enter = ○ (但需要防止在输入框中触发)
+            'ShiftLeft': 'SQUARE', // 左 Shift = □
+            'ShiftRight': 'SQUARE',
+            'ControlLeft': 'TRIANGLE', // 左 Ctrl = △
+            'ControlRight': 'TRIANGLE',
+            // 肩键
+            'KeyQ': 'L1',
+            'KeyE': 'R1',
+            'KeyZ': 'L2',
+            'KeyC': 'R2',
+            // 功能键
+            'Tab': 'OPTIONS',
+            'Backspace': 'SHARE',
+            'Escape': 'PS'
+        };
+
+        // 已按下的键（用于防止重复触发）
+        const pressedKeys = new Set();
+
+        // 键盘事件处理
+        function handleKeyboardEvent(event, isKeyDown) {
+            // 如果焦点在输入框或文本区域，不处理键盘事件（除了 Escape）
+            const activeElement = document.activeElement;
+            const isInputFocused = activeElement && (
+                activeElement.tagName === 'INPUT' ||
+                activeElement.tagName === 'TEXTAREA' ||
+                activeElement.isContentEditable
+            );
+
+            // Escape 键始终处理（用于退出输入框）
+            if (event.key === 'Escape' || event.code === 'Escape') {
+                if (isInputFocused) {
+                    activeElement.blur();
+                }
+                // 继续处理 Escape 键映射
+            } else if (isInputFocused) {
+                // 其他键在输入框中时不处理
+                return;
+            }
+
+            // 防止默认行为（某些键）
+            const keyCode = event.code || event.key;
+            if (keyboardMapping[keyCode]) {
+                // 对于某些键，防止默认行为
+                if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(keyCode)) {
+                    event.preventDefault();
+                }
+            }
+
+            // 处理按键
+            const buttonName = keyboardMapping[keyCode];
+            if (buttonName) {
+                if (isKeyDown) {
+                    // 按下时只触发一次（防止重复）
+                    if (!pressedKeys.has(keyCode)) {
+                        pressedKeys.add(keyCode);
+                        
+                        // 高亮对应的按钮
+                        const btn = document.querySelector(`.controller-btn[data-button="${buttonName}"]`);
+                        if (btn) {
+                            btn.style.opacity = '0.7';
+                            btn.style.transform = 'scale(0.95)';
+                        }
+                        
+                        // 发送按下事件（长按模式）
+                        log(`⌨️ 键盘按下: ${keyCode} -> ${buttonName} (长按模式)`, 'info');
+                        sendControllerButton(buttonName, 'press');
+                    }
+                } else {
+                    // 释放时移除标记
+                    if (pressedKeys.has(keyCode)) {
+                        pressedKeys.delete(keyCode);
+                        
+                        // 恢复按钮样式
+                        const btn = document.querySelector(`.controller-btn[data-button="${buttonName}"]`);
+                        if (btn) {
+                            btn.style.opacity = '1';
+                            btn.style.transform = '';
+                        }
+                        
+                        // 发送释放事件
+                        log(`⌨️ 键盘释放: ${keyCode} -> ${buttonName}`, 'info');
+                        sendControllerButton(buttonName, 'release');
+                    }
+                }
+            }
+        }
+
+        // 初始化键盘事件监听
+        function initKeyboardMapping() {
+            // 监听键盘按下
+            document.addEventListener('keydown', (event) => {
+                handleKeyboardEvent(event, true);
+            }, false);
+
+            // 监听键盘释放
+            document.addEventListener('keyup', (event) => {
+                handleKeyboardEvent(event, false);
+            }, false);
+
+            // 页面失去焦点时清除所有按键状态
+            window.addEventListener('blur', () => {
+                // 释放所有按下的按钮
+                pressedKeys.forEach(keyCode => {
+                    const buttonName = keyboardMapping[keyCode];
+                    if (buttonName) {
+                        sendControllerButton(buttonName, 'release');
+                    }
+                });
+                pressedKeys.clear();
+                
+                // 释放所有鼠标按下的按钮
+                pressedButtons.forEach((value, buttonName) => {
+                    sendControllerButton(buttonName, 'release');
+                });
+                pressedButtons.clear();
+                
+                // 恢复所有按钮样式
+                document.querySelectorAll('.controller-btn').forEach(btn => {
+                    btn.style.opacity = '1';
+                    btn.style.transform = '';
+                });
+            });
+
+            log('✅ 键盘映射已初始化', 'success');
+        }
+
+        // 页面加载时的初始化
+        window.addEventListener('load', () => {
+            updateAuthTokenStatus();
+            log('HLS Player 已就绪', 'success');
+            log('请输入 HLS URL 或 Session ID 并点击播放', 'info');
+            
+            // 检查浏览器支持
+            if (Hls.isSupported()) {
+                log('✅ HLS.js 已加载并支持', 'success');
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                log('✅ 浏览器原生支持 HLS', 'success');
+            } else {
+                log('❌ 浏览器不支持 HLS 播放', 'error');
+            }
+            
+            // 初始化控制器按钮
+            initControllerButtons();
+            
+            // 初始化键盘映射
+            initKeyboardMapping();
+        });
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', () => {
+            stopStream();
+        });
+    </script>
+</body>
+</html>
+
