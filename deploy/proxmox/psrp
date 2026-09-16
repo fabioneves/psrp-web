@@ -1,0 +1,51 @@
+#!/bin/sh
+# Player One helper installed inside the container as /usr/local/bin/psrp.
+#   psrp update [--force]   pull the latest code and rebuild (refuses while a stream runs)
+#   psrp status             container health, version and stream state
+#   psrp logs [n]           last n log lines (default 100)
+#   psrp save-log           archive the current log to ~/psrp-logs
+#   psrp restart            restart the app without rebuilding
+set -eu
+APP_DIR=${APP_DIR:-/opt/psrp}
+cd "$APP_DIR"
+port=$(grep -E '^PORT=' .env 2>/dev/null | cut -d= -f2)
+port=${port:-8080}
+health() { curl -fsS -m 5 "http://127.0.0.1:$port/healthz" 2>/dev/null || true; }
+streams() { health | sed -n 's/.*"streams":\([0-9]*\).*/\1/p'; }
+save_log() {
+    mkdir -p ~/psrp-logs
+    file=~/psrp-logs/$(date -u +%Y%m%dT%H%M%SZ).log
+    docker compose logs --timestamps remote-play > "$file" 2>&1
+    echo "Saved $file"
+}
+case "${1:-}" in
+    update)
+        if [ "${2:-}" != --force ] && [ "$(streams)" = 1 ]; then
+            echo "A stream is running; updating would end it. Wait for it to finish or use: psrp update --force" >&2
+            exit 1
+        fi
+        before=$(git rev-parse --short HEAD)
+        git fetch -q origin
+        branch=$(git rev-parse --abbrev-ref HEAD)
+        if [ "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$branch")" ]; then
+            echo "Already up to date at $before."
+            [ "${2:-}" = --force ] || exit 0
+        fi
+        save_log
+        git merge -q --ff-only "origin/$branch"
+        after=$(git rev-parse --short HEAD)
+        docker compose up --build -d
+        until [ -n "$(health)" ]; do sleep 3; done
+        docker image prune -f >/dev/null
+        echo "Updated $before -> $after. $(health)"
+        ;;
+    status)
+        echo "Version   $(git rev-parse --short HEAD) ($(git log -1 --format=%cd --date=short))"
+        echo "Health    $(health)"
+        docker compose ps
+        ;;
+    logs) docker compose logs --tail "${2:-100}" remote-play ;;
+    save-log) save_log ;;
+    restart) docker compose restart remote-play && until [ -n "$(health)" ]; do sleep 3; done && health && echo ;;
+    *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
+esac

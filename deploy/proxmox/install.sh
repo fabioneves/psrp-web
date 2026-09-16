@@ -53,8 +53,10 @@ if [ ! -f .env ]; then
     chmod 600 .env
 fi
 
+install -m 0755 deploy/proxmox/psrp /usr/local/bin/psrp
 docker compose up --build -d
 until curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; do sleep 3; done
 ip=$(hostname -I | awk '{print $1}')
 echo "Remote Play is running at http://$ip:$PORT"
+echo "Later: 'psrp update' pulls and rebuilds, 'psrp status' and 'psrp logs' inspect it."
 [ -z "${REMOTE_PLAY_DOMAIN:-}" ] || echo "HTTPS: https://$REMOTE_PLAY_DOMAIN (point its DNS at $ip and open ports 80 and 443)"

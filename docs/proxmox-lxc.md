@@ -89,16 +89,21 @@ Delete the dump and archive afterwards; they contain credentials.
 
 ## 4. Update
 
-```sh
-cd /opt/psrp && git pull && docker compose up --build -d
-```
-
-Check `/healthz` shows `"streams":0` before updating; rebuilding ends a running
-session. Save the log first if a session had problems:
+From the Proxmox node:
 
 ```sh
-docker compose logs --timestamps remote-play > ~/psrp-$(date -u +%Y%m%dT%H%M%SZ).log
+pct exec 120 -- psrp update
 ```
+
+or `psrp update` inside the container. The command refuses while a stream is
+running because rebuilding ends the session (`psrp update --force` overrides),
+saves the current log to `~/psrp-logs`, fast-forwards the checkout to the
+branch it was installed from, rebuilds the image, waits for the health check
+and prunes the previous image. `psrp status` shows the version, health and
+containers; `psrp logs [n]` prints the last lines; `psrp save-log` archives
+the log without updating; `psrp restart` restarts the app without a rebuild.
+
+The equivalent by hand is `cd /opt/psrp && git pull && docker compose up --build -d`.
 
 ## Notes
 
