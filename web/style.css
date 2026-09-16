@@ -260,6 +260,55 @@ main {
 .symbol-row span:nth-child(4) {
   color:var(--pink);
 }
+.splash {
+  margin:18vh auto;
+  text-align:center;
+  font-family:monospace;
+  color:var(--accent);
+  opacity:0;
+  animation:appear 0s .4s forwards;
+}
+@keyframes appear {
+  to { opacity:1; }
+}
+.status-dot {
+  display:inline-block;
+  width:9px;
+  height:9px;
+  margin-right:8px;
+  background:#6b7a99;
+  box-shadow:1px 1px #050a18;
+  vertical-align:1px;
+}
+.status-dot[data-state=ready] {
+  background:var(--accent);
+}
+.status-dot[data-state=rest] {
+  background:#ffd390;
+}
+.device-recovery {
+  margin:0;
+  font-size:.78rem;
+}
+.device-recovery summary {
+  padding:8px 0;
+  min-height:36px;
+}
+.device-recovery .hint {
+  display:block;
+  margin:0 0 10px;
+}
+.advanced-settings {
+  margin-top:4px;
+}
+.advanced-settings summary {
+  font-weight:650;
+  color:var(--text);
+  font-size:.85rem;
+}
+.advanced-settings .settings-grid {
+  margin-top:4px;
+}
 .device-list {
   display:grid;
   gap:16px;
@@ -394,11 +443,21 @@ main {
   flex:1;
   min-width:130px;
 }
-#stream-status {
+.session-status {
   display:block;
   min-height:1.6em;
   color:var(--muted);
   font-size:.8rem;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+#stream-profile:not(:empty)::before {
+  content:' · ';
+}
+#stream-profile {
+  font-family:ui-monospace,monospace;
+  font-variant-numeric:tabular-nums;
 }
 .player-actions {
   display:flex;
@@ -1193,8 +1252,15 @@ h1,h2 {
 .lobby-grid .device-actions button {
   font-size:.75rem;
 }
-.lobby-grid .device-actions>button:last-child {
+.lobby-grid .device-actions>button,.lobby-grid .device-actions>details {
   grid-column:1/-1;
+}
+.device-actions>details {
+  grid-column:1/-1;
+  width:100%;
+}
+.device-actions>details button {
+  width:100%;
 }
 .lobby-grid .section-heading {
   flex-wrap:wrap;

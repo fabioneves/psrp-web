@@ -126,7 +126,7 @@ for (const resolution of ['720p', '1080p']) {
     await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
     await expect(page.locator('#resolution')).toHaveText(resolution === '720p' ? '1280 × 720' : '1920 × 1080');
     await page.getByRole('tab', { name: 'Sound', exact: true }).click();
-    await page.getByRole('button', { name: 'Enable sound' }).click();
+    if (await page.getByRole('button', { name: 'Enable sound' }).isVisible()) await page.getByRole('button', { name: 'Enable sound' }).click();
     await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
     expect(await page.evaluate(() => window.decoderPreferences.every(value => value === 'prefer-hardware'))).toBe(true);
     await page.locator('#fullscreen').click();
@@ -164,7 +164,7 @@ test('native H.264 runs in the video worker with direct audio output', async ({ 
   await expect(page.locator('#engine')).toHaveText('H.264 · hardware preferred · Canvas 2D · worker', { timeout: 30000 });
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
   await page.getByRole('tab', { name: 'Sound', exact: true }).click();
-  await page.getByRole('button', { name: 'Enable sound' }).click();
+  if (await page.getByRole('button', { name: 'Enable sound' }).isVisible()) await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
   const worker = page.workers().find(worker => worker.url().endsWith('/stream-worker.js'));
   expect(await worker.evaluate(() => globalThis.decoderPreferences)).toEqual(['prefer-hardware']);
@@ -224,7 +224,7 @@ test('real HEVC transport reaches a stubbed WebCodecs boundary with codec config
   expect(key.types).toEqual(expect.arrayContaining([32, 33, 34]));
   expect(received.chunks.some(chunk => chunk.type === 'delta')).toBe(true);
   await page.getByRole('tab', { name: 'Sound', exact: true }).click();
-  await page.getByRole('button', { name: 'Enable sound' }).click();
+  if (await page.getByRole('button', { name: 'Enable sound' }).isVisible()) await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
   await page.locator('#stop').click();
 });

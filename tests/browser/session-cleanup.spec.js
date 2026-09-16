@@ -24,6 +24,8 @@ test('disconnect all is authenticated, scoped to paired consoles and shows compl
     complete = async () => { await route.fulfill({ json: { stopped: 2, message: 'All server sessions disconnected.' } }); resolve(); };
   }));
   const button = page.locator('.device').getByRole('button', { name: 'Disconnect all sessions' });
+  await expect(button).toBeHidden();
+  await page.locator('.device').getByText('Trouble connecting?').click();
   await button.click();
   await expect(button).toBeDisabled();
   await expect(page.locator('#message')).toContainText('Disconnecting all sessions');

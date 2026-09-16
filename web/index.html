@@ -14,6 +14,7 @@
 </head>
 <body>
   <main>
+    <p id="restoring" class="splash" role="status">Restoring your session…</p>
     <section id="account" class="account-layout" hidden>
       <div class="intro"><a class="brand" href="/"><img src="/art/controller.svg" width="48" height="32" alt=""> PLAYER ONE <span>REMOTE PLAY</span></a>
         <p class="eyebrow">INSERT COIN? JUST SIGN IN.</p>
@@ -106,9 +107,14 @@
       <div class="settings-grid">
       <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>
       <label>Frame rate<select id="fps-profile"><option value="60" selected>60 fps</option><option value="30">30 fps</option></select></label>
-      <label>Frame pacing<select id="frame-pacing"><option value="smooth" selected>Smooth · small video buffer</option><option value="responsive">Responsive · lowest delay</option></select></label>
-      <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="3000">3 Mbps · low bandwidth</option><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · high quality</option><option value="30000">30 Mbps · 1080p quality</option></select></label>
       </div>
+      <details id="advanced-settings" class="advanced-settings"><summary>Advanced · bitrate and frame pacing</summary>
+      <div class="settings-grid">
+      <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="3000">3 Mbps · low bandwidth</option><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · high quality</option><option value="30000">30 Mbps · 1080p quality</option></select></label>
+      <label>Frame pacing<select id="frame-pacing"><option value="smooth" selected>Smooth · small video buffer</option><option value="responsive">Responsive · lowest delay</option></select></label>
+      </div>
+      <p class="hint">Bitrate follows the resolution unless you change it. Responsive pacing trades a little smoothness for the lowest delay.</p>
+      </details>
       <p class="hint">1080p depends on console support and browser CPU. Start with 720p60 and use the test stream to compare profiles.</p>
         <label class="check auto-quality"><input id="auto-quality" type="checkbox">Automatically adjust quality</label>
         <button id="apply-profile" hidden>Apply selected profile</button>
@@ -119,7 +125,7 @@
     </section>
 
     <section id="player" hidden>
-      <div class="player-bar"><div class="session-title"><img src="/art/console.svg" width="36" height="40" alt=""><div><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div></div><div class="player-actions"><button id="fullscreen" aria-label="Full screen" title="Full screen"><img src="/art/fullscreen.svg" width="20" height="20" alt=""><span>Full screen</span></button><button id="stop" class="danger" aria-label="Disconnect" title="Disconnect"><span class="stop-icon" aria-hidden="true"></span><span>Disconnect</span></button></div></div>
+      <div class="player-bar"><div class="session-title"><img src="/art/console.svg" width="36" height="40" alt=""><div><strong id="stream-title">Remote Play</strong><span class="session-status"><span id="stream-status" role="status">Connecting…</span><span id="stream-profile"></span></span></div></div><div class="player-actions"><button id="fullscreen" aria-label="Full screen" title="Full screen"><img src="/art/fullscreen.svg" width="20" height="20" alt=""><span>Full screen</span></button><button id="stop" class="danger" aria-label="Disconnect" title="Disconnect"><span class="stop-icon" aria-hidden="true"></span><span>Disconnect</span></button></div></div>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing video…</div>
       <p id="connection-message" class="stage-banner" role="status" aria-live="polite"></p>
       <button id="fullscreen-exit" hidden><img src="/art/fullscreen.svg" width="20" height="20" alt="">Exit fullscreen</button>

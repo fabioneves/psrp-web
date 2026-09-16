@@ -21,7 +21,7 @@ Open **http://localhost:8080** (or your server's IP and port).
 1. Create a local account or sign in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it.
 2. Select a nearby console, or choose **Add console** to enter its IP address.
 3. Choose **Sign in to PSN**, sign in on Sony's page, then paste its final redirect URL back into setup. The app saves and encodes your account ID. Choose **Pair automatically**; if it fails, use **Pair with a PIN** and enter the console's Link Device PIN.
-4. Click **Play**; a console in rest mode is woken automatically before connecting. **Wake up** wakes it without starting playback. **Stream settings** offers resolutions through 1080p60. **Start test stream** checks browser playback. **Disconnect** ends the session.
+4. Click **Play**; a console in rest mode is woken automatically before connecting. A sleeping console shows **Wake up**, a ready one **Put console to sleep**; the card's status dot is green when ready and amber in rest mode. **Stream settings** offers resolutions through 1080p60, with bitrate and frame pacing under **Advanced**. **Start test stream** checks browser playback. **Disconnect** ends the session.
 
 Manual account-ID entry and public online-name lookup are also available under PIN pairing. The public lookup provider may be unavailable; Sony sign-in does not depend on it. See [setup details and verification limits](docs/psn-setup.md).
 
@@ -314,7 +314,7 @@ by device. Its Annex B stream includes VPS/SPS/PPS on keyframes as required by t
 
 ## Disconnecting sessions
 
-**Disconnect all sessions** on a paired console card or in the player stops this
+**Disconnect all sessions**, under **Trouble connecting?** on a paired console card or in the player, stops this
 server's viewer and attached controllers for that console, including a connection
 still starting. It revokes pending tickets and waits for server cleanup. Browsers
 receive an explicit stop signal so they do not automatically reclaim the console.
@@ -403,7 +403,7 @@ See [source attribution](docs/sources.md), [architecture and protocol](docs/arch
 
 ## Player One interface
 
-The retro interface uses custom pixel art and self-hosted fonts. Video settings are always visible in the console library. Custom Canvas, H.264 (default), and H.265 tiles replace the codec dropdown. During a session, a smaller player sits beside the Control deck on wide screens; the deck stacks below on phones. Picture, Sound, and Controls tabs keep settings easy to reach, with touch buttons for short option lists. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
+The retro interface uses custom pixel art and self-hosted fonts. Video presets, codec tiles, resolution and frame rate are always visible in the console library; bitrate and frame pacing sit under an Advanced disclosure that opens automatically when they differ from the defaults. Custom Canvas, H.264 (default), and H.265 tiles replace the codec dropdown. During a session, a smaller player sits beside the Control deck on wide screens; the deck stacks below on phones. Picture, Sound, and Controls tabs keep settings easy to reach, with touch buttons for short option lists. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
 
 - **Full screen** hides app controls and statistics. Exit with Escape or double-click/double-tap on the picture. Browsers without the Fullscreen API use a viewport-filling theater view; browser chrome cannot be hidden by the app in that fallback.
 - **Start in fullscreen**, the labeled icon toggle to the left of each Play button, is off by default and saved per browser. When checked, Play enters fullscreen immediately while connecting. Test streams and input-only attachments keep their normal view.

@@ -290,7 +290,7 @@ test('1080p60 software profile renders with real stereo audio', async ({ page },
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
   await page.getByRole('tab', { name: 'Sound', exact: true }).click();
-  await page.getByRole('button', { name: 'Enable sound' }).click();
+  if (await page.getByRole('button', { name: 'Enable sound' }).isVisible()) await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect.poll(async () => Number(await page.locator('#audio-status').getAttribute('data-rms')), { timeout: 10000 }).toBeGreaterThan(0.01);
   await expect.poll(async () => Number(await page.locator('#fps').getAttribute('data-frames')), { timeout: 20000 }).toBeGreaterThan(600);
   const fps = Number.parseFloat(await page.locator('#fps').textContent());
@@ -498,7 +498,7 @@ test('audio fallback and automatic video worker fallback remain playable', async
   await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
   await expect(page.locator('#engine')).toHaveText('WebAssembly · Canvas 2D');
   await page.getByRole('tab', { name: 'Sound', exact: true }).click();
-  await page.getByRole('button', { name: 'Enable sound' }).click();
+  if (await page.getByRole('button', { name: 'Enable sound' }).isVisible()) await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect(page.locator('#audio-status')).toContainText('Web Audio fallback', { timeout: 10000 });
   await expect.poll(async () => Number(await page.locator('#audio-status').getAttribute('data-rms'))).toBeGreaterThan(0.01);
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();

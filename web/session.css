@@ -23,7 +23,6 @@
 .session-title>img { flex-shrink:0; image-rendering:pixelated; }
 .session-title>div { min-width:0; }
 .player-bar strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; font:600 1.4rem/1.2 Pixelify,monospace; }
-#stream-status { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .player-actions { flex-wrap:nowrap; flex-shrink:0; gap:8px; }
 .player-actions button { display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px; white-space:nowrap; padding:8px 12px; }
 .stop-icon { display:block; width:12px; height:12px; background:var(--red); box-shadow:2px 2px #803849; }

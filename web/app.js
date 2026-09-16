@@ -119,6 +119,7 @@ async function run(button, action, clearMessage = true) {
   finally { button.disabled = false; button.removeAttribute('aria-busy'); }
 }
 function showAccount() {
+  $('restoring')?.remove();
   $('account').hidden = !!token;
   $('library').hidden = !token;
   $('logout').hidden = !token;
@@ -170,10 +171,23 @@ async function restoreSession() {
   finally { showAccount(); }
 }
 
+const defaultBitrate = { '360p': '3000', '540p': '6000', '720p': '10000', '1080p': '20000' };
+function consoleState(status) {
+  if (/standby/i.test(status || '')) return 'rest';
+  if (/^ok$/i.test(status || '')) return 'ready';
+  return 'unknown';
+}
 function consoleStatus(status) {
-  if (/standby/i.test(status || '')) return 'Rest mode';
-  if (/^ok$/i.test(status || '')) return 'Ready';
-  return status || 'Paired';
+  return { rest: 'Rest mode', ready: 'Ready' }[consoleState(status)] || status || 'Paired';
+}
+function setDeviceStatus(card, hostType, ip, status) {
+  const state = consoleState(status);
+  const detail = card.querySelector('.device-status');
+  detail.replaceChildren();
+  const dot = document.createElement('span'); dot.className = 'status-dot'; dot.dataset.state = state; dot.setAttribute('aria-hidden', 'true');
+  detail.append(dot, `${hostType || 'Console'} · ${ip || 'IP unavailable'} · ${consoleStatus(status)}`);
+  card.querySelector('.wake').hidden = state === 'ready';
+  card.querySelector('.sleep').hidden = state === 'rest';
 }
 function fullscreenToggle() {
   const label = document.createElement('label'); label.className = 'check fullscreen-toggle'; label.title = 'Start in fullscreen';
@@ -210,11 +224,11 @@ async function refresh() {
     const icon = document.createElement('span'); icon.className = 'device-icon'; icon.textContent = ''; icon.setAttribute('aria-hidden', 'true');
     const info = document.createElement('div');
     const title = document.createElement('h2'); title.textContent = device.hostName || device.hostType || 'PlayStation';
-    const detail = document.createElement('p'); detail.textContent = `${device.hostType || 'Console'} · ${device.ipAddress || 'IP unavailable'} · ${consoleStatus(device.status)}`;
+    const detail = document.createElement('p'); detail.className = 'device-status';
     info.append(title, detail);
     const button = document.createElement('button'); button.className = 'primary'; button.textContent = 'Play'; button.disabled = !device.isRegistered;
     button.onclick = () => run(button, () => play(device.hostId, title.textContent, false, null, device.hostType));
-    const wake = document.createElement('button'); wake.className = 'quiet'; wake.textContent = 'Wake up';
+    const wake = document.createElement('button'); wake.className = 'quiet wake'; wake.textContent = 'Wake up';
     wake.disabled = !device.isRegistered;
     wake.onclick = () => run(wake, async () => {
       wake.textContent = 'Waking…';
@@ -225,13 +239,18 @@ async function refresh() {
     const disconnect = document.createElement('button'); disconnect.className = 'quiet danger'; disconnect.textContent = 'Disconnect all sessions';
     disconnect.disabled = !device.isRegistered;
     disconnect.onclick = () => run(disconnect, () => disconnectConsole(device.hostId));
-    const actions = document.createElement('div'); actions.className = 'device-actions'; const sleep = document.createElement('button'); sleep.className = 'quiet'; sleep.textContent = 'Put console to sleep';
+    const recovery = document.createElement('details'); recovery.className = 'device-recovery';
+    const summary = document.createElement('summary'); summary.textContent = 'Trouble connecting?';
+    const recoveryHint = document.createElement('span'); recoveryHint.className = 'hint'; recoveryHint.textContent = 'Release every session this server holds for the console, then press Play again.';
+    recovery.append(summary, recoveryHint, disconnect);
+    const actions = document.createElement('div'); actions.className = 'device-actions'; const sleep = document.createElement('button'); sleep.className = 'quiet sleep'; sleep.textContent = 'Put console to sleep';
     sleep.disabled = !device.isRegistered;
     sleep.onclick = () => run(sleep, () => sleepConsole(device.hostId));
     const playActions = document.createElement('div'); playActions.className = 'play-actions';
     playActions.append(fullscreenToggle(), button);
-    actions.append(playActions, wake, sleep, disconnect);
+    actions.append(playActions, wake, sleep, recovery);
     card.append(icon, info, actions); $('devices').append(card);
+    setDeviceStatus(card, device.hostType, device.ipAddress, device.status);
   }
   void discoverConsoles();
 }
@@ -318,8 +337,8 @@ async function discoverConsoles(hostIp = '') {
       : 'No consoles found by automatic discovery. Enter the console IP address above and choose Check IP address to search directly.';
     const cards = new Map([...$('devices').children].map(card => [card.dataset.hostId, card]));
     for (const console of consoles) {
-      const card = cards.get(console.uuid);
-      if (card) card.querySelector('p').textContent = `${console.hostType || 'Console'} · ${console.ip} · ${consoleStatus(console.status)}`;
+      const card = console.uuid ? cards.get(console.uuid) : null;
+      if (card) setDeviceStatus(card, console.hostType, console.ip, console.status);
       const button = document.createElement('button'); button.type = 'button';
       button.textContent = `${console.name} · ${console.ip}`;
       button.onclick = () => {
@@ -423,6 +442,8 @@ function showPlayer({ hostId, title, demo, inputSession, profile }) {
   $('apply-profile').hidden = !!inputSession;
   $('stream-title').textContent = demo && !inputSession ? `${profile.resolution}${profile.fps} · Browser test` : title;
   $('stream-status').textContent = 'Connecting…';
+  $('stream-profile').textContent = '';
+  $('enable-audio').hidden = false;
 }
 async function openStream({ hostId, title, demo, inputSession, hostType, profile }) {
   stop(true);
@@ -504,6 +525,8 @@ function onStreamMessage(message) {
     $('timing-status').dataset.metrics = JSON.stringify(message);
     $('resolution').textContent = `${message.width} × ${message.height}`;
     $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}`;
+    if (target && message.totalFrames)
+      $('stream-profile').textContent = `${target.profile.resolution}${target.profile.fps} · ${{ mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[activeCodec]} · ${message.mbps.toFixed(1)} Mbps`;
     if (message.totalFrames) {
       $('connecting').hidden = true;
       $('stream-status').textContent = 'Playing';
@@ -639,6 +662,7 @@ function onAudioMessage(message) {
     worker?.postMessage({ type: 'audio-enabled', enabled: audio?.context.state === 'running' });
     if (audio?.context.state !== 'running') audio?.reset();
     $('audio-status').textContent = message.state === 'suspended' ? 'Tap Enable sound to start audio.' : `Audio ${message.state}`;
+    $('enable-audio').hidden = message.state === 'running';
   }
 }
 function syncAudio() { audio?.volume($('mute').checked ? 0 : Number($('volume').value)); }
@@ -650,8 +674,9 @@ document.addEventListener('pointerdown', () => { if (audio?.context.state === 's
 document.addEventListener('keydown', () => { if (audio?.context.state === 'suspended') audio.resume(); });
 
 $('resolution-profile').onchange = () => {
-  $('bitrate').value = { '360p': '3000', '540p': '6000', '720p': '10000', '1080p': '20000' }[$('resolution-profile').value];
+  $('bitrate').value = defaultBitrate[$('resolution-profile').value];
 };
+$('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
 
 function updateQuality(reason = '') {
   const profile = target?.profile || selectedProfile();
