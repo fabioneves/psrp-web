@@ -430,10 +430,6 @@ main {
   margin-right:10px;
 }
 .connection-feedback {
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  gap:12px;
-  align-items:center;
   margin-bottom:12px;
 }
 #connection-message {
@@ -1091,7 +1087,7 @@ h1,h2 {
 .lobby-grid .device-actions button {
   font-size:.75rem;
 }
-.lobby-grid .device-actions button:nth-child(3) {
+.lobby-grid .device-actions>button:last-child {
   grid-column:1/-1;
 }
 .lobby-grid .section-heading {

@@ -39,7 +39,6 @@
         <p>Attach this device as a controller. The other screen keeps playing.</p>
         <button id="attach-input" class="primary">Attach input only</button>
       </section>
-      <label class="check launch-preference"><input id="auto-fullscreen" type="checkbox"><img src="/art/fullscreen.svg" width="20" height="20" alt="">Start in fullscreen</label>
       <div id="devices" class="device-list"></div>
       <section id="nearby-panel" hidden>
         <h2>Nearby consoles</h2>
@@ -131,7 +130,7 @@
         <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button></div>
       </aside></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
-      <div class="connection-feedback"><p id="connection-message" role="status" aria-live="polite"></p><button id="retry-stream" disabled>Try again</button></div>
+      <div class="connection-feedback"><p id="connection-message" role="status" aria-live="polite"></p></div>
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
       <aside id="session-sidebar" aria-label="Session settings">
         <div class="deck-heading"><div><p class="eyebrow">PLAYER ONE / LIVE</p><h2>Control deck</h2></div><img src="/art/session-deck.svg" width="100" height="40" alt=""></div>

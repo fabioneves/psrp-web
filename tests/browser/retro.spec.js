@@ -80,7 +80,7 @@ test('theater fallback keeps fullscreen clean and touch gestures can exit it', a
   await register(page);
   await page.route('**/api/software/tickets', route => route.fulfill({ status: 409, json: { message: 'Test console busy.' } }));
   await page.locator('#demo').click();
-  await expect(page.locator('#retry-stream')).toBeEnabled();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
   await page.locator('#show-controls').check();
   await page.locator('#fullscreen').click();
   await expect(page.locator('#player')).toHaveClass(/theater/);
@@ -115,7 +115,7 @@ test('control deck sits beside a smaller player and keeps its toolbar on one row
   await register(page);
   await page.route('**/api/software/tickets', route => route.fulfill({ status: 409, json: { message: 'Test console busy.' } }));
   await page.locator('#demo').click();
-  await expect(page.locator('#retry-stream')).toBeEnabled();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
   const stage = await page.locator('#stage').boundingBox();
   const sidebar = await page.locator('#session-sidebar').boundingBox();
   expect(sidebar.x).toBeGreaterThan(stage.x + stage.width);
@@ -151,15 +151,15 @@ for (const fallback of [false, true]) {
     await page.locator('#refresh').click();
     const pending = [];
     await page.route('**/api/software/tickets', route => { pending.push(route); });
-    await expect(page.locator('#auto-fullscreen')).not.toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Start in fullscreen', exact: true })).not.toBeChecked();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect.poll(() => pending.length).toBe(1);
     expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
     await expect(page.locator('#player')).not.toHaveClass(/theater/);
     await page.locator('#stop').click();
-    await page.locator('#auto-fullscreen').check();
+    await page.locator('.fullscreen-toggle').click();
     await page.reload();
-    await expect(page.locator('#auto-fullscreen')).toBeChecked();
+    await expect(page.getByRole('checkbox', { name: 'Start in fullscreen', exact: true })).toBeChecked();
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect.poll(() => pending.length).toBe(2);
     if (fallback) await expect(page.locator('#player')).toHaveClass(/theater/);
@@ -223,4 +223,46 @@ test('three translucent HUD layouts show live data, stay compact and switch with
   await expect(page.locator('#library')).toBeVisible();
   await expect(page.locator('#hud-style')).toHaveValue('horizontal');
   expect(await page.locator('#debug-mode').isChecked()).toBe(true);
+});
+
+test('each Play button has a labeled fullscreen toggle on its left, with shared saved state', async ({ page }) => {
+  await register(page);
+  const devices = ['Living room', 'Office'].map((hostName, index) => ({ hostId: `layout-${index}`, hostName, hostType: 'PS5', isRegistered: true, status: 'OK' }));
+  await page.route('**/api/playstation/my-devices', route => route.fulfill({ json: devices }));
+  await page.locator('#refresh').click();
+  const toggles = page.getByRole('checkbox', { name: 'Start in fullscreen', exact: true });
+  await expect(toggles).toHaveCount(2);
+  await expect(toggles.first()).not.toBeChecked();
+  await page.locator('.fullscreen-toggle').first().click();
+  await expect(page.locator('.fullscreen-toggle').first()).toHaveClass(/is-selected/);
+  await expect(toggles.last()).toBeChecked();
+  await page.reload();
+  await expect(toggles.first()).toBeChecked();
+  await expect(toggles.last()).toBeChecked();
+  for (const width of [1440, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1080 });
+    for (const row of await page.locator('.play-actions').all()) {
+      const toggle = row.locator('.fullscreen-toggle');
+      await expect(toggle).toHaveText('Start in fullscreen');
+      await expect(toggle).toHaveClass(/is-selected/);
+      expect(await toggle.locator('input').evaluate(element => getComputedStyle(element).clipPath)).toBe('inset(50%)');
+      await expect(toggle.locator('img')).toBeVisible();
+      const check = await toggle.boundingBox(), play = await row.getByRole('button', { name: 'Play', exact: true }).boundingBox();
+      expect(check.x + check.width).toBeLessThan(play.x);
+      expect(check.y).toBe(play.y);
+      expect(check.height).toBeGreaterThanOrEqual(48);
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await page.screenshot({ path: '/tmp/psrp-compact-play-mobile.png', fullPage: true });
+  await toggles.first().focus();
+  await page.keyboard.press('Tab');
+  await expect(page.locator('.play-actions').first().getByRole('button', { name: 'Play', exact: true })).toBeFocused();
+  await page.locator('.fullscreen-toggle').last().click();
+  await expect(page.locator('.fullscreen-toggle').first()).not.toHaveClass(/is-selected/);
+  await toggles.first().focus();
+  await page.keyboard.press('Space');
+  await expect(toggles.last()).toBeChecked();
+  await page.keyboard.press('Space');
+  await expect(toggles.first()).not.toBeChecked();
 });

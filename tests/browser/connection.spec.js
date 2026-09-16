@@ -41,7 +41,7 @@ test('retry keeps the player, settings, scroll position and readable message in 
   await expect(page.locator('#library')).toBeVisible();
 });
 
-test('busy feedback stays visible and retries only when the user asks', async ({ page }) => {
+test('busy feedback stays visible without a retry button and a new launch reconnects', async ({ page }) => {
   await register(page);
   let requests = 0;
   const message = 'Another stream is still active on this server. Disconnect that stream before trying again.';
@@ -52,19 +52,20 @@ test('busy feedback stays visible and retries only when the user asks', async ({
   await page.locator('#demo').click();
   await expect(page.locator('#connection-message')).toHaveText(message);
   await expect(page.locator('#stream-status')).toHaveText('Connection failed');
-  await expect(page.locator('#retry-stream')).toBeEnabled();
   const before = await page.locator('#stage').boundingBox();
   await page.waitForTimeout(1200);
   expect(requests).toBe(1);
-  await page.locator('#retry-stream').click();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await page.locator('#stop').click();
+  await page.locator('#demo').click();
   await expect.poll(() => requests).toBe(2);
-  await expect(page.locator('#retry-stream')).toBeEnabled();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
   expect(await page.locator('#stage').boundingBox()).toEqual(before);
   await expect(page.locator('#connection-message')).toHaveText(message);
   await page.locator('#stop').click();
 });
 
-test('exhausted retries leave the failure on screen with a manual retry action', async ({ page }) => {
+test('exhausted retries leave readable failure and disconnect guidance', async ({ page }) => {
   await register(page);
   await page.clock.install();
   let requests = 0;
@@ -82,7 +83,9 @@ test('exhausted retries leave the failure on screen with a manual retry action',
   await expect(page.locator('#player')).toBeVisible();
   await expect(page.locator('#library')).toBeHidden();
   await expect(page.locator('#connection-message')).toContainText('Console did not respond. Automatic reconnection stopped after five attempts.');
-  await expect(page.locator('#retry-stream')).toBeEnabled();
+  await expect(page.locator('#connection-message')).toContainText('Disconnect and press Play when ready.');
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
   await page.locator('#stop').click();
 });
 

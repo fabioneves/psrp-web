@@ -28,7 +28,7 @@ for (const fallback of [true, false]) {
     await register(page);
     await page.route('**/api/software/tickets', route => route.fulfill({ status: 409, json: { message: 'Test connection feedback.' } }));
     await page.locator('#demo').click();
-    await expect(page.locator('#retry-stream')).toBeEnabled();
+    await expect(page.locator('#stream-status')).toHaveText('Connection failed');
     await page.locator('#fullscreen').click();
     const active = () => page.evaluate(() => !!document.fullscreenElement || document.getElementById('player').classList.contains('theater'));
     await expect.poll(active).toBe(true);
@@ -65,7 +65,7 @@ for (const fallback of [true, false]) {
     await register(page);
     await page.route('**/api/software/tickets', route => route.fulfill({ status: 409, json: { message: 'Test connection feedback.' } }));
     await page.locator('#demo').click();
-    await expect(page.locator('#retry-stream')).toBeEnabled();
+    await expect(page.locator('#stream-status')).toHaveText('Connection failed');
     await page.locator('#fullscreen').click();
     const exit = page.locator('#fullscreen-exit');
     await expect(exit).toBeHidden();
@@ -94,7 +94,7 @@ for (const fallback of [true, false]) {
     let tickets = 0;
     await page.route('**/api/software/tickets', route => { tickets++; return route.fulfill({ status: 409, json: { message: 'Test connection feedback.' } }); });
     await page.locator('#demo').click();
-    await expect(page.locator('#retry-stream')).toBeEnabled();
+    await expect(page.locator('#stream-status')).toHaveText('Connection failed');
     await page.locator('#fullscreen').click();
     const session = await context.newCDPSession(page);
     const tap = async count => {

@@ -36,7 +36,9 @@ try {
   if (localStorage.getItem('remote-play:video-mode') === null && localStorage.getItem('remote-play:hardware-acceleration') === 'false')
     $('video-mode').value = 'mpeg1';
 } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'auto-fullscreen', 'hud-style'];
+let startInFullscreen = false;
+try { startInFullscreen = localStorage.getItem('remote-play:auto-fullscreen') === 'true'; } catch {}
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -162,6 +164,24 @@ function consoleStatus(status) {
   if (/^ok$/i.test(status || '')) return 'Ready';
   return status || 'Paired';
 }
+function fullscreenToggle() {
+  const label = document.createElement('label'); label.className = 'check fullscreen-toggle'; label.title = 'Start in fullscreen';
+  const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = startInFullscreen;
+  checkbox.setAttribute('aria-label', 'Start in fullscreen');
+  checkbox.onchange = () => {
+    startInFullscreen = checkbox.checked;
+    try { localStorage.setItem('remote-play:auto-fullscreen', String(startInFullscreen)); } catch {}
+    for (const input of document.querySelectorAll('.fullscreen-toggle input')) {
+      input.checked = startInFullscreen;
+      input.closest('label').classList.toggle('is-selected', startInFullscreen);
+    }
+  };
+  const icon = document.createElement('img'); icon.src = '/art/fullscreen.svg'; icon.width = icon.height = 20; icon.alt = '';
+  const text = document.createElement('span'); text.textContent = 'Start in fullscreen';
+  label.classList.toggle('is-selected', startInFullscreen);
+  label.append(checkbox, icon, text);
+  return label;
+}
 async function refresh() {
   await refreshActive();
   const devices = await api('playstation/my-devices');
@@ -197,7 +217,9 @@ async function refresh() {
     const actions = document.createElement('div'); actions.className = 'device-actions'; const sleep = document.createElement('button'); sleep.className = 'quiet'; sleep.textContent = 'Put console to sleep';
     sleep.disabled = !device.isRegistered;
     sleep.onclick = () => run(sleep, () => sleepConsole(device.hostId));
-    actions.append(wake, sleep, disconnect, button);
+    const playActions = document.createElement('div'); playActions.className = 'play-actions';
+    playActions.append(fullscreenToggle(), button);
+    actions.append(playActions, wake, sleep, disconnect);
     card.append(icon, info, actions); $('devices').append(card);
   }
   void discoverConsoles();
@@ -326,7 +348,7 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
   showPlayer(target);
   $('player').scrollIntoView({ block: 'start' });
   selectSessionTab(inputSession ? 'input-panel' : 'picture-panel');
-  if (hostId && !inputSession && $('auto-fullscreen').checked) void enterFullscreen();
+  if (hostId && !inputSession && startInFullscreen) void enterFullscreen();
   if (!inputSession) {
     try {
       const output = new AudioOutput(message => { if (audio === output) onAudioMessage(message); });
@@ -360,7 +382,6 @@ async function connect() {
 function failConnection(message) {
   stop(true);
   retry.reset();
-  $('retry-stream').disabled = false;
   $('stream-status').textContent = 'Connection failed';
   $('connecting').textContent = 'Connection failed';
   notify(message);
@@ -370,7 +391,7 @@ function reconnect(message, workerFailed = false) {
   if (sleepingHost && target.hostId === sleepingHost) { stop(); return; }
   if (workerFailed) forceMain = true;
   stop(true);
-  if (!retry.schedule()) { failConnection(`${message} Automatic reconnection stopped after five attempts. Choose Try again when ready.`); return; }
+  if (!retry.schedule()) { failConnection(`${message} Automatic reconnection stopped after five attempts. Disconnect and press Play when ready.`); return; }
   $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
 }
@@ -389,7 +410,6 @@ function showPlayer({ hostId, title, demo, inputSession, profile }) {
   if ($('profile-settings').parentElement !== $('playing-profile')) $('playing-profile').append($('profile-settings'));
   $('performance-details').hidden = !!inputSession;
   $('apply-profile').hidden = !!inputSession;
-  $('retry-stream').disabled = true;
   $('stream-title').textContent = demo && !inputSession ? `${profile.resolution}${profile.fps} · Browser test` : title;
   $('stream-status').textContent = 'Connecting…';
 }
@@ -517,7 +537,6 @@ function stop(preserveTarget = false) {
 }
 $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true));
 $('stop').onclick = () => stop();
-$('retry-stream').onclick = () => { retry.reset(); void connect(); };
 $('show-controls').onchange = () => { resetFullscreenGestures(); resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
 $('controls').hidden = !$('show-controls').checked;
 async function enterFullscreen() {

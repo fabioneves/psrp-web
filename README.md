@@ -361,8 +361,8 @@ clients retry while the same console stream reconnects.
 
 Connection failures retry up to five times with a fresh ticket and exponential
 backoff. The player, fullscreen state, settings and scroll position stay in place
-during retries. Connection messages remain visible, and **Try again** becomes
-available when retries stop. Authentication, pairing and active-viewer conflicts
+during retries. Connection messages remain visible when retries stop; disconnect
+and press **Play** to start another connection. Authentication, pairing and active-viewer conflicts
 show their error without repeatedly reconnecting. New connections wait up to eight
 seconds for the previous viewer to release its slot; a still-active stream gets
 an explicit conflict message. Disconnect cancels retries. A failed video worker switches automatically
@@ -406,7 +406,7 @@ See [source attribution](docs/sources.md), [architecture and protocol](docs/arch
 The retro interface uses custom pixel art and self-hosted fonts. Video settings are always visible in the console library. Custom Canvas, H.264 (default), and H.265 tiles replace the codec dropdown. During a session, a smaller player sits beside the Control deck on wide screens; the deck stacks below on phones. Picture, Sound, and Controls tabs keep settings easy to reach, with touch buttons for short option lists. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
 
 - **Full screen** hides app controls and statistics. Exit with Escape or double-click/double-tap on the picture. Browsers without the Fullscreen API use a viewport-filling theater view; browser chrome cannot be hidden by the app in that fallback.
-- **Start in fullscreen** in the console list is off by default and saved per browser. When checked, Play enters fullscreen immediately while connecting. Test streams and input-only attachments keep their normal view.
+- **Start in fullscreen**, the labeled icon toggle to the left of each Play button, is off by default and saved per browser. When checked, Play enters fullscreen immediately while connecting. Test streams and input-only attachments keep their normal view.
 - **Touch fullscreen exit:** swipe down on the picture to return to the Control deck. With touch controls off, a tap also reveals a large **Exit fullscreen** button for five seconds. Double-tap and Escape remain available. In fullscreen, **two-finger tap** toggles debug, **three-finger tap** toggles touch controls, and **swipe left/right** cycles HUD layouts while debug is on. These gestures work with native fullscreen and the iPhone-style theater fallback.
 - **Touch controls** are off by default and can be enabled before fullscreen. They remain available over the video when enabled.
 - **Debug HUD** (or **Shift+D**) has three saved layouts, selected with illustrated buttons: **Detailed** keeps all metrics and the FPS graph; **Minimal** shows FPS, codec, and resolution; **Horizontal** uses a slim strip, adding network RTT and bitrate when space allows. All have translucent backgrounds. **Shift+H** cycles layouts while debug is on, including in fullscreen. Compact layouts let taps pass through to the picture. Detailed includes frame interval p95, estimated video age, decode/draw times, audio queue/underruns and Copy diagnostics; copied data contains no account credentials or stream tickets.
