@@ -62,3 +62,16 @@ test('a late callback cannot present a newer request early', () => {
   assert.equal(draws, 2);
   presenter.destroy();
 });
+
+test('metrics count presentation stalls over 2.5 expected intervals and reset each report', () => {
+  const timers = clock();
+  let now = 0;
+  timers.performance = { now: () => now };
+  const presenter = new FramePresenter(() => false, timers, 10);
+  for (const at of [0, 10, 20, 60, 70]) { now = at; presenter.request(); timers.frame(); }
+  const metrics = presenter.metrics();
+  assert.equal(metrics.stalls, 1);
+  assert.equal(metrics.stallMs, 30);
+  assert.equal(metrics.frameMaxMs, 40);
+  assert.equal(presenter.metrics().stalls, 0);
+});

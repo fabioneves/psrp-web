@@ -99,6 +99,7 @@ function notify(message, tone = 'info') {
   if (message && tone === 'info') toastTimer = setTimeout(() => { $('toast').dataset.open = 'false'; }, 8000);
 }
 $('dismiss-message').onclick = () => { clearTimeout(toastTimer); $('toast').dataset.open = 'false'; };
+for (const link of document.querySelectorAll('.tesla-link')) link.href = `https://www.youtube.com/redirect?q=${encodeURIComponent(`${location.origin}/`)}`;
 async function api(path, body, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout || 15000);
@@ -628,7 +629,7 @@ function onStreamMessage(message) {
     resetInputs(); gamepads.reset();
     if (message.inputOnly) $('stream-status').textContent = 'Controller connected';
   } else if (message.type === 'stats') {
-    log.videoStats(message, 1000 / (target?.profile.fps || 60));
+    log.videoStats(message);
     renderEvents();
     updateHud(message, activeCodec);
     if (message.totalFrames > 600) retry.reset();

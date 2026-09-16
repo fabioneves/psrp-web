@@ -41,6 +41,7 @@
 #debug-overlay[data-layout=horizontal] .hud-grid dt::after { content:attr(data-short); font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; font-size:9px; color:var(--hud-color); }
 #debug-overlay[data-layout=horizontal] .hud-grid dd .unit { display:none; }
+#debug-overlay[data-layout=horizontal] .hud-grid dl>div:has(#hud-decode) { display:none; }
 #debug-overlay[data-layout=horizontal] #hud-health { display:block; font-size:9px; margin:0; white-space:nowrap; color:var(--hud-color); }
 #debug-overlay[data-layout=horizontal] .hud-note { display:none; }
 #player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; padding-top:calc(4px + env(safe-area-inset-top, 0px)); padding-left:calc(6px + env(safe-area-inset-left, 0px)); padding-right:calc(6px + env(safe-area-inset-right, 0px)); }

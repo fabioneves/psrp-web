@@ -140,7 +140,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     } catch (error) { options.onError?.(error.message); }
     finally { frame.close(); }
     return frames.pending;
-  });
+  }, globalThis, 1000 / (options.fps || 60));
   const decoder = new VideoDecoder({
     output(frame) {
       if (stopped) { frame.close(); return; }

@@ -50,6 +50,13 @@ docker compose down
 
 `/healthz` returns `{"status":"ready"}` when the application can reach PostgreSQL. `docker compose down` preserves the named data volumes.
 
+### Tesla theater
+
+The sign-in page and the library carry an **Open in Tesla theater** link. It goes
+through YouTube's redirect so the car opens the app in its fullscreen theater
+browser; the car must be parked. Sign in there once and the saved session
+restores on later launches.
+
 ## Pairing and network setup
 
 The Docker server must be able to reach the console on your home network. The browser reaches only this web server. Set a DHCP reservation for the console to keep its IP stable.
@@ -278,7 +285,7 @@ change saved controller preferences. Settings apply on the next Play/test launch
 
 Enable **Automatically adjust quality** to let playback reduce bitrate for network queues, or resolution for browser overload. The chosen profile is the ceiling. It keeps 60 fps where possible, uses 30 fps at the minimum resolution if necessary, and restores quality slowly after sustained healthy playback. Changes reconnect the Remote Play session briefly; attached controllers reconnect through their existing retry flow.
 
-During playback, expand **Stream diagnostics** below the player for separate processing costs, queue delays, console→server packet loss and keyframe requests, and a list of recent stalls, superseded frames, audio underruns and reconnects. **Download diagnostics log** saves the last five minutes of per-second metrics and every event as JSON for analysis; the debug HUD has the same button. The server logs a console stream summary with the loss counters when a session ends. Use the **Picture** tab for the selected profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
+The debug HUD reports server-to-canvas age, network round trip, arrival jitter (p95 and longest gap between video packets reaching the browser), presentation stalls per second, frame interval p95 and max, console packet loss and keyframe requests, and audio queue and underruns. During playback, expand **Stream diagnostics** below the player for separate processing costs, queue delays, console→server packet loss and keyframe requests, and a list of recent stalls, superseded frames, audio underruns and reconnects. **Download diagnostics log** saves the last five minutes of per-second metrics and every event as JSON for analysis; the debug HUD has the same button. The server logs a console stream summary with the loss counters when a session ends. Use the **Picture** tab for the selected profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
 Smooth frame pacing primes one frame interval, keeps up to three decoded images to absorb uneven delivery, and skips an image that has waited 2.5 intervals when a newer one is ready. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 

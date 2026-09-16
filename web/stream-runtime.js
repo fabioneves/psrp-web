@@ -4,10 +4,13 @@ import { now, StreamClock, unpackMedia } from './timing.js';
 
 export async function startStream(canvas, url, report, videoCodec = 'mpeg1', hardwareAcceleration = 'prefer-hardware', presentation = {}) {
   const clock = new StreamClock();
-  let videoAgeMs = null, transportMs = null, serverQueueMs = 0;
+  let videoAgeMs = null, transportMs = null, serverQueueMs = 0, lastArrival = null;
+  let gaps = [], transports = [];
+  const percentile = (values, share) => values.length ? [...values].sort((a, b) => a - b)[Math.ceil(values.length * share) - 1] : null;
   const decoder = canvas ? await (videoCodec !== 'mpeg1' ? createNativeDecoder : createDecoder)(canvas, message => {
-    report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs });
-    serverQueueMs = 0;
+    report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs,
+      arrivalP95Ms: percentile(gaps, 0.95), arrivalMaxMs: gaps.length ? Math.max(...gaps) : null, transportP95Ms: percentile(transports, 0.95) });
+    serverQueueMs = 0; gaps = []; transports = [];
   }, {
     ...presentation, videoCodec, hardwareAcceleration,
     onError(message) { fail(message, failureType()); },
@@ -47,7 +50,13 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
       } else {
         const media = unpackMedia(event.data);
         if (media.kind !== 2 && (media.kind === 3) !== (videoCodec !== 'mpeg1')) throw new Error('The server sent an unexpected video format. Reload the page.');
-        if (media.kind !== 2) transportMs = clock.age(media.sent);
+        if (media.kind !== 2) {
+          transportMs = clock.age(media.sent);
+          if (transportMs != null) transports.push(transportMs);
+          const arrival = performance.now();
+          if (lastArrival != null) gaps.push(arrival - lastArrival);
+          lastArrival = arrival;
+        }
         serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
         if (media.kind === 2)
           report({ type: 'audio', bytes: media.bytes, timestamp: media.timestamp });

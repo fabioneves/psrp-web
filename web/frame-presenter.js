@@ -1,7 +1,9 @@
 export class FramePresenter {
-  constructor(present, timers = globalThis) {
+  constructor(present, timers = globalThis, expectedInterval = 1000 / 60) {
     this.present = present;
     this.timers = timers;
+    this.expected = expectedInterval;
+    this.stalls = 0; this.stallMs = 0;
     this.animation = typeof timers.requestAnimationFrame === 'function';
     this.pending = false;
     this.stopped = false;
@@ -20,8 +22,10 @@ export class FramePresenter {
       const now = this.timers.performance?.now() ?? performance.now();
       const result = this.present();
       if (result !== 'waiting' && this.lastDraw != null) {
-        this.intervals.push(now - this.lastDraw);
+        const interval = now - this.lastDraw;
+        this.intervals.push(interval);
         if (this.intervals.length > 120) this.intervals.shift();
+        if (interval > this.expected * 2.5) { this.stalls++; this.stallMs += interval - this.expected; }
       }
       if (result !== 'waiting') this.lastDraw = now;
       if (result === true || result === 'waiting') this.request();
@@ -36,8 +40,10 @@ export class FramePresenter {
   }
   metrics() {
     const sorted = [...this.intervals].sort((a, b) => a - b);
-    return { frameP95Ms: sorted.length ? sorted[Math.ceil(sorted.length * 0.95) - 1] : null,
-      frameMaxMs: sorted.length ? sorted.at(-1) : null };
+    const result = { frameP95Ms: sorted.length ? sorted[Math.ceil(sorted.length * 0.95) - 1] : null,
+      frameMaxMs: sorted.length ? sorted.at(-1) : null, stalls: this.stalls, stallMs: Math.round(this.stallMs) };
+    this.stalls = 0; this.stallMs = 0;
+    return result;
   }
   cancel() {
     this.pending = false;

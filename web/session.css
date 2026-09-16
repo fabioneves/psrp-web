@@ -1,6 +1,6 @@
 .banner-nav { position:relative; display:flex; align-items:center; justify-content:space-between; gap:12px; padding-bottom:16px; border-bottom:1px solid #8eb8ff33; margin-bottom:24px; }
 .banner-nav .brand { text-shadow:2px 2px #050a18; }
-.banner-nav #logout { flex-shrink:0; min-height:48px; }
+.banner-nav #logout,.banner-nav a.tesla-link { flex-shrink:0; min-height:48px; }
 .lobby-banner { padding-top:16px; }
 .intro>.brand { margin-bottom:30px; }
 .choice-field { min-width:0; border:0; padding:0; margin:0; }
@@ -80,6 +80,7 @@
   .banner-nav .brand { font-size:1rem; gap:8px; }
   .banner-nav .brand img { width:28px; }
   .banner-nav #logout { padding:8px; font-size:.75rem; }
+  .banner-nav a.tesla-link { display:none; }
   .lobby-banner { padding:12px 14px 24px; }
   .banner-nav { gap:6px; margin-bottom:24px; }
   .lobby-grid .settings-grid { grid-template-columns:1fr; }

@@ -64,7 +64,7 @@ export async function createDecoder(canvas, report, options = {}) {
     frame.take(); pool.push(frame);
     return frames.pending;
   };
-  const presentation = new FramePresenter(present);
+  const presentation = new FramePresenter(present, globalThis, 1000 / (options.fps || 60));
   const timer = setInterval(() => {
     const elapsed = performance.now() - start;
     report({ type: 'stats', ...presentation.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,

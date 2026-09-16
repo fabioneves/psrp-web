@@ -4,7 +4,7 @@ const set = (id, text) => { const element = $(id); (element.querySelector('.valu
 let history = [], video = null, audio = null, console_ = null;
 export function resetHud() {
   history = []; video = audio = console_ = null;
-  for (const id of ['hud-fps', 'hud-codec', 'hud-size', 'hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-max', 'hud-decode', 'hud-audio', 'hud-loss']) set(id, '—');
+  for (const id of ['hud-fps', 'hud-codec', 'hud-size', 'hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-max', 'hud-decode', 'hud-audio', 'hud-loss', 'hud-jitter', 'hud-stall']) set(id, '—');
   $('fps-history').setAttribute('points', '');
   $('hud-health').textContent = 'Waiting for audio';
 }
@@ -26,6 +26,8 @@ export function updateHud(message, codec) {
     $('hud-bitrate').textContent = `${video.mbps.toFixed(1)} Mbps`;
     set('hud-pacing', ms(video.frameP95Ms));
     set('hud-max', ms(video.frameMaxMs));
+    set('hud-jitter', `${ms(video.arrivalP95Ms)} / ${ms(video.arrivalMaxMs)}`);
+    set('hud-stall', video.stalls == null ? '—' : `${video.stalls} · ${video.stallMs} ms`);
     set('hud-decode', `${(video.nativeDecodeMs ?? video.codecMs).toFixed(1)} / ${video.drawMs.toFixed(1)}`);
     $('fps-history').setAttribute('points', history.map((fps, index) => `${index * 180 / 29},${42 - Math.max(0, Math.min(65, fps)) / 65 * 40}`).join(' '));
   }

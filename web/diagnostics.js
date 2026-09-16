@@ -31,16 +31,19 @@ export class StreamLog {
     this.audio = stats;
     if (previous && stats.underruns > previous.underruns) this.event('audio-underrun', { count: stats.underruns - previous.underruns, bufferedMs: Math.round(stats.bufferedMs) });
   }
-  videoStats(stats, interval = 1000 / 60) {
+  videoStats(stats) {
     const dropped = Math.max(0, (stats.droppedFrames ?? 0) - this.dropped);
     this.dropped = stats.droppedFrames ?? 0;
-    if (stats.frameMaxMs > interval * 2.5) this.event('frame-gap', { maxMs: Math.round(stats.frameMaxMs), p95Ms: Math.round(stats.frameP95Ms ?? 0) });
     if (dropped) this.event('superseded', { frames: dropped });
     if (stats.decodeQueue > 8) this.event('decode-backlog', { queued: stats.decodeQueue });
     if (stats.fps < 50 && stats.totalFrames > 120) this.event('low-fps', { fps: Math.round(stats.fps * 10) / 10 });
+    if (stats.arrivalMaxMs > 100) this.event('delivery-gap', { maxMs: Math.round(stats.arrivalMaxMs), p95Ms: Math.round(stats.arrivalP95Ms ?? 0) });
+    if (stats.stalls > 0) this.event('stall', { count: stats.stalls, ms: stats.stallMs });
     this.samples.push({ t: this.at(), fps: round(stats.fps), p95: round(stats.frameP95Ms), max: round(stats.frameMaxMs), age: round(stats.videoAgeMs),
       queue: round(stats.queueMs), decode: round(stats.nativeDecodeMs ?? stats.codecMs), rtt: round(stats.rttMs), mbps: round(stats.mbps), dropped,
-      decodeQueue: stats.decodeQueue ?? null, audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
+      decodeQueue: stats.decodeQueue ?? null, arrivalP95: round(stats.arrivalP95Ms), arrivalMax: round(stats.arrivalMaxMs), transportP95: round(stats.transportP95Ms),
+      stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
+      audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
       lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null });
     if (this.samples.length > SAMPLE_LIMIT) this.samples.shift();
   }
@@ -55,10 +58,11 @@ export function describeEvent(event) {
   const labels = {
     'server-loss': e => `console packets lost ${e.lost}, frames dropped ${e.dropped}, frozen ${e.frozen}, keyframe requests ${e.idr}`,
     'audio-underrun': e => `audio underrun ×${e.count} (${e.bufferedMs} ms queued)`,
-    'frame-gap': e => `frame gap ${e.maxMs} ms (p95 ${e.p95Ms} ms)`,
     superseded: e => `${e.frames} superseded frame${e.frames === 1 ? '' : 's'}`,
     'decode-backlog': e => `decoder backlog ${e.queued} frames`,
-    'low-fps': e => `presentation fell to ${e.fps} fps`
+    'low-fps': e => `presentation fell to ${e.fps} fps`,
+    'delivery-gap': e => `video packets paused ${e.maxMs} ms (arrival p95 ${e.p95Ms} ms)`,
+    stall: e => `${e.count} presentation stall${e.count === 1 ? '' : 's'}, ${e.ms} ms late`
   };
   const seconds = (event.t / 1000).toFixed(1);
   return `${seconds}s · ${labels[event.type] ? labels[event.type](event) : `${event.type}${event.message ? ` · ${event.message}` : ''}`}`;

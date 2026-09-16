@@ -199,7 +199,8 @@ test('three translucent HUD layouts show live data, stay compact and switch with
     if (layout === 'minimal') { expect(box.width).toBeLessThanOrEqual(180); expect(box.height).toBeLessThan(90); }
     if (layout === 'horizontal') {
       expect(box.height).toBeLessThan(40);
-      for (const id of ['hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-decode', 'hud-audio', 'hud-health', 'fps-chart']) await expect(page.locator(`#${id}`)).toBeVisible();
+      for (const id of ['hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-max', 'hud-jitter', 'hud-stall', 'hud-loss', 'hud-audio', 'hud-health', 'fps-chart']) await expect(page.locator(`#${id}`)).toBeVisible();
+      await expect(page.locator('#hud-decode')).toBeHidden();
       expect(await hud.evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('0px');
       const groups = hud.locator('.hud-group');
       await expect(groups).toHaveCount(4);
@@ -226,7 +227,7 @@ test('three translucent HUD layouts show live data, stay compact and switch with
   const box = await hud.boundingBox(), stage = await page.locator('#stage').boundingBox();
   expect(box.x + box.width).toBeLessThanOrEqual(stage.x + stage.width);
   expect(box.height).toBeLessThanOrEqual(64);
-  for (const id of ['hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-decode', 'hud-audio', 'hud-health']) await expect(page.locator(`#${id}`)).toBeVisible();
+  for (const id of ['hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-jitter', 'hud-stall', 'hud-audio', 'hud-health']) await expect(page.locator(`#${id}`)).toBeVisible();
   await page.locator('#stage').screenshot({ path: '/tmp/psrp-hud-horizontal-mobile.png' });
   expect(await hud.evaluate(element => getComputedStyle(element).pointerEvents)).toBe('none');
   await page.locator('#stop').click();

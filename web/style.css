@@ -154,6 +154,34 @@ a {
 #logout {
   margin-left:auto;
 }
+.nav-actions {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-shrink:0;
+}
+a.tesla-link {
+  display:inline-flex;
+  align-items:center;
+  min-height:44px;
+  padding:8px 14px;
+  border:2px solid var(--line);
+  background:#101a31;
+  color:var(--blue);
+  text-decoration:none;
+  font-weight:650;
+  font-size:.85rem;
+  box-shadow:3px 3px 0 #050a18;
+}
+a.tesla-link:hover {
+  background:#2b4067;
+}
+.intro a.tesla-link {
+  margin-top:26px;
+}
+.tesla-hint {
+  max-width:340px;
+}
 main {
   max-width:1440px;
   margin:auto;
