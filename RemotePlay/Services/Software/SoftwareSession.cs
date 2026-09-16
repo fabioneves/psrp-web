@@ -6,6 +6,7 @@ using RemotePlay.Contracts.Services;
 using RemotePlay.Models.Context;
 using RemotePlay.Models.PlayStation;
 using RemotePlay.Services.Streaming.Controller;
+using RemotePlay.Services.Streaming.Core;
 using RemotePlay.Services.Session;
 
 namespace RemotePlay.Services.Software;
@@ -18,6 +19,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(aborted);
         var ct = lifetime.Token;
         Guid? sessionId = null;
+        RPStreamV2? stream = null;
         Process? generator = null;
         SoftwareTranscoder? transcoder = null;
         using var receiver = new SoftwareReceiver(grant.VideoCodec == "mpeg1" ? 8 : 32, grant.VideoCodec == "h265" ? "hevc" : "h264");
@@ -75,7 +77,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 if (!await streams.StartStreamAsync(session.Id, false, ct))
                     throw new IOException("Could not start the console video stream.");
                 await streams.AttachReceiverAsync(session.Id, receiver, ct);
-                var stream = await streams.GetStreamAsync(session.Id);
+                stream = await streams.GetStreamAsync(session.Id);
                 if (stream != null) await stream.RequestKeyframeAsync();
                 if (!await controller.ConnectAsync(session.Id, ct) || !await controller.StartAsync(session.Id, ct))
                     throw new IOException("Could not start console input.");
@@ -86,6 +88,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             published.Input = input;
             var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
             var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
+            if (stream != null) _ = SendConsoleStatsAsync(socket, stream, sendGate, ct);
             workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
             var completed = await Task.WhenAny(workers);
             await completed;
@@ -149,6 +152,31 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 WebSocketMessageType.Text, true, ct);
         }
         finally { sendGate?.Release(); }
+    }
+
+    private async Task SendConsoleStatsAsync(WebSocket socket, RPStreamV2 stream, SemaphoreSlim sendGate, CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        object? last = null;
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                var (snapshot, pipeline) = stream.GetStreamHealth();
+                last = new { type = "console-stats", lost = pipeline.VideoLost, timeoutDropped = pipeline.VideoTimeoutDropped,
+                    dropped = snapshot.TotalDroppedFrames, recovered = snapshot.TotalRecoveredFrames, frozen = snapshot.TotalFrozenFrames,
+                    idr = pipeline.TotalIdrRequests, fecFailures = pipeline.FecFailures, pending = pipeline.PendingPackets,
+                    consoleFps = Math.Round(snapshot.RecentFps, 1), consoleMbps = Math.Round(snapshot.MeasuredBitrateMbps, 1) };
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(1));
+                await sendGate.WaitAsync(timeout.Token);
+                try { await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(last), WebSocketMessageType.Text, true, timeout.Token); }
+                finally { sendGate.Release(); }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { logger.LogDebug(ex, "Console statistics stopped"); }
+        finally { if (last != null) logger.LogInformation("Console stream summary {Summary}", JsonSerializer.Serialize(last)); }
     }
 
     private static async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, CancellationToken ct)

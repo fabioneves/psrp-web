@@ -95,6 +95,19 @@
           </details>
         </form>
       </dialog>
+      <dialog id="console-dialog" aria-labelledby="console-title">
+        <div class="section-heading"><div><p class="eyebrow">CONSOLE</p><h2 id="console-title">Console</h2></div><button type="button" id="close-console" class="quiet" aria-label="Close console settings">Close</button></div>
+        <p id="console-detail" class="device-status"></p>
+        <p id="console-message" class="hint" role="status" aria-live="polite" hidden></p>
+        <div class="setup-actions console-dialog-actions"><button type="button" id="console-play" class="primary">Play</button><button type="button" id="console-wake" class="quiet">Wake up</button><button type="button" id="console-sleep" class="quiet">Put console to sleep</button></div>
+        <section class="console-profile">
+          <h3>Stream settings for this console</h3>
+          <label class="check"><input type="checkbox" id="console-custom">Use custom settings for this console</label>
+          <p id="console-profile-hint" class="hint">The shared Stream settings apply when you press Play.</p>
+          <div id="console-profile-host"></div>
+        </section>
+        <details><summary>Trouble connecting?</summary><p class="hint">Release every session this server holds for the console, then press Play again.</p><button type="button" id="console-disconnect" class="danger">Disconnect all sessions</button></details>
+      </dialog>
       <section id="stream-settings" class="panel"><div class="section-heading"><div><p class="eyebrow">02 / TUNE YOUR SESSION</p><h2>Stream settings</h2></div><img src="/art/disc.svg" width="44" height="44" alt=""></div>
       <div id="library-profile"><div id="profile-settings">
       <div class="preset-grid" aria-label="Quick video profiles">
@@ -133,18 +146,18 @@
         <div class="hud-group hud-video" role="group" aria-label="Video metrics"><div class="hud-heading"><span>● LIVE TELEMETRY</span><span id="hud-codec">—</span></div>
         <div class="hud-hero"><strong id="hud-fps">—</strong><span><span class="hud-fps-label">FPS</span><br class="hud-break"><small id="hud-size">—</small></span><svg id="fps-chart" viewBox="0 0 180 44" role="img" aria-label="Last 30 seconds of frame rate"><path d="M0 8H180M0 36H180" class="chart-grid"/><polyline id="fps-history" points=""/></svg></div></div>
         <div class="hud-grid">
-          <div class="hud-group hud-network" role="group" aria-label="Network metrics"><span class="hud-group-title">NET</span><dl><div><dt data-short="RTT">Network RTT</dt><dd id="hud-rtt">—</dd></div><div><dt data-short="Rate">Bitrate</dt><dd id="hud-bitrate">—</dd></div></dl></div>
-          <div class="hud-group hud-timing" role="group" aria-label="Timing metrics"><span class="hud-group-title">TIME</span><dl><div><dt data-short="Age*">Video age*</dt><dd id="hud-age" aria-describedby="hud-age-note">—</dd></div><div><dt data-short="p95">Frame p95</dt><dd id="hud-pacing">—</dd></div><div><dt data-short="Dec/draw">Decode / draw</dt><dd id="hud-decode">—</dd></div></dl></div>
-          <div class="hud-group hud-sound" role="group" aria-label="Audio metrics"><span class="hud-group-title">SND</span><dl><div><dt data-short="Queue">Audio queue</dt><dd id="hud-audio">—</dd></div></dl><p id="hud-health">Waiting for audio</p></div>
+          <div class="hud-group hud-network" role="group" aria-label="Network metrics"><span class="hud-group-title">NET</span><dl><div><dt data-short="RTT">Network RTT</dt><dd id="hud-rtt"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Rate">Bitrate</dt><dd id="hud-bitrate">—</dd></div><div><dt data-short="Loss">Console loss / s</dt><dd id="hud-loss">—</dd></div></dl></div>
+          <div class="hud-group hud-timing" role="group" aria-label="Timing metrics"><span class="hud-group-title">TIME</span><dl><div><dt data-short="Age*">Video age*</dt><dd id="hud-age" aria-describedby="hud-age-note"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="p95">Frame p95</dt><dd id="hud-pacing"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Max">Frame max</dt><dd id="hud-max"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Dec/draw">Decode / draw</dt><dd id="hud-decode"><span class="value">—</span><span class="unit"> ms</span></dd></div></dl></div>
+          <div class="hud-group hud-sound" role="group" aria-label="Audio metrics"><span class="hud-group-title">SND</span><dl><div><dt data-short="Queue">Audio queue</dt><dd id="hud-audio"><span class="value">—</span><span class="unit"> ms</span></dd></div></dl><p id="hud-health">Waiting for audio</p></div>
         </div>
         <p id="hud-age-note" class="hud-note">*Server media ready → canvas, not input latency.</p>
-        <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button></div>
+        <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button><button id="hud-download">Download log</button></div>
       </aside></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
       <aside id="session-sidebar" aria-label="Session settings">
         <div class="deck-heading"><div><p class="eyebrow">PLAYER ONE / LIVE</p><h2>Control deck</h2></div><img src="/art/session-deck.svg" width="100" height="40" alt=""></div>
-        <div class="quick-switches"><label class="check switch-card"><input type="checkbox" id="show-controls">Touch controls</label><label class="check switch-card"><input type="checkbox" id="debug-mode">Debug HUD</label></div>
+        <div class="quick-switches"><label class="check switch-card"><input type="checkbox" id="show-controls">Fullscreen touch overlay</label><label class="check switch-card"><input type="checkbox" id="debug-mode">Debug HUD</label></div>
         <div id="hud-settings" class="hud-settings" hidden><label>HUD layout<select id="hud-style"><option value="detailed" selected>Detailed</option><option value="minimal">Minimal</option><option value="horizontal">Horizontal</option></select></label><p class="hint">Swipe left / right or press Shift+H to change layouts in fullscreen.</p></div>
         <div id="session-tabs" role="tablist" aria-label="Session settings">
           <button id="picture-tab" role="tab" aria-controls="picture-panel" aria-selected="true"><img src="/art/codec-canvas.svg" width="22" height="22" alt="">Picture</button>
@@ -181,7 +194,7 @@
         </div>
         <div class="console-utilities"><button id="sleep-console" class="quiet">Put console to sleep</button><details><summary>Connection recovery</summary><p class="hint">Release sessions opened by this server.</p><button id="disconnect-all" class="danger">Disconnect all sessions</button></details></div>
       </aside>
-      <div id="controls" hidden class="controls" aria-label="Touch controller">
+      <div id="controls" class="controls" aria-label="On-screen controller">
         <div><span class="control-label">D-PAD</span><div class="pad">
           <button class="north" data-command="button:UP" aria-label="D-pad up">↑</button><button class="west" data-command="button:LEFT" aria-label="D-pad left">←</button><button class="east" data-command="button:RIGHT" aria-label="D-pad right">→</button><button class="south" data-command="button:DOWN" aria-label="D-pad down">↓</button>
         </div></div>
@@ -198,7 +211,7 @@
       </div>
       <div id="session-help">
       <details class="fullscreen-help"><summary>Fullscreen shortcuts</summary><dl><div><dt>Exit</dt><dd>Swipe down, double-tap, Esc, or tap once for the exit button when touch controls are off</dd></div><div><dt>Debug HUD</dt><dd>Two-finger tap or Shift+D · swipe left / right or Shift+H changes the layout</dd></div><div><dt>Touch controls</dt><dd>Three-finger tap</dd></div></dl></details>
-      <details id="stream-diagnostics"><summary>Stream diagnostics</summary><p id="timing-status">Measuring stream timing…</p><p id="render-status"></p><p class="hint">Timing starts when media is ready on the server. Console capture and physical display delay are not measured.</p></details></div>
+      <details id="stream-diagnostics"><summary>Stream diagnostics</summary><p id="timing-status">Measuring stream timing…</p><p id="render-status"></p><p id="console-status"></p><p class="hint">Timing starts when media is ready on the server. Console capture and physical display delay are not measured.</p><h3>Recent events</h3><ul id="event-log" class="event-log"><li class="hint">No stalls, drops or reconnects recorded yet.</li></ul><button id="download-debug" class="quiet">Download diagnostics log</button><p class="hint">The log holds the last five minutes of per-second metrics and every stall, packet loss, audio underrun and reconnect event of this session.</p></details></div>
     </section>
   </main>
   <div id="toast" class="toast" data-open="false"><p id="message" role="status" aria-live="polite"></p><button type="button" id="dismiss-message" class="quiet" aria-label="Dismiss message">×</button></div>

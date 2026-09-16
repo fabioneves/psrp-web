@@ -194,7 +194,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     const elapsed = performance.now() - start;
     report({ type: 'stats', ...presentation.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
       decodeMs: drawn ? (decodeMs + drawMs) / drawn : 0, codecMs: 0, nativeDecodeMs: decoded ? decodeMs / decoded : 0,
-      colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: frames.dropped,
+      colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: frames.dropped, decodeQueue: queue.items.length + decoder.decodeQueueSize,
       pixelEngine: 'Browser', mbps: bytesReceived * 8 / elapsed / 1000, totalFrames,
       width: canvas.width, height: canvas.height, engine });
     decoded = drawn = bytesReceived = decodeMs = drawMs = 0; start = performance.now();

@@ -41,7 +41,13 @@ releases buttons, centers both sticks and releases both triggers. L2/R2 update
 both the button event and analog trigger state. Directions are clamped to [-1,1].
 
 Server → browser text messages contain `type` (`status` or `error`) and `message`,
-or a timestamped `pong`. Every binary message starts with the RPM1 timing envelope
+a timestamped `pong`, or a once-per-second `console-stats` message with cumulative
+console→server counters (packets lost, frames dropped/frozen/recovered, keyframe
+requests, FEC failures, pending packets) plus the console's frame rate and bitrate.
+The browser keeps a per-session diagnostics log of those counters, its own
+per-second metrics and every stall, superseded frame, audio underrun and reconnect,
+downloadable as JSON from Stream diagnostics or the debug HUD. The server logs the
+final counters when a console stream ends. Every binary message starts with the RPM1 timing envelope
 described below. Canvas video payloads contain consecutive MPEG-TS bytes, not necessarily a whole
 frame or transport packet; JSMpeg handles arbitrary chunk boundaries. H.264/H.265 video
 payloads are one complete Annex B access unit per message. Audio

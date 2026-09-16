@@ -25,9 +25,9 @@
 .hud-network { --hud-color:#8eb8ff; --hud-tint:#8eb8ff0e; }
 .hud-timing { --hud-color:#ffd390; --hud-tint:#ffd3900e; }
 .hud-sound { --hud-color:#f1a5c9; --hud-tint:#f1a5c90e; }
-#debug-overlay[data-layout=horizontal] .hud-group-title { display:block; color:var(--hud-color); font:600 10px/1 Pixelify,monospace; letter-spacing:.04em; }
+#debug-overlay[data-layout=horizontal] .hud-group-title { display:block; color:var(--hud-color); font:600 10px/1 Jersey,monospace; letter-spacing:.04em; }
 #debug-overlay[data-layout=horizontal] .hud-heading { font-size:9px; color:var(--hud-color); white-space:nowrap; }
-#debug-overlay[data-layout=horizontal] .hud-hero>strong { font:600 12px/1 Pixelify,monospace; }
+#debug-overlay[data-layout=horizontal] .hud-hero>strong { font:600 12px/1 Jersey,monospace; }
 #debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:6px; margin-left:-4px; font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-video>.hud-heading { order:-1; }
 #debug-overlay[data-layout=horizontal] .hud-hero>strong { order:-4; }
@@ -40,6 +40,7 @@
 #debug-overlay[data-layout=horizontal] .hud-grid dt { font-size:0; }
 #debug-overlay[data-layout=horizontal] .hud-grid dt::after { content:attr(data-short); font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; font-size:9px; color:var(--hud-color); }
+#debug-overlay[data-layout=horizontal] .hud-grid dd .unit { display:none; }
 #debug-overlay[data-layout=horizontal] #hud-health { display:block; font-size:9px; margin:0; white-space:nowrap; color:var(--hud-color); }
 #debug-overlay[data-layout=horizontal] .hud-note { display:none; }
 #player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; padding-top:calc(4px + env(safe-area-inset-top, 0px)); padding-left:calc(6px + env(safe-area-inset-left, 0px)); padding-right:calc(6px + env(safe-area-inset-right, 0px)); }

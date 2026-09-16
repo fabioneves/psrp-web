@@ -4,7 +4,7 @@
 
 - A PlayStation-inspired pixel art interface, original room illustration, reusable pixel console/controller art and responsive layouts. Keep readable body text and keyboard focus.
 - Visible video settings with Tesla (Canvas 720p60), balanced (H.264 720p60), and detail (H.264 1080p60) shortcuts. Save all playback preferences locally.
-- Fullscreen contains only video by default. Debug mode explicitly enables its overlay; optional touch controls remain available. Escape exits, with a gesture fallback for browsers without Fullscreen API.
+- Fullscreen contains only video by default. Debug mode explicitly enables its overlay; the on-screen controller under the video is always available in the normal layout and appears over fullscreen video only when the touch overlay switch is on. Escape exits, with a gesture fallback for browsers without Fullscreen API.
 - Debug overlay: actual codec, decoder, resolution, FPS history, frame interval p95, network RTT, delivery estimate, bitrate, decode/draw time and audio queue/underruns. No invented end-to-end latency.
 - Smooth audio clock correction instead of repeated sample cuts and silence on small video timing changes. Bound queues and recover from large discontinuities. Verify jitter, drift and buffer behavior with deterministic tests.
 - Restore animation-frame scheduling after fullscreen callbacks stall; measure frame pacing, not just a rounded FPS number. Preserve Canvas CPU rendering and all existing video profiles.

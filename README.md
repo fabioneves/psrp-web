@@ -278,7 +278,7 @@ change saved controller preferences. Settings apply on the next Play/test launch
 
 Enable **Automatically adjust quality** to let playback reduce bitrate for network queues, or resolution for browser overload. The chosen profile is the ceiling. It keeps 60 fps where possible, uses 30 fps at the minimum resolution if necessary, and restores quality slowly after sustained healthy playback. Changes reconnect the Remote Play session briefly; attached controllers reconnect through their existing retry flow.
 
-During playback, expand **Stream diagnostics** below the player for separate processing costs and queue delays; use the **Picture** tab for the selected profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
+During playback, expand **Stream diagnostics** below the player for separate processing costs, queue delays, console→server packet loss and keyframe requests, and a list of recent stalls, superseded frames, audio underruns and reconnects. **Download diagnostics log** saves the last five minutes of per-second metrics and every event as JSON for analysis; the debug HUD has the same button. The server logs a console stream summary with the loss counters when a session ends. Use the **Picture** tab for the selected profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
 Smooth frame pacing primes one frame interval, keeps up to three decoded images to absorb uneven delivery, and skips an image that has waited 1.5 intervals when a newer one is ready. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
@@ -314,7 +314,9 @@ by device. Its Annex B stream includes VPS/SPS/PPS on keyframes as required by t
 
 ## Disconnecting sessions
 
-**Disconnect all sessions**, under **Trouble connecting?** on a paired console card or in the player, stops this
+**Console settings** on a paired card opens that console without connecting: its live status, Play, wake or sleep, recovery, and an optional **custom settings** profile. With the switch on, the Stream settings block edits a profile that applies only when that console plays; the shared settings return once the session ends, and the card lists the custom profile.
+
+**Disconnect all sessions**, under **Trouble connecting?** on a paired console card, in Console settings or in the player, stops this
 server's viewer and attached controllers for that console, including a connection
 still starting. It revokes pending tickets and waits for server cleanup. Browsers
 receive an explicit stop signal so they do not automatically reclaim the console.
@@ -408,7 +410,7 @@ The retro interface uses custom pixel art and self-hosted fonts. Video presets, 
 - **Full screen** hides app controls and statistics. Exit with Escape or double-click/double-tap on the picture. Browsers without the Fullscreen API use a viewport-filling theater view; browser chrome cannot be hidden by the app in that fallback.
 - **Start in fullscreen**, the labeled icon toggle to the left of each Play button, is off by default and saved per browser. When checked, Play enters fullscreen immediately while connecting. Test streams and input-only attachments keep their normal view.
 - **Touch fullscreen exit:** swipe down on the picture to return to the Control deck. With touch controls off, a tap also reveals a large **Exit fullscreen** button for five seconds. Double-tap and Escape remain available. In fullscreen, **two-finger tap** toggles debug, **three-finger tap** toggles touch controls, and **swipe left/right** cycles HUD layouts while debug is on. These gestures work with native fullscreen and the iPhone-style theater fallback.
-- **Touch controls** are off by default and can be enabled before fullscreen. They remain available over the video when enabled.
+- **On-screen controller** buttons always sit under the video in the normal layout for mouse, keyboard and touch use. The **Fullscreen touch overlay** switch (off by default) also shows them over fullscreen video.
 - **Debug HUD** (or **Shift+D**) has three saved layouts, selected with illustrated buttons: **Detailed** keeps all metrics and the FPS graph; **Minimal** shows FPS, codec, and resolution; **Horizontal** spans the top edge with smaller text, mint video, blue network, amber timing, and pink audio groups, plus a tiny FPS graph on wider screens. Pixel headings and colored dividers separate the readings; codec appears once without the redundant hardware-preference description. All have translucent backgrounds. **Shift+H** cycles layouts while debug is on, including in fullscreen. Compact layouts let taps pass through to the picture. Detailed includes frame interval p95, estimated video age, decode/draw times, audio queue/underruns and Copy diagnostics; copied data contains no account credentials or stream tickets.
 - **Smooth** pacing trades a small video buffer for fewer dropped frames. **Responsive** minimizes delay. See [comparison and timing limits](docs/retro-player.md).
 - **Put console to sleep** requests rest mode from a paired console, then releases this server's session. It works from the library or player. An idle console uses a short authenticated control connection; an already sleeping console is left asleep. Enable network wake in the console's rest-mode settings to wake it again remotely.

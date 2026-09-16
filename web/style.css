@@ -1,8 +1,8 @@
 @font-face {
-  font-family:Pixelify;
-  src:url('/art/pixelify-sans.ttf') format('truetype');
+  font-family:Jersey;
+  src:url('/art/jersey-20.ttf') format('truetype');
   font-style:normal;
-  font-weight:400 700;
+  font-weight:400;
   font-display:swap;
 }
 :root {
@@ -558,7 +558,22 @@ main {
 #performance-details {
   margin-top:18px;
 }
-#timing-status,#render-status {
+.event-log {
+  margin:0 0 12px;
+  padding:0;
+  list-style:none;
+  font:.76rem/1.6 ui-monospace,monospace;
+}
+.event-log li {
+  border-left:3px solid var(--blue);
+  padding-left:10px;
+  margin:4px 0;
+}
+#stream-diagnostics h3 {
+  font-size:.9rem;
+  margin:16px 0 8px;
+}
+#timing-status,#render-status,#console-status {
   font-size:.76rem;
   font-family:monospace;
   overflow-wrap:anywhere;
@@ -666,7 +681,7 @@ footer {
   font:.65rem/1.6 monospace;
   letter-spacing:.04em;
 }
-#setup-dialog {
+#setup-dialog,#console-dialog {
   width:min(640px,calc(100vw - 32px));
   max-height:calc(100dvh - 40px);
   color:var(--text);
@@ -676,11 +691,60 @@ footer {
   border-radius:0;
   padding:28px;
 }
-#setup-dialog::backdrop {
+#setup-dialog::backdrop,#console-dialog::backdrop {
   background:#020715d9;
 }
 #setup-dialog label {
   margin:16px 0;
+}
+#console-dialog .device-status {
+  margin:0 0 12px;
+}
+#console-dialog h2 {
+  margin:0;
+  font-size:1.6rem;
+}
+#console-dialog h3 {
+  font-size:1rem;
+  margin:0 0 10px;
+}
+.console-profile {
+  margin-top:22px;
+  padding-top:18px;
+  border-top:2px solid var(--line);
+}
+.console-profile .check {
+  min-height:44px;
+  white-space:normal;
+}
+#console-profile-host {
+  margin-top:12px;
+}
+#console-profile-host .settings-grid {
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+#console-profile-host [data-choice-for=resolution-profile],#console-profile-host [data-choice-for=bitrate] {
+  grid-column:1/-1;
+}
+#console-profile-host .preset-icon {
+  float:none;
+  display:block;
+  margin:0 0 6px;
+}
+#console-message[data-tone=error] {
+  color:var(--red);
+}
+.console-dialog-actions .primary {
+  flex:1;
+}
+.device-custom {
+  display:block;
+  color:var(--accent);
+  font-size:.76rem;
+  margin:2px 0 0;
+}
+.device-custom:empty {
+  display:none;
 }
 #setup-dialog details {
   margin:18px 0;
@@ -934,6 +998,9 @@ footer {
 #player:fullscreen:not(.debug) #connecting,#player.theater:not(.debug) #connecting {
   display:none;
 }
+#player:fullscreen:not(.touch) #controls,#player.theater:not(.touch) #controls {
+  display:none!important;
+}
 #player:fullscreen #controls,#player.theater #controls {
   position:absolute;
   inset:auto 12px 12px;
@@ -1173,7 +1240,7 @@ footer {
   }
 }
 h1,h2,.brand,.preset-grid strong {
-  font-family:Pixelify,monospace;
+  font-family:Jersey,monospace;
   letter-spacing:0;
 }
 h1,h2 {
@@ -1183,13 +1250,13 @@ h1,h2 {
   font-size:1.1rem;
 }
 .lobby-banner h2 {
-  font-size:3.2rem;
+  font-size:3.4rem;
 }
 .device h2 {
-  font-size:1.5rem;
+  font-size:1.65rem;
 }
 .preset-grid strong {
-  font-size:1.1rem;
+  font-size:1.2rem;
 }
 @media(max-width:680px) {
   .lobby-banner h2 {
@@ -1218,7 +1285,7 @@ h1,h2 {
   grid-column:auto;
 }
 .lobby-grid .section-heading h1 {
-  font-size:1.8rem;
+  font-size:2rem;
 }
 .lobby-grid .preset-grid {
   gap:8px;
@@ -1246,7 +1313,7 @@ h1,h2 {
 .lobby-grid .device-actions .primary {
   grid-column:1/-1;
   grid-row:1;
-  font-family:Pixelify,monospace;
+  font-family:Jersey,monospace;
   font-size:1.25rem;
 }
 .lobby-grid .device-actions button {

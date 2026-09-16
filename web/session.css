@@ -11,7 +11,7 @@
 .choice-buttons button { min-width:0; min-height:48px; padding:8px 4px; font-size:.78rem; position:relative; touch-action:manipulation; }
 .choice-buttons button[aria-checked=true] { background:#1a3d43; border-color:var(--accent); box-shadow:inset 0 -3px var(--accent),3px 3px #050a18; color:#d6ffef; }
 .codec-field .choice-buttons button { display:grid; justify-items:center; align-content:center; gap:4px; padding:12px 4px; }
-.codec-field strong { font:600 1.4rem/1.1 Pixelify,monospace; }
+.codec-field strong { font:600 1.55rem/1.1 Jersey,monospace; }
 .codec-field small { font-size:.65rem; font-weight:400; color:var(--muted); }
 .codec-field img { image-rendering:pixelated; }
 .lobby-grid .settings-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -22,7 +22,7 @@
 .player-bar>.session-title { display:flex; align-items:center; min-width:0; gap:12px; }
 .session-title>img { flex-shrink:0; image-rendering:pixelated; }
 .session-title>div { min-width:0; }
-.player-bar strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; font:600 1.4rem/1.2 Pixelify,monospace; }
+.player-bar strong { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin:0; font:600 1.55rem/1.2 Jersey,monospace; }
 .player-actions { flex-wrap:nowrap; flex-shrink:0; gap:8px; }
 .player-actions button { display:flex; align-items:center; justify-content:center; gap:8px; min-height:48px; white-space:nowrap; padding:8px 12px; }
 .stop-icon { display:block; width:12px; height:12px; background:var(--red); box-shadow:2px 2px #803849; }
@@ -33,14 +33,14 @@
 #session-help { grid-area:help; }
 #session-sidebar { grid-area:sidebar; border:2px solid var(--line); border-top:4px solid var(--blue); padding:18px; background:var(--panel); box-shadow:5px 5px #060c1b; }
 .deck-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:18px; }
-.deck-heading h2 { font:600 1.8rem/1 Pixelify,monospace; margin:0; }
+.deck-heading h2 { font:600 2rem/1 Jersey,monospace; margin:0; }
 .deck-heading .eyebrow { font-size:.6rem; margin-bottom:8px; }
 .deck-heading img { image-rendering:pixelated; }
 .quick-switches { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:18px; }
-.switch-card { min-height:48px; padding:10px 8px; border:2px solid var(--line); background:#0b1429; cursor:pointer; font-size:.74rem; }
+.switch-card { min-height:48px; padding:10px 8px; border:2px solid var(--line); background:#0b1429; cursor:pointer; font-size:.74rem; white-space:normal; line-height:1.2; }
 .switch-card:has(input:checked) { border-color:var(--accent); background:#1a3d43; }
 #session-tabs { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:20px; }
-#session-tabs button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:52px; padding:8px 4px; font:500 1rem Pixelify,monospace; }
+#session-tabs button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:52px; padding:8px 4px; font:500 1.1rem Jersey,monospace; }
 #session-tabs [aria-selected=true] { color:var(--blue); border-color:var(--blue); box-shadow:inset 0 -3px var(--blue),3px 3px #050a18; background:#213453; }
 #session-sidebar [role=tabpanel] { min-height:560px; }
 #performance-details { margin:0; }
@@ -51,12 +51,12 @@
 .auto-quality,.controller-settings .check { min-height:48px; white-space:normal; cursor:pointer; }
 #apply-profile { width:100%; margin:8px 0; background:#264a47; border-color:var(--accent); }
 .panel-caption { display:flex; gap:16px; align-items:center; margin:6px 0 24px; }
-.panel-caption h3 { font:500 1.5rem Pixelify,monospace; margin:0; }
+.panel-caption h3 { font:500 1.5rem Jersey,monospace; margin:0; }
 .panel-caption p { margin:4px 0 0; font-size:.75rem; }
 #audio-controls { grid-template-columns:1fr; padding:0 0 16px; gap:20px; }
 #audio-controls .check { min-height:48px; }
 #enable-audio { border-color:var(--accent); }
-.controller-settings h3 { font:500 1.25rem Pixelify,monospace; }
+.controller-settings h3 { font:500 1.25rem Jersey,monospace; }
 .console-utilities { border-top:2px solid var(--line); margin-top:20px; padding-top:16px; }
 .console-utilities>button,.console-utilities details button { width:100%; min-height:48px; }
 .console-utilities details { margin-top:8px; }

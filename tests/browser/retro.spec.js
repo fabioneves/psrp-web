@@ -34,10 +34,9 @@ test('fullscreen is video only, touch is opt-in and the debug overlay contains m
   await page.locator('[data-preset=tesla]').click();
   await page.locator('#demo').click();
   await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
-  await expect(page.locator('#controls')).toBeHidden();
-  await page.locator('#show-controls').check();
+  await expect(page.locator('#controls')).toBeVisible();
   await expect(page.getByRole('button', { name: 'D-pad up', exact: true })).toBeVisible();
-  await page.locator('#show-controls').uncheck();
+  await expect(page.locator('#show-controls')).not.toBeChecked();
   await page.locator('#fullscreen').click();
   await expect(page.locator('.player-bar')).toBeHidden();
   await expect(page.locator('#debug-overlay')).toBeHidden();
@@ -235,6 +234,42 @@ test('three translucent HUD layouts show live data, stay compact and switch with
   await expect(page.locator('#library')).toBeVisible();
   await expect(page.locator('#hud-style')).toHaveValue('horizontal');
   expect(await page.locator('#debug-mode').isChecked()).toBe(true);
+});
+
+test('console settings open without connecting and a custom profile applies only to that console', async ({ page }) => {
+  await register(page);
+  await page.route('**/api/playstation/my-devices', route => route.fulfill({ json: [{ hostId: 'custom-ps5', hostName: 'Bedroom', hostType: 'PS5', ipAddress: '192.0.2.9', isRegistered: true, status: 'OK' }] }));
+  await page.locator('#refresh').click();
+  await page.getByRole('button', { name: 'Console settings', exact: true }).click();
+  const dialog = page.locator('#console-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.locator('#console-title')).toHaveText('Bedroom');
+  await expect(page.locator('#console-detail')).toContainText('Ready');
+  await expect(page.locator('#console-sleep')).toBeVisible();
+  await expect(page.locator('#console-wake')).toBeHidden();
+  await expect(page.locator('#console-profile-host [data-choice-for=resolution-profile]')).toHaveCount(0);
+  await page.locator('#console-custom').check();
+  await expect(page.locator('#console-profile-host [data-choice-for=resolution-profile]')).toBeVisible();
+  await page.locator('#console-profile-host [data-choice-for=resolution-profile] [data-value="1080p"]').click();
+  await page.locator('#close-console').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('#library-profile #profile-settings')).toHaveCount(1);
+  await expect(page.locator('#resolution-profile')).toHaveValue('720p');
+  await expect(page.locator('.device-custom')).toContainText('1080p60');
+  const tickets = [];
+  await page.route('**/api/software/tickets', route => { tickets.push(route.request().postDataJSON()); route.fulfill({ status: 409, json: { message: 'Console busy.' } }); });
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
+  expect(tickets[0].resolution).toBe('1080p');
+  await expect(page.locator('#resolution-profile')).toHaveValue('1080p');
+  await page.locator('#stop').click();
+  await expect(page.locator('#resolution-profile')).toHaveValue('720p');
+  await page.reload();
+  await expect(page.locator('.device-custom')).toContainText('1080p60');
+  await page.getByRole('button', { name: 'Console settings', exact: true }).click();
+  await page.locator('#console-custom').uncheck();
+  await page.locator('#close-console').click();
+  await expect(page.locator('.device-custom')).toBeEmpty();
 });
 
 test('each Play button has a labeled fullscreen toggle on its left, with shared saved state', async ({ page }) => {

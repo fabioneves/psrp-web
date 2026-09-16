@@ -11,6 +11,7 @@ import { startStream } from './stream-runtime.js';
 import { AdaptiveQuality } from './adaptive.js';
 import { encodeAccountId } from './account-id.js';
 import { bindSetup } from './setup.js';
+import { StreamLog, describeEvent } from './diagnostics.js';
 
 const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
@@ -27,6 +28,7 @@ const failedCodecs = new Set();
 let decoderFailure = '', sleepingHost = null;
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
+const log = new StreamLog();
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
   swap: $('controller-swap').value, deadZone: Number($('dead-zone').value),
   invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked });
@@ -49,7 +51,8 @@ for (const id of preferenceIds) {
     }
   } catch {}
   element.addEventListener('change', () => {
-    try { localStorage.setItem(`remote-play:${id}`, element.type === 'checkbox' ? element.checked : element.value); } catch {}
+    if (!(profileScope && Object.values(profileFields).includes(id)))
+      try { localStorage.setItem(`remote-play:${id}`, element.type === 'checkbox' ? element.checked : element.value); } catch {}
     gamepads.reset();
     updateWakeLock();
   });
@@ -83,6 +86,7 @@ window.addEventListener('focus', () => gamepads.reset());
 let toastTimer;
 function notify(message, tone = 'info') {
   if ($('setup-dialog').open) { $('psn-status').textContent = message; $('psn-status').hidden = !message; return; }
+  if ($('console-dialog').open) { $('console-message').textContent = message; $('console-message').dataset.tone = tone; $('console-message').hidden = !message; return; }
   if (!$('player').hidden && !$('stage').hidden) {
     $('connection-message').textContent = message;
     $('connection-message').dataset.tone = tone;
@@ -172,6 +176,31 @@ async function restoreSession() {
 }
 
 const defaultBitrate = { '360p': '3000', '540p': '6000', '720p': '10000', '1080p': '20000' };
+const profileFields = { codec: 'video-mode', resolution: 'resolution-profile', fps: 'fps-profile', bitrateKbps: 'bitrate', pacing: 'frame-pacing' };
+let consoleProfiles = {}, profileScope = null, sharedSettings = null, dialogConsole = null;
+try { consoleProfiles = JSON.parse(localStorage.getItem('remote-play:console-profiles') || '{}') || {}; } catch {}
+function persistConsoleProfiles() { try { localStorage.setItem('remote-play:console-profiles', JSON.stringify(consoleProfiles)); } catch {} }
+function readSettings() { return Object.fromEntries(Object.entries(profileFields).map(([key, id]) => [key, $(id).value])); }
+function writeSettings(values) {
+  for (const [key, id] of Object.entries(profileFields)) if (values[key] !== undefined && [...$(id).options].some(option => option.value === String(values[key]))) $(id).value = String(values[key]);
+  $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+  savePlaybackPreferences();
+}
+function describeProfile(profile) {
+  return `${profile.resolution}${profile.fps} · ${{ mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[profile.codec] || profile.codec} · ${Number(profile.bitrateKbps) / 1000} Mbps${profile.pacing === 'responsive' ? ' · responsive' : ''}`;
+}
+function enterConsoleScope(hostId) {
+  if (profileScope === hostId) return;
+  if (!profileScope) sharedSettings = readSettings();
+  profileScope = hostId;
+  writeSettings(consoleProfiles[hostId]);
+}
+function leaveConsoleScope() {
+  if (!profileScope) return;
+  profileScope = null;
+  writeSettings(sharedSettings);
+  sharedSettings = null;
+}
 function consoleState(status) {
   if (/standby/i.test(status || '')) return 'rest';
   if (/^ok$/i.test(status || '')) return 'ready';
@@ -225,17 +254,18 @@ async function refresh() {
     const info = document.createElement('div');
     const title = document.createElement('h2'); title.textContent = device.hostName || device.hostType || 'PlayStation';
     const detail = document.createElement('p'); detail.className = 'device-status';
-    info.append(title, detail);
+    const custom = document.createElement('span'); custom.className = 'device-custom';
+    info.append(title, detail, custom);
     const button = document.createElement('button'); button.className = 'primary'; button.textContent = 'Play'; button.disabled = !device.isRegistered;
     button.onclick = () => run(button, () => play(device.hostId, title.textContent, false, null, device.hostType));
     const wake = document.createElement('button'); wake.className = 'quiet wake'; wake.textContent = 'Wake up';
     wake.disabled = !device.isRegistered;
     wake.onclick = () => run(wake, async () => {
       wake.textContent = 'Waking…';
-      notify('Waking console…', 'busy');
-      try { await api('software/wake', { hostId: device.hostId }, { timeout: 30000 }); await refresh(); notify('Console is awake. Choose Play to connect.'); }
-      finally { wake.textContent = 'Wake up'; }
+      try { await wakeConsole(device.hostId); } finally { wake.textContent = 'Wake up'; }
     });
+    const settings = document.createElement('button'); settings.className = 'quiet'; settings.textContent = 'Console settings';
+    settings.onclick = () => openConsoleDialog(device);
     const disconnect = document.createElement('button'); disconnect.className = 'quiet danger'; disconnect.textContent = 'Disconnect all sessions';
     disconnect.disabled = !device.isRegistered;
     disconnect.onclick = () => run(disconnect, () => disconnectConsole(device.hostId));
@@ -248,12 +278,69 @@ async function refresh() {
     sleep.onclick = () => run(sleep, () => sleepConsole(device.hostId));
     const playActions = document.createElement('div'); playActions.className = 'play-actions';
     playActions.append(fullscreenToggle(), button);
-    actions.append(playActions, wake, sleep, recovery);
+    actions.append(playActions, wake, sleep, settings, recovery);
     card.append(icon, info, actions); $('devices').append(card);
     setDeviceStatus(card, device.hostType, device.ipAddress, device.status);
+    updateCustomLine(card, device.hostId);
   }
   void discoverConsoles();
 }
+function updateCustomLine(card, hostId) {
+  const profile = consoleProfiles[hostId];
+  card.querySelector('.device-custom').textContent = profile ? `Custom settings · ${describeProfile(profile)}` : '';
+}
+async function wakeConsole(hostId) {
+  notify('Waking console…', 'busy');
+  await api('software/wake', { hostId }, { timeout: 30000 });
+  await refresh();
+  notify('Console is awake. Choose Play to connect.');
+}
+function openConsoleDialog(device) {
+  dialogConsole = device;
+  $('console-title').textContent = device.hostName || device.hostType || 'PlayStation';
+  const detail = $('console-detail'), state = consoleState(device.status);
+  detail.replaceChildren();
+  const dot = document.createElement('span'); dot.className = 'status-dot'; dot.dataset.state = state; dot.setAttribute('aria-hidden', 'true');
+  detail.append(dot, `${device.hostType || 'Console'} · ${device.ipAddress || 'IP unavailable'} · ${consoleStatus(device.status)}`);
+  $('console-wake').hidden = state === 'ready';
+  $('console-sleep').hidden = state === 'rest';
+  for (const id of ['console-play', 'console-wake', 'console-sleep', 'console-disconnect']) $(id).disabled = !device.isRegistered;
+  $('console-message').hidden = true;
+  $('console-custom').checked = !!consoleProfiles[device.hostId];
+  syncConsoleProfile();
+  $('console-dialog').showModal();
+}
+function syncConsoleProfile() {
+  const custom = $('console-custom').checked, hostId = dialogConsole.hostId;
+  $('console-profile-hint').textContent = custom ? 'These settings apply only when you play this console. Presets and tiles edit the console profile while this is on.' : 'The shared Stream settings apply when you press Play.';
+  if (custom) {
+    consoleProfiles[hostId] ??= readSettings();
+    persistConsoleProfiles();
+    enterConsoleScope(hostId);
+    $('console-profile-host').append($('profile-settings'));
+  } else {
+    delete consoleProfiles[hostId];
+    persistConsoleProfiles();
+    leaveConsoleScope();
+    $('library-profile').append($('profile-settings'));
+  }
+}
+function closeConsoleDialog() {
+  if (!dialogConsole) return;
+  leaveConsoleScope();
+  $('library-profile').append($('profile-settings'));
+  const card = $('devices').querySelector(`[data-host-id="${CSS.escape(dialogConsole.hostId)}"]`);
+  if (card) updateCustomLine(card, dialogConsole.hostId);
+  dialogConsole = null;
+  if ($('console-dialog').open) $('console-dialog').close();
+}
+$('console-custom').onchange = syncConsoleProfile;
+$('close-console').onclick = closeConsoleDialog;
+$('console-dialog').addEventListener('close', closeConsoleDialog);
+$('console-play').onclick = () => { const device = dialogConsole; closeConsoleDialog(); void run($('console-play'), () => play(device.hostId, device.hostName || device.hostType || 'PlayStation', false, null, device.hostType)); };
+$('console-wake').onclick = () => run($('console-wake'), () => wakeConsole(dialogConsole.hostId));
+$('console-sleep').onclick = () => run($('console-sleep'), () => sleepConsole(dialogConsole.hostId));
+$('console-disconnect').onclick = () => run($('console-disconnect'), () => disconnectConsole(dialogConsole.hostId));
 async function sleepConsole(hostId) {
   retry.reset();
   notify('Sending rest-mode request…', 'busy');
@@ -371,8 +458,10 @@ async function discoverConsoles(hostIp = '') {
 
 async function play(hostId, title, demo = false, inputSession = null, hostType = null) {
   stop();
+  if (hostId && !inputSession && consoleProfiles[hostId]) enterConsoleScope(hostId);
   target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile() };
-  resetHud();
+  resetHud(); log.reset(); renderEvents();
+  log.event('play', { hostId, demo, inputSession: !!inputSession, profile: target.profile, codec: $('video-mode').value });
   quality = new AdaptiveQuality(target.profile);
   $('connection-message').textContent = '';
   showPlayer(target);
@@ -422,6 +511,7 @@ function reconnect(message, workerFailed = false) {
   if (workerFailed) forceMain = true;
   stop(true);
   if (!retry.schedule()) { failConnection(`${message} Automatic reconnection stopped after five attempts. Disconnect and press Play when ready.`); return; }
+  log.event('reconnect', { attempt: retry.count, message });
   $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
 }
@@ -496,11 +586,34 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
     updateWakeLock();
   } catch (error) { if (attempt === current) { if (activeCodec !== 'mpeg1') failedCodecs.add(activeCodec); else forceMain = true; stop(true); throw error; } }
 }
+function renderEvents() {
+  const recent = log.recent(8);
+  $('event-log').replaceChildren(...(recent.length ? recent.map(event => { const item = document.createElement('li'); item.textContent = describeEvent(event); return item; })
+    : [Object.assign(document.createElement('li'), { className: 'hint', textContent: 'No stalls, drops or reconnects recorded yet.' })]));
+}
+function downloadDiagnostics() {
+  const data = log.export({ title: target?.title ?? $('stream-title').textContent, codec: activeCodec, engine: $('engine').textContent, profile: target?.profile,
+    pacing: $('frame-pacing').value, audioDelayMs: Number($('audio-delay').value), worker: !!worker, userAgent: navigator.userAgent, secureContext: isSecureContext,
+    latest: { video: $('timing-status').dataset.metrics ? JSON.parse($('timing-status').dataset.metrics) : null, audio: $('audio-status').textContent, console: $('console-status').textContent } });
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = `remote-play-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  document.body.append(link); link.click(); link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+$('download-debug').onclick = downloadDiagnostics;
+$('hud-download').onclick = downloadDiagnostics;
 function onStreamMessage(message) {
-  if (message.type === 'stopped') { stop(); notify(message.message); }
+  if (message.type === 'console-stats') {
+    const delta = log.serverStats(message);
+    $('console-status').textContent = `Console → server: ${message.lost} packets lost · ${message.dropped} frames dropped · ${message.frozen} frozen · ${message.recovered} recovered · ${message.idr} keyframe requests · ${message.pending} pending packets · console ${message.consoleFps} fps / ${message.consoleMbps} Mbps`;
+    if (delta) updateHud({ type: 'console-stats', ...delta }, activeCodec);
+    return;
+  }
+  if (message.type === 'stopped') { log.event('stopped', { message: message.message }); stop(); notify(message.message); }
   else if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
   else if (message.type === 'sync') audio?.sync(message.timestamp);
   else if (message.type === 'renderer-error') {
+    log.event('renderer-error', { message: message.message, codec: activeCodec });
     if (activeCodec !== 'mpeg1') {
       console.warn('Native video decoder fallback:', message.message);
       decoderFailure = message.message;
@@ -510,9 +623,12 @@ function onStreamMessage(message) {
     }
     reconnect('Switching to the compatibility renderer…', true);
   } else if (message.type === 'connected') {
+    log.event('connected', { inputOnly: !!message.inputOnly, codec: activeCodec });
     resetInputs(); gamepads.reset();
     if (message.inputOnly) $('stream-status').textContent = 'Controller connected';
   } else if (message.type === 'stats') {
+    log.videoStats(message, 1000 / (target?.profile.fps || 60));
+    renderEvents();
     updateHud(message, activeCodec);
     if (message.totalFrames > 600) retry.reset();
     $('fps').textContent = `${message.fps.toFixed(1)} fps`;
@@ -536,8 +652,9 @@ function onStreamMessage(message) {
       const change = quality?.sample(message, performance.now(), !document.hidden);
       if (change) changeProfile(change.profile, change.reason);
     }
-  } else if (message.type === 'status') $('stream-status').textContent = message.message;
+  } else if (message.type === 'status') { log.event('status', { message: message.message }); $('stream-status').textContent = message.message; }
   else if (message.type === 'error' || message.type === 'closed') {
+    log.event(message.type, { message: message.message });
     if ($('auto-quality').checked && quality && /cannot keep up|falling behind/.test(message.message)) {
       const change = quality.change(quality.lower(true), 'Browser decoding exceeded its time limit', performance.now());
       if (change) { changeProfile(change.profile, change.reason); return; }
@@ -565,6 +682,7 @@ function stop(preserveTarget = false) {
   resetFullscreenGestures();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   $('player').classList.remove('theater');
+  leaveConsoleScope();
   $('library-profile').append($('profile-settings'));
   $('apply-profile').hidden = true;
   $('player').hidden = true;
@@ -572,8 +690,9 @@ function stop(preserveTarget = false) {
 }
 $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true));
 $('stop').onclick = () => stop();
-$('show-controls').onchange = () => { resetFullscreenGestures(); resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
-$('controls').hidden = !$('show-controls').checked;
+function updateTouchOverlay() { $('player').classList.toggle('touch', $('show-controls').checked); }
+$('show-controls').onchange = () => { resetFullscreenGestures(); resetInputs(); gamepads.reset(); updateTouchOverlay(); };
+updateTouchOverlay();
 async function enterFullscreen() {
   if ($('player').hidden || document.fullscreenElement === $('player')) return;
   try {
@@ -651,6 +770,7 @@ function onAudioMessage(message) {
     worker?.postMessage({ type: 'audio-fallback' });
     $('audio-status').textContent = 'Using compatible Web Audio output.';
   } else if (message.type === 'audio-stats') {
+    log.audioStats(message);
     updateHud(message, activeCodec);
     $('audio-status').textContent = `${message.engine} · ${Math.round(message.bufferedMs)} ms queued · ${message.underruns} underruns${message.skewMs == null ? '' : ` · audio lag estimate ${Math.round(message.lagMs)} ms`}`;
     $('audio-status').dataset.skew = message.skewMs ?? '';
@@ -685,6 +805,7 @@ function updateQuality(reason = '') {
 }
 function changeProfile(profile, reason) {
   if (!target || target.inputSession) return;
+  log.event('profile-change', { reason, profile });
   target.profile = { ...profile };
   retry.reset();
   reconnect(`${reason}. Reconnecting with ${profile.resolution}${profile.fps}…`);
@@ -719,7 +840,9 @@ const presets = {
 };
 function savePlaybackPreferences() {
   syncChoices();
+  if (profileScope) { consoleProfiles[profileScope] = readSettings(); persistConsoleProfiles(); }
   for (const id of preferenceIds) {
+    if (profileScope && Object.values(profileFields).includes(id)) continue;
     const element = $(id);
     try { localStorage.setItem(`remote-play:${id}`, element.type === 'checkbox' ? element.checked : element.value); } catch {}
   }

@@ -401,6 +401,23 @@ test('controller-only sessions show connection feedback in the toast instead of 
   await context.close();
 });
 
+test('stream diagnostics lists events and downloads a JSON log with per-second samples', async ({ page }) => {
+  await register(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+  await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(120);
+  await page.locator('#stream-diagnostics summary').click();
+  await expect(page.locator('#event-log li').first()).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download diagnostics log' }).click()]);
+  expect(download.suggestedFilename()).toMatch(/^remote-play-diagnostics-.*\.json$/);
+  const data = JSON.parse(await (await import('node:fs/promises')).readFile(await download.path(), 'utf8'));
+  expect(data.samples.length).toBeGreaterThan(1);
+  expect(data.samples.at(-1).fps).toBeGreaterThan(30);
+  expect(data.events.map(event => event.type)).toEqual(expect.arrayContaining(['play', 'connected']));
+  expect(data.codec).toBe('mpeg1');
+  await page.locator('#stop').click();
+});
+
 test('gamepads poll without connection events and release when unplugged', async ({ page }) => {
   await page.addInitScript(() => {
     window.pads = [];
