@@ -290,6 +290,32 @@ test('console settings open without connecting and a custom profile applies only
   await expect(page.locator('.device-custom')).toBeEmpty();
 });
 
+test('Play keeps the page at the top and the session survives a refresh through its own URL', async ({ page }) => {
+  await register(page);
+  await page.route('**/api/playstation/my-devices', route => route.fulfill({ json: [{ hostId: 'route-ps5', hostName: 'Den', hostType: 'PS5', ipAddress: '192.0.2.7', isRegistered: true, status: 'OK' }] }));
+  await page.locator('#refresh').click();
+  let tickets = 0;
+  await page.route('**/api/software/tickets', route => { tickets++; route.fulfill({ status: 409, json: { message: 'Console busy.' } }); });
+  await page.evaluate(() => window.scrollTo(0, 400));
+  await page.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
+  expect(await page.evaluate(() => scrollY)).toBe(0);
+  expect(await page.evaluate(() => location.hash)).toBe('#/play/route-ps5');
+  await page.reload();
+  await expect(page.locator('#player')).toBeVisible();
+  await expect(page.locator('#stream-title')).toHaveText('Den');
+  await expect.poll(() => tickets).toBe(2);
+  await page.goBack();
+  await expect(page.locator('#library')).toBeVisible();
+  expect(await page.evaluate(() => location.hash)).toBe('');
+  await page.locator('#demo').click();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
+  expect(await page.evaluate(() => location.hash)).toBe('#/test');
+  await page.locator('#stop').click();
+  await expect(page.locator('#library')).toBeVisible();
+  expect(await page.evaluate(() => location.hash)).toBe('');
+});
+
 test('each Play button has a labeled fullscreen toggle on its left, with shared saved state', async ({ page }) => {
   await register(page);
   const devices = ['Living room', 'Office'].map((hostName, index) => ({ hostId: `layout-${index}`, hostName, hostType: 'PS5', isRegistered: true, status: 'OK' }));

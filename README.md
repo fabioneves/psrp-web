@@ -59,6 +59,13 @@ resumes at the next IDR. Four failures within 30 seconds reconnect instead.
 A console that reports "still occupied" after a drop is retried every four
 seconds for a minute before the attempt counter applies.
 
+### Session URLs
+
+Playing a console moves the address to `#/play/<console id>` and the test
+stream to `#/test`, so a refresh reconnects to the same console after the
+saved login restores. Back returns to the library and ends the session;
+Disconnect clears the address. The page stays at the top when a session starts.
+
 ### Tesla theater
 
 The sign-in page and the library carry an **Open in Tesla theater** link. It goes

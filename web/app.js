@@ -16,7 +16,7 @@ import { StreamLog, describeEvent } from './diagnostics.js';
 const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
 const setup = bindSetup(api, refresh, notify);
-let pairedConsoleIds = new Set(), scanning = false;
+let pairedConsoleIds = new Set(), scanning = false, knownDevices = [];
 const resetInputs = bindInputs($('controls'), message => {
   worker?.postMessage(message);
   stream?.input(message);
@@ -191,7 +191,17 @@ async function restoreSession() {
     if (token) { await refresh(); void setup.restore(); }
   } catch (error) { notify(`Could not restore your session: ${error.message}`, 'error'); }
   finally { showAccount(); }
+  if (token) resumeRoute();
 }
+function resumeRoute() {
+  const match = /^#\/(play\/(.+)|test)$/.exec(location.hash);
+  if (!match || target) return;
+  if (match[1] === 'test') { void play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true); return; }
+  const device = knownDevices.find(candidate => candidate.hostId === decodeURIComponent(match[2]));
+  if (device?.isRegistered) void play(device.hostId, device.hostName || device.hostType || 'PlayStation', false, null, device.hostType);
+  else { history.replaceState(null, '', location.pathname + location.search); notify('That console is no longer paired with your account.', 'error'); }
+}
+window.addEventListener('popstate', () => { if (target && !target.inputSession && !/^#\/(play\/|test)/.test(location.hash)) stop(); });
 
 const defaultBitrate = { '360p': '3000', '540p': '6000', '720p': '10000', '1080p': '20000' };
 const profileFields = { codec: 'video-mode', resolution: 'resolution-profile', fps: 'fps-profile', bitrateKbps: 'bitrate', pacing: 'frame-pacing' };
@@ -257,6 +267,7 @@ function fullscreenToggle() {
 async function refresh() {
   await refreshActive();
   const devices = await api('playstation/my-devices');
+  knownDevices = devices;
   pairedConsoleIds = new Set(devices.map(device => device.hostId));
   $('devices').replaceChildren();
   if (!devices.length) {
@@ -483,7 +494,11 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
   quality = new AdaptiveQuality(target.profile);
   $('connection-message').textContent = '';
   showPlayer(target);
-  $('player').scrollIntoView({ block: 'start' });
+  window.scrollTo(0, 0);
+  if (!inputSession) {
+    const route = demo ? '#/test' : `#/play/${encodeURIComponent(hostId)}`;
+    if (location.hash !== route) history.pushState({ route }, '', route);
+  }
   selectSessionTab(inputSession ? 'input-panel' : 'picture-panel');
   if (hostId && !inputSession && startInFullscreen) void enterFullscreen();
   if (!inputSession) {
@@ -708,6 +723,7 @@ function stop(preserveTarget = false) {
   $('apply-profile').hidden = true;
   $('player').hidden = true;
   $('library').hidden = !token;
+  if (/^#\/(play\/|test)/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
 }
 $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true));
 $('stop').onclick = () => stop();
