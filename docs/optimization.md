@@ -132,7 +132,7 @@ last change. Hidden tabs reset observation. A decode batch exceeding its hard ti
 limit can trigger an immediate lower profile. Changes reconnect the session with
 a fresh ticket, which briefly interrupts video/audio and attached input clients.
 
-Apply selected profile disables automatic mode and applies the manual choice.
+During playback, Apply copies the selected settings onto the session: it reconnects when the profile, codec or pacing changed and keeps automatic mode as chosen, with the selected profile as the new ceiling. The automatic-quality checkbox is a saved preference.
 CPU-pressure integration tests inject degraded metrics while using real encoding,
 transport and reconnection; this does not model a particular Tesla CPU.
 

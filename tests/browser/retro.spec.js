@@ -94,7 +94,7 @@ test('theater fallback keeps fullscreen clean and touch gestures can exit it', a
   await page.locator('#stop').click();
 });
 
-test('codec tiles default to H.264, support keyboard selection and save preferences', async ({ page }) => {
+test('codec tiles default to H.264, support keyboard selection and save preferences with the automatic quality choice', async ({ page }) => {
   await register(page);
   const modes = page.getByRole('radiogroup', { name: 'Video mode', exact: true });
   await expect(modes.getByRole('radio', { name: 'H.264', exact: true })).toBeChecked();
@@ -104,8 +104,10 @@ test('codec tiles default to H.264, support keyboard selection and save preferen
   await page.keyboard.press('End');
   await expect(modes.getByRole('radio', { name: 'H.265', exact: true })).toBeFocused();
   await expect(page.locator('#video-mode')).toHaveValue('h265');
+  await page.getByLabel('Automatically adjust quality').check();
   await page.reload();
   await expect(modes.getByRole('radio', { name: 'H.265', exact: true })).toBeChecked();
+  await expect(page.getByLabel('Automatically adjust quality')).toBeChecked();
   await expect(page.locator('.banner-nav #logout')).toBeVisible();
   await expect(page.locator('.site-header')).toHaveCount(0);
 });

@@ -322,7 +322,9 @@ test('manual profile changes reconnect at 540p30 and burst frames recover with J
   await expect(page.locator('#playing-profile')).toBeVisible();
   await chooseSetting(page, 'resolution-profile', '540p');
   await chooseSetting(page, 'fps-profile', '30');
-  await page.getByRole('button', { name: 'Apply selected profile' }).click();
+  await expect(page.locator('#quality-status')).toContainText('press Apply to use the new settings');
+  await expect(page.locator('#resolution')).toHaveText('1280 × 720');
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
   await expect(page.locator('#resolution')).toHaveText('960 × 540', { timeout: 30000 });
   await expect(page.locator('#quality-status')).toContainText('Manual · active 540p30');
   await expect(page.locator('#render-status')).toContainText('JavaScript');
@@ -333,7 +335,7 @@ test('manual profile changes reconnect at 540p30 and burst frames recover with J
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 });
 
-test('automatic quality responds to sustained CPU pressure and manual apply overrides it', async ({ page }) => {
+test('automatic quality responds to sustained CPU pressure and Apply restores the ceiling while keeping automatic mode', async ({ page }) => {
   await page.route('**/decoder.js', async route => {
     const response = await route.fetch();
     const script = (await response.text()).replace('codecMs: decoded ? decodeMs / decoded : 0', 'codecMs: 30');
@@ -349,8 +351,9 @@ test('automatic quality responds to sustained CPU pressure and manual apply over
   await page.getByRole('tab', { name: 'Picture', exact: true }).click();
   await expect(page.locator('#playing-profile')).toBeVisible();
   await expect(page.locator('#quality-status')).toContainText('active 720p60');
-  await page.getByRole('button', { name: 'Apply selected profile' }).click();
-  await expect(page.getByLabel('Automatically adjust quality')).not.toBeChecked();
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(page.getByLabel('Automatically adjust quality')).toBeChecked();
+  await expect(page.locator('#quality-status')).toContainText('Automatic');
   await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 });

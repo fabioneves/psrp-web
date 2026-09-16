@@ -54,7 +54,7 @@ try {
 } catch {}
 let startInFullscreen = false;
 try { startInFullscreen = localStorage.getItem('remote-play:auto-fullscreen') === 'true'; } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style', 'auto-quality'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -506,7 +506,7 @@ async function discoverConsoles(hostIp = '') {
 async function play(hostId, title, demo = false, inputSession = null, hostType = null) {
   stop();
   if (hostId && !inputSession && consoleProfiles[hostId]) enterConsoleScope(hostId);
-  target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile() };
+  target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile(), codec: $('video-mode').value, pacing: $('frame-pacing').value, auto: $('auto-quality').checked };
   resetHud(); log.reset(); renderEvents();
   log.event('play', { hostId, demo, inputSession: !!inputSession, profile: target.profile, codec: $('video-mode').value });
   quality = new AdaptiveQuality(target.profile);
@@ -587,11 +587,10 @@ function showPlayer({ hostId, title, demo, inputSession, profile }) {
   $('stream-profile').textContent = '';
   $('enable-audio').hidden = false;
 }
-async function openStream({ hostId, title, demo, inputSession, hostType, profile }) {
+async function openStream({ hostId, title, demo, inputSession, hostType, profile, codec: preferred, pacing }) {
   stop(true);
   showPlayer({ hostId, title, demo, inputSession, profile });
   const current = ++attempt;
-  const preferred = $('video-mode').value;
   const codec = inputSession ? 'mpeg1' : await selectVideoCodec(preferred, profile, failedCodecs, hostType);
   const native = codec === 'mpeg1' ? null : await nativeVideoConfig(profile, globalThis, codec);
   const hardwareAcceleration = native?.hardwareAcceleration || 'prefer-hardware';
@@ -629,7 +628,7 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {
-      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration, { fps: profile.fps, pacing: $('frame-pacing').value });
+      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration, { fps: profile.fps, pacing });
       if (attempt !== current) { connection.close(); return; }
       stream = connection;
     }
@@ -702,14 +701,14 @@ function onStreamMessage(message) {
       $('stream-status').textContent = 'Playing';
       $('connection-message').textContent = '';
     }
-    if ($('auto-quality').checked && !target?.inputSession) {
+    if (target?.auto && !target.inputSession) {
       const change = quality?.sample(message, performance.now(), !document.hidden);
       if (change) changeProfile(change.profile, change.reason);
     }
   } else if (message.type === 'status') { log.event('status', { message: message.message }); $('stream-status').textContent = message.message; }
   else if (message.type === 'error' || message.type === 'closed') {
     log.event(message.type, { message: message.message });
-    if ($('auto-quality').checked && quality && /cannot keep up|falling behind/.test(message.message)) {
+    if (target?.auto && quality && /cannot keep up|falling behind/.test(message.message)) {
       const change = quality.change(quality.lower(true), 'Browser decoding exceeded its time limit', performance.now());
       if (change) { changeProfile(change.profile, change.reason); return; }
     }
@@ -853,10 +852,18 @@ $('resolution-profile').onchange = () => {
 };
 $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
 
+// Settings changed during playback are a draft until Apply copies them onto the target.
+function sessionChanged() {
+  const selected = selectedProfile();
+  return $('video-mode').value !== target.codec || $('frame-pacing').value !== target.pacing || Object.keys(selected).some(key => selected[key] !== target.profile[key]);
+}
+function pendingSettings() { return !!target && !target.inputSession && (sessionChanged() || $('auto-quality').checked !== target.auto); }
 function updateQuality(reason = '') {
   const profile = target?.profile || selectedProfile();
-  const mode = $('auto-quality').checked ? 'Automatic · selected profile is the ceiling' : 'Manual';
-  $('quality-status').textContent = `${mode} · active ${profile.resolution}${profile.fps} · ${profile.bitrateKbps / 1000} Mbps${reason ? ` · ${reason}` : ''}`;
+  const auto = target ? target.auto : $('auto-quality').checked;
+  const mode = auto ? 'Automatic · selected profile is the ceiling' : 'Manual';
+  const note = pendingSettings() ? 'press Apply to use the new settings' : reason;
+  $('quality-status').textContent = `${mode} · active ${profile.resolution}${profile.fps} · ${profile.bitrateKbps / 1000} Mbps${note ? ` · ${note}` : ''}`;
 }
 function changeProfile(profile, reason) {
   if (!target || target.inputSession) return;
@@ -866,27 +873,15 @@ function changeProfile(profile, reason) {
   reconnect(`${reason}. Reconnecting with ${profile.resolution}${profile.fps}…`);
   updateQuality(reason);
 }
-$('auto-quality').onchange = () => {
-  if (target) {
-    quality = new AdaptiveQuality(selectedProfile());
-    const selected = selectedProfile();
-    const active = target.profile;
-    if ($('auto-quality').checked && (parseInt(active.resolution) > parseInt(selected.resolution) || active.fps > selected.fps || active.bitrateKbps > selected.bitrateKbps)) {
-      changeProfile(selected, 'Automatic quality ceiling applied');
-    } else quality.current = { ...active };
-  }
-  updateQuality();
-};
 $('apply-profile').onclick = () => {
-  $('auto-quality').checked = false;
-  quality = new AdaptiveQuality(selectedProfile());
-  changeProfile(selectedProfile(), 'Manual profile selected');
-};
-
-$('video-mode').addEventListener('change', () => {
+  if (!target || target.inputSession) return;
+  const selected = selectedProfile(), changed = sessionChanged();
+  Object.assign(target, { codec: $('video-mode').value, pacing: $('frame-pacing').value, auto: $('auto-quality').checked });
   failedCodecs.clear(); decoderFailure = '';
-  if (target && !target.inputSession) { retry.reset(); reconnect('Applying video mode…'); }
-});
+  quality = new AdaptiveQuality(selected);
+  if (changed) changeProfile(selected, 'Settings applied');
+  else updateQuality('Settings applied');
+};
 
 const presets = {
   tesla: { codec: 'mpeg1', resolution: '720p', fps: 60, bitrateKbps: 10000 },
@@ -912,12 +907,9 @@ for (const button of document.querySelectorAll('[data-preset]')) button.onclick 
   $('resolution-profile').value = preset.resolution;
   $('fps-profile').value = String(preset.fps);
   $('bitrate').value = String(preset.bitrateKbps);
-  failedCodecs.clear(); decoderFailure = '';
   savePlaybackPreferences();
-  if (target && !target.inputSession) changeProfile(selectedProfile(), 'Quick profile selected');
-  else updateQuality();
+  updateQuality();
 };
-document.addEventListener('change', event => { if (preferenceIds.includes(event.target.id)) savePlaybackPreferences(); });
+document.addEventListener('change', event => { if (preferenceIds.includes(event.target.id)) { savePlaybackPreferences(); updateQuality(); } });
 savePlaybackPreferences();
 
-$('frame-pacing').onchange = () => { if (target && !target.inputSession) changeProfile(selectedProfile(), 'Frame pacing updated'); };

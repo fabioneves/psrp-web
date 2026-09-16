@@ -136,6 +136,8 @@ for (const resolution of ['720p', '1080p']) {
     await page.getByRole('tab', { name: 'Picture', exact: true }).click();
     await expect(page.locator('#playing-profile')).toBeVisible();
     await chooseSetting(page, 'video-mode', 'mpeg1');
+    await expect(page.locator('#engine')).toContainText('H.264 · hardware preferred');
+    await page.getByRole('button', { name: 'Apply', exact: true }).click();
     await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
     await page.locator('#stop').click();
   });
