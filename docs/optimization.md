@@ -144,8 +144,8 @@ From the repository root:
 npm run build:pixels
 npm run benchmark:pixels
 npm run test:unit
-docker build --target test -t canvas-remote-play-tests .
-docker run --rm --entrypoint dotnet canvas-remote-play-tests /src/tests/backend/bin/Release/net10.0/BackendTests.dll --benchmark
+docker build --target test -t player-one-tests .
+docker run --rm --entrypoint dotnet player-one-tests /src/tests/backend/bin/Release/net10.0/BackendTests.dll --benchmark
 docker compose up --build -d
 TEST_URL=http://127.0.0.1:18080 npm test
 ```

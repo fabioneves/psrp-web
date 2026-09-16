@@ -1,8 +1,18 @@
-# Canvas Remote Play
+# Player One
 
-A Docker-hosted PlayStation Remote Play client with **optional browser hardware decoding and a software Canvas 2D fallback**. Based on [o1298098/remote-play](https://github.com/o1298098/remote-play), with a canvas playback approach inspired by [Moonlight Web Tesla](https://github.com/Argon2000/moonlight-web-stream-tsla).
+PlayStation Remote Play in any browser, built for the Tesla screen. A small
+self-hosted server pairs with your PS5 or PS4 and streams it to the browser
+over HTTPS: **H.264 (or H.265 on PS5) decoded by the browser's hardware video
+decoder** through WebCodecs by default, forwarded frame by frame with no
+transcoding in between. A software Canvas 2D renderer remains as the fallback
+for browsers without hardware decoding. Based on
+[o1298098/remote-play](https://github.com/o1298098/remote-play), with the
+canvas fallback inspired by [Moonlight Web Tesla](https://github.com/Argon2000/moonlight-web-stream-tsla).
 
-**Default: 1280×720 at 60 fps, 10 Mbps, with stereo audio. Select up to 1080p60.** No GPU, hardware video decoder, WebGL, WebCodecs, physical gamepad or joystick is required. Tesla is the primary browser target, using touch buttons and keyboard input. Optional gamepads and second-device input are also included.
+**Default: 1280×720 at 60 fps, 10 Mbps, H.264, with stereo audio. Select up to
+1080p60 and H.265.** No GPU is needed on the server. Tesla is the primary
+browser target, with on-screen and keyboard controls; gamepads with rumble and
+a phone as a second controller are included.
 
 The synthetic video pipeline has been tested at 60 fps in desktop Chromium with GPU acceleration disabled. **Brief real PS5 streaming checks passed; a Tesla browser has not been tested here.** See [validation and performance](docs/validation.md).
 
@@ -20,9 +30,22 @@ address falls back to Canvas software video.
 An unprivileged Debian container with rootful Docker inside and host
 networking. The console's UDP stream reaches the app through the kernel alone
 and discovery and wake use LAN broadcasts, so no subnet configuration is needed.
-The full guide with data migration is in [docs/proxmox-lxc.md](docs/proxmox-lxc.md).
 
-On the Proxmox node:
+The one-command way, on the Proxmox node as root:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/fabioneves/psrp-web/main/deploy/proxmox/setup.sh)"
+```
+
+It asks for a container id, hostname, bridge, storage, address, size and your
+domain, then creates the container, installs Docker and the app, and waits for
+the HTTPS certificate when a domain was given. Every answer has a default, and
+all of them can be passed as environment variables for an unattended run
+(`CTID`, `CT_HOSTNAME`, `BRIDGE`, `STORAGE`, `IP`, `GATEWAY`, `CORES`,
+`MEMORY`, `DISK`, `DOMAIN`). The full guide with data migration is in
+[docs/proxmox-lxc.md](docs/proxmox-lxc.md).
+
+The same steps by hand, on the Proxmox node:
 
 ```sh
 git clone https://github.com/fabioneves/psrp-web.git && cd psrp-web
@@ -437,7 +460,7 @@ the web assets; Node is not included in the running server. Local Node is needed
 for tests and rebuilding the vendored decoder bundle.
 
 ```sh
-docker build --target test -t canvas-remote-play-tests .
+docker build --target test -t player-one-tests .
 npm ci
 npm test
 ```
@@ -461,7 +484,7 @@ See [source attribution](docs/sources.md), [architecture and protocol](docs/arch
 
 ## Player One interface
 
-The retro interface uses custom pixel art and self-hosted fonts. Video presets, codec tiles, resolution and frame rate are always visible in the console library; bitrate and frame pacing sit under an Advanced disclosure that opens automatically when they differ from the defaults. Custom Canvas, H.264 (default), and H.265 tiles replace the codec dropdown. During a session, a smaller player sits beside the Control deck on wide screens; the deck stacks below on phones. Picture, Sound, and Controls tabs keep settings easy to reach, with touch buttons for short option lists. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
+The retro interface uses custom pixel art and self-hosted fonts. Video presets, codec tiles, resolution and frame rate are always visible in the console library; bitrate and frame pacing sit under an Advanced disclosure that opens automatically when they differ from the defaults. Custom Canvas, H.264 (default), and H.265 tiles replace the codec dropdown. During a session, a smaller player sits beside the Control deck on wide screens; the deck stacks below on phones. Picture, Sound, and Controls tabs keep settings easy to reach, with touch buttons for short option lists. Quick presets select the Compatibility Canvas fallback at 720p60, the default balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
 
 - **Full screen** hides app controls and statistics. Exit with Escape or double-click/double-tap on the picture. Browsers without the Fullscreen API use a viewport-filling theater view; browser chrome cannot be hidden by the app in that fallback.
 - **Start in fullscreen**, the labeled icon toggle to the left of each Play button, is off by default and saved per browser. When checked, Play enters fullscreen immediately while connecting. Test streams and input-only attachments keep their normal view.

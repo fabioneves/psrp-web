@@ -6,6 +6,17 @@ alone and discovery and wake use LAN broadcasts. Docker Compose on any other
 host keeps working exactly as described in the README; this is the alternative
 for a Proxmox environment.
 
+## Quick path
+
+One command on the Proxmox node does everything below, asking for each value:
+
+```sh
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/fabioneves/psrp-web/main/deploy/proxmox/setup.sh)"
+```
+
+Set `PSRP_DRY_RUN=1` to see the commands it would run. The manual steps
+follow for anyone who prefers to run them one at a time.
+
 ## 1. Create the container (on the Proxmox node)
 
 ```sh

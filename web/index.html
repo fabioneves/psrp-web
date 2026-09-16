@@ -112,11 +112,11 @@
       <section id="stream-settings" class="panel"><div class="section-heading"><div><p class="eyebrow">02 / TUNE YOUR SESSION</p><h2>Stream settings</h2></div><img src="/art/disc.svg" width="44" height="44" alt=""></div>
       <div id="library-profile"><div id="profile-settings">
       <div class="preset-grid" aria-label="Quick video profiles">
-        <button type="button" data-preset="tesla"><span class="preset-icon">△</span><strong>Tesla / Canvas</strong><small>720p · 60 fps · CPU decoding</small></button>
-        <button type="button" data-preset="balanced"><span class="preset-icon">×</span><strong>Balanced</strong><small>720p · 60 fps · H.264</small></button>
+        <button type="button" data-preset="tesla"><span class="preset-icon">△</span><strong>Compatibility</strong><small>720p · 60 fps · Canvas fallback</small></button>
+        <button type="button" data-preset="balanced"><span class="preset-icon">×</span><strong>Balanced</strong><small>720p · 60 fps · H.264 · default</small></button>
         <button type="button" data-preset="detail"><span class="preset-icon">□</span><strong>Maximum detail</strong><small>1080p · 60 fps · H.264</small></button>
       </div>
-      <label for="video-mode">Video mode</label><select id="video-mode" aria-describedby="video-mode-status"><option value="mpeg1">Canvas · software</option><option value="h264" selected>H.264 · browser decoding</option><option value="h265">H.265 · PS5, browser decoding</option></select>
+      <label for="video-mode">Video mode</label><select id="video-mode" aria-describedby="video-mode-status"><option value="mpeg1">Canvas · software fallback</option><option value="h264" selected>H.264 · browser decoding</option><option value="h265">H.265 · PS5, browser decoding</option></select>
       <p id="video-mode-status" class="hint" role="status">H.264 and H.265 prefer hardware decoding. Unsupported modes fall back automatically.</p>
       <div class="settings-grid">
       <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>

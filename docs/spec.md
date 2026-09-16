@@ -1,4 +1,4 @@
-# Canvas Remote Play
+# Player One
 
 ## Objective
 Run PS4/PS5 Remote Play in a browser with no GPU, hardware video decoder,
@@ -25,7 +25,7 @@ explicitly force a software decoder. We adopt canvas rendering, not its decoder.
 
 ## Commands
 - Run: `docker compose up --build -d`
-- Backend tests: `docker build --target test -t canvas-remote-play-tests .`
+- Backend tests: `docker build --target test -t player-one-tests .`
 - Browser tests: `npm ci && npm test`
 - Stop: `docker compose down`
 
