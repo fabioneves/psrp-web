@@ -146,22 +146,38 @@ function showAccount() {
   $('library').hidden = !token;
   $('logout').hidden = !token;
 }
-$('auth-toggle').onclick = () => {
-  registering = !registering;
+let firstRun = false;
+function setRegistering(value) {
+  registering = value;
   $('email-label').hidden = !registering;
   $('email').required = registering;
   $('username').previousSibling.textContent = registering ? 'Username (letters, numbers, underscore)' : 'Username or email';
   $('password').autocomplete = registering ? 'new-password' : 'current-password';
-  $('auth-title').textContent = registering ? 'Create your account' : 'Sign in to play';
+  $('auth-eyebrow').textContent = firstRun ? 'FIRST RUN' : 'WELCOME BACK';
+  $('auth-title').textContent = firstRun ? 'Create the owner account' : registering ? 'Create your account' : 'Sign in to play';
   $('auth-submit').textContent = registering ? 'Create account' : 'Sign in';
   $('auth-toggle').textContent = registering ? 'Already have an account? Sign in' : 'Create a local account';
-};
+  $('auth-intro').hidden = !firstRun;
+}
+$('auth-toggle').onclick = () => setRegistering(!registering);
+async function loadSetupState() {
+  try {
+    const state = await api('auth/setup');
+    firstRun = !!state.needsSetup;
+    $('auth-toggle').hidden = firstRun || !state.registrationOpen;
+    setRegistering(firstRun);
+  } catch {
+    firstRun = false;
+    setRegistering(false);
+  }
+}
 $('auth-form').onsubmit = event => {
   event.preventDefault();
   run($('auth-submit'), async () => {
     const credentials = { usernameOrEmail: $('username').value.trim(), password: $('password').value };
     if (registering) await api('auth/register', { username: credentials.usernameOrEmail, email: $('email').value, password: credentials.password });
     const result = await api('auth/login', credentials);
+    firstRun = false; $('auth-toggle').hidden = true; setRegistering(false);
     token = result.token;
     setup.reset();
     $('password').value = '';
@@ -182,6 +198,7 @@ $('auth-form').onsubmit = event => {
 $('logout').onclick = () => run($('logout'), async () => {
   await api('auth/logout', {});
   stop(); token = null; setup.reset(); showAccount(); notify('');
+  await loadSetupState();
 });
 
 async function restoreSession() {
@@ -192,6 +209,7 @@ async function restoreSession() {
   } catch (error) { notify(`Could not restore your session: ${error.message}`, 'error'); }
   finally { showAccount(); }
   if (token) resumeRoute();
+  else await loadSetupState();
 }
 function resumeRoute() {
   const match = /^#\/(play\/(.+)|test)$/.exec(location.hash);

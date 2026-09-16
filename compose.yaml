@@ -35,6 +35,7 @@ services:
       DECODER_THREADS: ${DECODER_THREADS:-1}
       ENCODER_THREADS: ${ENCODER_THREADS:-4}
       DISCOVERY_SUBNETS: ${DISCOVERY_SUBNETS:-}
+      ALLOW_REGISTRATION: ${ALLOW_REGISTRATION:-false}
     volumes:
       - app-data:/data
     depends_on:

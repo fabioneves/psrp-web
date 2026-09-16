@@ -146,7 +146,7 @@ npm run benchmark:pixels
 npm run test:unit
 docker build --target test -t player-one-tests .
 docker run --rm --entrypoint dotnet player-one-tests /src/tests/backend/bin/Release/net10.0/BackendTests.dll --benchmark
-docker compose up --build -d
+ALLOW_REGISTRATION=true docker compose up --build -d
 TEST_URL=http://127.0.0.1:18080 npm test
 ```
 

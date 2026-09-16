@@ -7,10 +7,10 @@ namespace RemotePlay.Models.Auth
     /// </summary>
     public class LoginRequest
     {
-        [Required(ErrorMessage = "用户名或邮箱是必填项")]
+        [Required(ErrorMessage = "Username or email is required.")]
         public required string UsernameOrEmail { get; set; }
 
-        [Required(ErrorMessage = "密码是必填项")]
+        [Required(ErrorMessage = "Password is required.")]
         public required string Password { get; set; }
     }
 }

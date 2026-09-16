@@ -7,20 +7,20 @@ namespace RemotePlay.Models.Auth
     /// </summary>
     public class RegisterRequest
     {
-        [Required(ErrorMessage = "用户名是必填项")]
-        [MinLength(3, ErrorMessage = "用户名至少需要3个字符")]
-        [MaxLength(50, ErrorMessage = "用户名不能超过50个字符")]
-        [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "用户名只能包含字母、数字和下划线")]
+        [Required(ErrorMessage = "Username is required.")]
+        [MinLength(3, ErrorMessage = "Username needs at least 3 characters.")]
+        [MaxLength(50, ErrorMessage = "Username cannot exceed 50 characters.")]
+        [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "Username may contain letters, numbers and underscores only.")]
         public required string Username { get; set; }
 
-        [Required(ErrorMessage = "邮箱是必填项")]
-        [EmailAddress(ErrorMessage = "邮箱格式不正确")]
-        [MaxLength(100, ErrorMessage = "邮箱不能超过100个字符")]
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Email address is not valid.")]
+        [MaxLength(100, ErrorMessage = "Email cannot exceed 100 characters.")]
         public required string Email { get; set; }
 
-        [Required(ErrorMessage = "密码是必填项")]
-        [MinLength(8, ErrorMessage = "密码至少需要8个字符")]
-        [MaxLength(100, ErrorMessage = "密码不能超过100个字符")]
+        [Required(ErrorMessage = "Password is required.")]
+        [MinLength(8, ErrorMessage = "Password needs at least 8 characters.")]
+        [MaxLength(100, ErrorMessage = "Password cannot exceed 100 characters.")]
         public required string Password { get; set; }
     }
 }

@@ -23,8 +23,9 @@
         <a class="tesla-link" href="https://www.youtube.com/redirect" rel="noopener">Open in Tesla theater ↗</a><p class="hint tesla-hint">In a parked Tesla this opens the app in the fullscreen theater browser.</p>
       </div>
       <form id="auth-form" class="panel">
-        <p class="eyebrow">WELCOME BACK</p>
+        <p class="eyebrow" id="auth-eyebrow">WELCOME BACK</p>
         <h2 id="auth-title">Sign in to play</h2>
+        <p id="auth-intro" class="hint" hidden>This server has no accounts yet. The first account you create becomes its owner; after that, sign-ups are closed.</p>
         <label>Username or email<input id="username" name="username" autocomplete="username" required maxlength="100"></label>
         <label id="email-label" hidden>Email<input id="email" type="email" autocomplete="email" maxlength="100"></label>
         <label>Password<input id="password" type="password" autocomplete="current-password" required minlength="8" maxlength="100"></label>

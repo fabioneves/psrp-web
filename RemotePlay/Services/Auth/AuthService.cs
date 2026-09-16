@@ -43,13 +43,13 @@ namespace RemotePlay.Services.Auth
             // 检查用户名是否已存在
             if (await _context.Users.AnyAsync(u => u.Username == request.Username))
             {
-                throw new InvalidOperationException("用户名已存在");
+                throw new InvalidOperationException("That username is already taken.");
             }
 
             // 检查邮箱是否已存在
             if (await _context.Users.AnyAsync(u => u.Email == request.Email))
             {
-                throw new InvalidOperationException("邮箱已被注册");
+                throw new InvalidOperationException("That email address is already registered.");
             }
 
             // 创建新用户

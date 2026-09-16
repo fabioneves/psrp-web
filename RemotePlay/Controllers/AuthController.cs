@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc;
 using RemotePlay.Contracts.Services;
 using RemotePlay.Models.Auth;
 using RemotePlay.Models.Base;
+using RemotePlay.Models.Context;
 using RemotePlay.Services.Auth;
+using Microsoft.EntityFrameworkCore;
 
 namespace RemotePlay.Controllers
 {
@@ -16,13 +18,31 @@ namespace RemotePlay.Controllers
     {
         private readonly IAuthService _authService;
         private readonly ILogger<AuthController> _logger;
+        private readonly RPContext _db;
 
         public AuthController(
             IAuthService authService,
-            ILogger<AuthController> logger)
+            ILogger<AuthController> logger,
+            RPContext db)
         {
             _authService = authService;
             _logger = logger;
+            _db = db;
+        }
+
+        private static bool RegistrationAllowedByConfiguration =>
+            string.Equals(Environment.GetEnvironmentVariable("ALLOW_REGISTRATION"), "true", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// First-run state: whether any account exists and whether registration is open.
+        /// </summary>
+        [HttpGet("setup")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Setup()
+        {
+            Response.Headers.CacheControl = "no-store";
+            var hasUsers = await _db.Users.AnyAsync();
+            return Ok(new { needsSetup = !hasUsers, registrationOpen = !hasUsers || RegistrationAllowedByConfiguration || User.Identity?.IsAuthenticated == true });
         }
 
         /// <summary>
@@ -39,8 +59,18 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "请求数据验证失败",
+                        ErrorMessage = "The request failed validation.",
                         ErrorCode = ErrorCode.InvalidRequest
+                    });
+                }
+
+                if (await _db.Users.AnyAsync() && !RegistrationAllowedByConfiguration && User.Identity?.IsAuthenticated != true)
+                {
+                    return StatusCode(403, new ApiErrorResponse
+                    {
+                        Success = false,
+                        ErrorMessage = "Registration is closed on this server. Sign in with an existing account, or set ALLOW_REGISTRATION=true to open it.",
+                        ErrorCode = ErrorCode.Unauthorized
                     });
                 }
 
@@ -50,7 +80,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = response,
-                    Message = "注册成功"
+                    Message = "Account created."
                 });
             }
             catch (InvalidOperationException ex)
@@ -67,7 +97,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "服务器内部错误",
+                    ErrorMessage = "Internal server error.",
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }
@@ -89,7 +119,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "请求数据验证失败",
+                        ErrorMessage = "The request failed validation.",
                         ErrorCode = ErrorCode.InvalidRequest
                     });
                 }
@@ -101,7 +131,7 @@ namespace RemotePlay.Controllers
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "用户名或密码错误",
+                        ErrorMessage = "Wrong username or password.",
                         ErrorCode = ErrorCode.InvalidCredentials
                     });
                 }
@@ -115,7 +145,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = response,
-                    Message = "登录成功"
+                    Message = "Signed in."
                 });
             }
             catch (Exception ex)
@@ -124,7 +154,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "服务器内部错误",
+                    ErrorMessage = "Internal server error.",
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }
@@ -171,7 +201,7 @@ namespace RemotePlay.Controllers
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "无法获取用户信息",
+                        ErrorMessage = "Could not load the user profile.",
                         ErrorCode = ErrorCode.Unauthorized
                     });
                 }
@@ -192,7 +222,7 @@ namespace RemotePlay.Controllers
                             Email = email,
                             UserId = userIdClaim
                         },
-                        Message = "令牌有效"
+                        Message = "Token is valid."
                     });
                 }
 
@@ -207,7 +237,7 @@ namespace RemotePlay.Controllers
                         LastLoginAt = user.LastLoginAt,
                         CreatedAt = user.CreatedAt
                     },
-                    Message = "令牌有效"
+                    Message = "Token is valid."
                 });
             }
             catch (Exception ex)
@@ -216,7 +246,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "服务器内部错误",
+                    ErrorMessage = "Internal server error.",
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }

@@ -81,7 +81,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = consoles,
-                    Message = $"发现 {consoles.Count} 个设备"
+                    Message = $"Found {consoles.Count} console(s)."
                 });
             }
             catch (Exception ex)
@@ -90,7 +90,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "设备发现失败: " + ex.Message,
+                    ErrorMessage = "Console discovery failed: " + ex.Message,
                     ErrorCode = ErrorCode.DeviceDiscoveryFailed
                 });
             }
@@ -112,7 +112,7 @@ namespace RemotePlay.Controllers
                 return NotFound(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = $"未找到主机: {hostIp}",
+                    ErrorMessage = $"No console found at {hostIp}.",
                     ErrorCode = ErrorCode.DeviceNotFound
                 });
             }
@@ -121,7 +121,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = console,
-                Message = "设备发现成功"
+                Message = "Console found."
             });
         }
 
@@ -141,7 +141,7 @@ namespace RemotePlay.Controllers
                 return NotFound(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "设备未找到",
+                    ErrorMessage = "Console not found.",
                     ErrorCode = ErrorCode.DeviceNotFound
                 });
             if (_device.IpAddress == null)
@@ -174,7 +174,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = _result,
-                Message = _result ? "唤醒成功" : "唤醒失败"
+                Message = _result ? "Wake request sent." : "Wake request failed."
             });
         }
 
@@ -193,7 +193,7 @@ namespace RemotePlay.Controllers
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "未授权",
+                        ErrorMessage = "Not authorized.",
                         ErrorCode = ErrorCode.Unauthorized
                     });
                 }
@@ -204,7 +204,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = response,
-                    Message = "设备设置加载成功"
+                    Message = "Console settings loaded."
                 });
             }
             catch (Exception ex)
@@ -222,7 +222,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "加载设备设置失败: " + ex.Message,
+                    ErrorMessage = "Could not load console settings: " + ex.Message,
                     ErrorCode = ErrorCode.DeviceSettingsLoadFailed
                 });
             }
@@ -240,7 +240,7 @@ namespace RemotePlay.Controllers
                 return BadRequest(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "请求体不能为空",
+                    ErrorMessage = "The request body is required.",
                     ErrorCode = ErrorCode.InvalidRequest
                 });
             }
@@ -253,7 +253,7 @@ namespace RemotePlay.Controllers
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "未授权",
+                        ErrorMessage = "Not authorized.",
                         ErrorCode = ErrorCode.Unauthorized
                     });
                 }
@@ -264,7 +264,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = response,
-                    Message = "设备设置保存成功"
+                    Message = "Console settings saved."
                 });
             }
             catch (Exception ex)
@@ -282,7 +282,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "保存设备设置失败: " + ex.Message,
+                    ErrorMessage = "Could not save console settings: " + ex.Message,
                     ErrorCode = ErrorCode.DeviceSettingsSaveFailed
                 });
             }
@@ -303,7 +303,7 @@ namespace RemotePlay.Controllers
                 return Unauthorized(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "未授权",
+                    ErrorMessage = "Not authorized.",
                     ErrorCode = ErrorCode.Unauthorized
                 });
             }
@@ -316,7 +316,7 @@ namespace RemotePlay.Controllers
                 return NotFound(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "设备未找到",
+                    ErrorMessage = "Console not found.",
                     ErrorCode = ErrorCode.DeviceNotFound
                 });
             if (_device.IpAddress == null)
@@ -381,7 +381,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = _session,
-                Message = "会话启动成功"
+                Message = "Session started."
             });
         }
 
@@ -398,7 +398,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = _session,
-                Message = _session ? "会话停止成功" : "会话停止失败"
+                Message = _session ? "Session stopped." : "Session stop failed."
             });
         }
 
@@ -413,7 +413,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = ok,
-                Message = ok ? "流启动成功" : "流启动失败"
+                Message = ok ? "Stream started." : "Stream start failed."
             });
         }
 
@@ -428,7 +428,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = ok,
-                Message = ok ? "流停止成功" : "流停止失败"
+                Message = ok ? "Stream stopped." : "Stream stop failed."
             });
         }
 
@@ -444,7 +444,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = ok,
-                Message = ok ? "接收器附加成功" : "接收器附加失败"
+                Message = ok ? "Receiver attached." : "Receiver attach failed."
             });
         }
 
@@ -460,7 +460,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = ok,
-                Message = ok ? "文件接收器附加成功" : "文件接收器附加失败"
+                Message = ok ? "File receiver attached." : "File receiver attach failed."
             });
         }
 
@@ -476,7 +476,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = ok,
-                Message = ok ? "FFplay接收器附加成功" : "FFplay接收器附加失败"
+                Message = ok ? "FFplay receiver attached." : "FFplay receiver attach failed."
             });
         }
 
@@ -502,7 +502,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = new { success = ok, output },
-                Message = ok ? "FFmpeg接收器附加成功" : "FFmpeg接收器附加失败"
+                Message = ok ? "FFmpeg receiver attached." : "FFmpeg receiver attach failed."
             });
         }
 
@@ -563,7 +563,7 @@ namespace RemotePlay.Controllers
                 return Ok(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "绑定 HLS 接收器失败，请确认流已启动或稍后重试",
+                    ErrorMessage = "Could not attach the HLS receiver. Make sure the stream is running and retry.",
                     ErrorCode = ErrorCode.StreamNotFound
                 });
             }
@@ -576,7 +576,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = new { url = publicUrl },
-                Message = "HLS 分享已启动"
+                Message = "HLS sharing started."
             });
         }
 
@@ -593,7 +593,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = _session,
-                Message = "获取会话成功"
+                Message = "Session retrieved."
             });
         }
         /// <summary>
@@ -610,7 +610,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "主机IP不能为空",
+                        ErrorMessage = "The console IP address is required.",
                         ErrorCode = ErrorCode.HostIpRequired
                     });
 
@@ -618,7 +618,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "账户ID不能为空",
+                        ErrorMessage = "The PSN account ID is required.",
                         ErrorCode = ErrorCode.AccountIdRequired
                     });
 
@@ -626,7 +626,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "PIN不能为空",
+                        ErrorMessage = "The PIN is required.",
                         ErrorCode = ErrorCode.PinRequired
                     });
 
@@ -640,7 +640,7 @@ namespace RemotePlay.Controllers
                     {
                         Success = true,
                         Data = result,
-                        Message = "设备注册成功"
+                        Message = "Console paired."
                     });
                 }
                 else
@@ -648,7 +648,7 @@ namespace RemotePlay.Controllers
                     return Ok(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = result.ErrorMessage ?? "设备注册失败"
+                        ErrorMessage = result.ErrorMessage ?? "Console pairing failed."
                     });
                 }
             }
@@ -658,7 +658,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "设备注册失败: " + ex.Message,
+                    ErrorMessage = "Console pairing failed: " + ex.Message,
                     ErrorCode = ErrorCode.DeviceRegistrationFailed
                 });
             }
@@ -678,7 +678,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "凭据不能为空",
+                        ErrorMessage = "Credentials are required.",
                         ErrorCode = ErrorCode.CredentialRequired
                     });
 
@@ -690,7 +690,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = isValid,
-                    Message = isValid ? "凭据有效" : "凭据无效或已过期"
+                    Message = isValid ? "Credentials are valid." : "Credentials are invalid or expired."
                 });
             }
             catch (Exception ex)
@@ -699,7 +699,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "验证凭据失败: " + ex.Message,
+                    ErrorMessage = "Credential check failed: " + ex.Message,
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }
@@ -719,7 +719,7 @@ namespace RemotePlay.Controllers
                     headers = headers,
                     playload = playload
                 },
-                Message = "测试编码成功"
+                Message = "Test encoding succeeded."
             });
         }
 
@@ -736,7 +736,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = success,
-                Message = success ? "控制器连接成功" : "控制器连接失败"
+                Message = success ? "Controller connected." : "Controller connection failed."
             });
         }
 
@@ -751,7 +751,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = true,
-                Message = "控制器断开成功"
+                Message = "Controller disconnected."
             });
         }
 
@@ -766,7 +766,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = success,
-                Message = success ? "控制器启动成功" : "控制器启动失败"
+                Message = success ? "Controller started." : "Controller start failed."
             });
         }
 
@@ -781,7 +781,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = true,
-                Message = "控制器停止成功"
+                Message = "Controller stopped."
             });
         }
 
@@ -798,7 +798,7 @@ namespace RemotePlay.Controllers
                 return BadRequest(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = $"无效的按键: {request.Button}，可用按键: {string.Join(", ", _controllerService.GetAvailableButtons())}"
+                    ErrorMessage = $"Invalid button: {request.Button}. Available buttons: {string.Join(", ", _controllerService.GetAvailableButtons())}"
                 });
             }
 
@@ -820,7 +820,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = true,
-                Message = "按键操作成功"
+                Message = "Button sent."
             });
         }
 
@@ -850,7 +850,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = true,
-                    Message = "摇杆设置成功"
+                    Message = "Stick updated."
                 });
             }
             catch (Exception ex)
@@ -875,7 +875,7 @@ namespace RemotePlay.Controllers
                 return BadRequest(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "必须至少提供 L2 或 R2 的数值",
+                    ErrorMessage = "Provide a value for L2 or R2.",
                     ErrorCode = ErrorCode.TriggerValueRequired
                 });
             }
@@ -886,7 +886,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = true,
-                Message = "扳机压力设置成功"
+                Message = "Triggers updated."
             });
         }
 
@@ -902,7 +902,7 @@ namespace RemotePlay.Controllers
                 return NotFound(new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "控制器未连接",
+                    ErrorMessage = "Controller not connected.",
                     ErrorCode = ErrorCode.ControllerNotConnected
                 });
             }
@@ -916,7 +916,7 @@ namespace RemotePlay.Controllers
                     right = new { x = state.Right.X, y = state.Right.Y },
                     triggers = new { l2 = state.L2State / 255f, r2 = state.R2State / 255f }
                 },
-                Message = "获取控制器状态成功"
+                Message = "Controller state retrieved."
             });
         }
 
@@ -931,7 +931,7 @@ namespace RemotePlay.Controllers
             {
                 Success = true,
                 Data = buttons,
-                Message = "获取可用按键成功"
+                Message = "Available buttons retrieved."
             });
         }
 
@@ -949,7 +949,7 @@ namespace RemotePlay.Controllers
                     isRunning = _controllerService.IsRunning(sessionId),
                     isReady = _controllerService.IsReady(sessionId)
                 },
-                Message = "获取控制器状态成功"
+                Message = "Controller state retrieved."
             });
         }
 
@@ -980,7 +980,7 @@ namespace RemotePlay.Controllers
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "未授权",
+                        ErrorMessage = "Not authorized.",
                         ErrorCode = ErrorCode.Unauthorized
                     });
                 }
@@ -990,7 +990,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "主机IP不能为空",
+                        ErrorMessage = "The console IP address is required.",
                         ErrorCode = ErrorCode.HostIpRequired
                     });
 
@@ -1006,7 +1006,7 @@ namespace RemotePlay.Controllers
                         return Ok(new ApiErrorResponse
                         {
                             Success = false,
-                            ErrorMessage = "设备注册失败: " + registerResult.ErrorMessage,
+                            ErrorMessage = "Console pairing failed: " + registerResult.ErrorMessage,
                             ErrorCode = ErrorCode.DeviceRegistrationFailed
                         });
                     }
@@ -1020,7 +1020,7 @@ namespace RemotePlay.Controllers
                     return BadRequest(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "无法发现设备，请确保设备已开机并连接到同一网络",
+                        ErrorMessage = "Console not found. Make sure it is on and connected to the same network.",
                         ErrorCode = ErrorCode.DeviceDiscoveryFailed
                     });
                 }
@@ -1039,7 +1039,7 @@ namespace RemotePlay.Controllers
                         ipAddress = device.IpAddress,
                         isRegistered = device.IsRegistered
                     },
-                    Message = "设备绑定成功"
+                    Message = "Console paired to your account."
                 });
             }
             catch (Exception ex)
@@ -1048,7 +1048,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "设备绑定失败: " + ex.Message,
+                    ErrorMessage = "Console pairing failed: " + ex.Message,
                     ErrorCode = ErrorCode.DeviceBindingFailed
                 });
             }
@@ -1071,7 +1071,7 @@ namespace RemotePlay.Controllers
                     {
                         success = false,
                         statusCode = 401,
-                        message = "未授权"
+                        message = "Not authorized."
                     });
                 }
 
@@ -1081,7 +1081,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = devices,
-                    Message = $"找到 {devices.Count} 个已绑定的设备"
+                    Message = $"Found {devices.Count} paired console(s)."
                 });
             }
             catch (Exception ex)
@@ -1090,7 +1090,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "获取设备列表失败: " + ex.Message,
+                    ErrorMessage = "Could not list consoles: " + ex.Message,
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }
@@ -1113,7 +1113,7 @@ namespace RemotePlay.Controllers
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "未授权",
+                        ErrorMessage = "Not authorized.",
                         ErrorCode = ErrorCode.Unauthorized
                     });
                 }
@@ -1126,7 +1126,7 @@ namespace RemotePlay.Controllers
                     return NotFound(new ApiErrorResponse
                     {
                         Success = false,
-                        ErrorMessage = "未找到该设备绑定",
+                        ErrorMessage = "That console is not paired to your account.",
                         ErrorCode = ErrorCode.NotFound
                     });
                 }
@@ -1139,7 +1139,7 @@ namespace RemotePlay.Controllers
                 {
                     Success = true,
                     Data = true,
-                    Message = "设备解绑成功"
+                    Message = "Console removed."
                 });
             }
             catch (Exception ex)
@@ -1148,7 +1148,7 @@ namespace RemotePlay.Controllers
                 return StatusCode(500, new ApiErrorResponse
                 {
                     Success = false,
-                    ErrorMessage = "设备解绑失败: " + ex.Message,
+                    ErrorMessage = "Could not remove the console: " + ex.Message,
                     ErrorCode = ErrorCode.InternalServerError
                 });
             }

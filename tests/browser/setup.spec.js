@@ -17,6 +17,27 @@ async function mockDiscovery(page) {
   await page.route('**/api/playstation/discover?*', route => route.fulfill({ json: [{ name: 'Example PS5', ip: '192.0.2.5', uuid: '001122334455', hostType: 'PS5' }] }));
 }
 
+test('first run offers only the owner account, then sign-ups close unless registration is open', async ({ page }) => {
+  await page.route('**/api/auth/setup', route => route.fulfill({ json: { needsSetup: true, registrationOpen: true } }));
+  await page.goto('/');
+  await expect(page.locator('#auth-title')).toHaveText('Create the owner account');
+  await expect(page.locator('#auth-intro')).toBeVisible();
+  await expect(page.locator('#auth-toggle')).toBeHidden();
+  await expect(page.getByLabel('Email', { exact: true })).toBeVisible();
+  await expect(page.locator('#auth-submit')).toHaveText('Create account');
+  await page.unroute('**/api/auth/setup');
+  await page.route('**/api/auth/setup', route => route.fulfill({ json: { needsSetup: false, registrationOpen: false } }));
+  await page.goto('/');
+  await expect(page.locator('#auth-title')).toHaveText('Sign in to play');
+  await expect(page.locator('#auth-toggle')).toBeHidden();
+  await expect(page.locator('#auth-intro')).toBeHidden();
+  await page.unroute('**/api/auth/setup');
+  await page.goto('/');
+  await expect(page.locator('#auth-toggle')).toBeVisible();
+  const setup = await page.request.get('/api/auth/setup');
+  expect((await setup.json()).registrationOpen).toBe(true);
+});
+
 test('simple console screen restores silently and setup fits small screens', async ({ page }) => {
   await mockDiscovery(page);
   await register(page);

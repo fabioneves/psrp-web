@@ -186,7 +186,7 @@ namespace RemotePlay.Services.Device
 
             if (!exists)
             {
-                throw new InvalidOperationException("未找到设备或没有访问权限");
+                throw new InvalidOperationException("Console not found or not yours.");
             }
         }
 

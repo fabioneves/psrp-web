@@ -61,7 +61,7 @@ namespace RemotePlay.Services.Session
             SessionStartOptions options,
             CancellationToken cancellationToken = default)
         {
-            if (string.IsNullOrWhiteSpace(hostIp)) throw new ArgumentException("hostIp 不能为空", nameof(hostIp));
+            if (string.IsNullOrWhiteSpace(hostIp)) throw new ArgumentException("The console IP address is required.", nameof(hostIp));
             if (credentials == null) throw new ArgumentNullException(nameof(credentials));
             hostType = string.IsNullOrWhiteSpace(hostType) ? "PS4" : hostType.ToUpper();
 
@@ -70,7 +70,7 @@ namespace RemotePlay.Services.Session
             // 1) 发现设备以校验连通性
             var device = await _discoveryService.DiscoverDeviceAsync(hostIp, _sessionConfig.ConnectTimeoutMs, cancellationToken);
             if (device == null)
-                throw new InvalidOperationException($"无法连接到主机 {hostIp}");
+                throw new InvalidOperationException($"Could not connect to the console at {hostIp}.");
 
             // 2) INIT: 发送初始化请求，获取服务器返回的 RP-Nonce
             var typeSlug = hostType == TYPE_PS5 ? "ps5" : "ps4";

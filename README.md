@@ -165,13 +165,14 @@ play.example.com {
 }
 ```
 
-Keep the server on a trusted network or behind controlled access: account
-creation is open to anyone who can reach the sign-in page, and the database
-and `app-data` volumes hold pairing credentials and the login signing secret.
+Keep the server behind HTTPS with a strong owner password: the database and
+`app-data` volumes hold pairing credentials and the login signing secret.
+Registration is open only until the first account exists, unless
+`ALLOW_REGISTRATION=true` is set.
 
 ### First use
 
-1. Create a local account or sign in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it.
+1. On a fresh server the sign-in page asks you to create the owner account; after that, sign-ups are closed and the page only signs in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it. To let other people in your household create their own accounts, set `ALLOW_REGISTRATION=true` in `.env`; each account pairs its own console.
 2. Select a nearby console, or choose **Add console** to enter its IP address.
 3. Choose **Sign in to PSN**, sign in on Sony's page, then paste its final redirect URL back into setup. The app saves and encodes your account ID. Choose **Pair automatically**; if it fails, use **Pair with a PIN** and enter the console's Link Device PIN.
 4. Click **Play**; a console in rest mode is woken automatically before connecting. A sleeping console shows **Wake up**, a ready one **Put console to sleep**; the card's status dot is green when ready and amber in rest mode. **Stream settings** offers resolutions through 1080p60, with bitrate and frame pacing under **Advanced**. **Start test stream** checks browser playback. **Disconnect** ends the session.
@@ -478,6 +479,7 @@ npm test
 Browser tests expect Chrome at `/usr/bin/google-chrome`; override `CHROME_PATH` if needed. If you changed the server port:
 
 ```sh
+ALLOW_REGISTRATION=true docker compose up --build -d   # tests create accounts freely
 TEST_URL=http://127.0.0.1:18080 npm test
 ```
 

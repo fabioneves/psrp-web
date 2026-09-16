@@ -178,19 +178,19 @@ namespace RemotePlay.Services.RemotePlay
         private static void ValidateRegistrationParameters(string hostIp, string accountId, string pin)
         {
             if (string.IsNullOrWhiteSpace(hostIp))
-                throw new ArgumentException("主机IP不能为空", nameof(hostIp));
+                throw new ArgumentException("The console IP address is required.", nameof(hostIp));
             if (string.IsNullOrWhiteSpace(accountId))
-                throw new ArgumentException("账户ID不能为空", nameof(accountId));
+                throw new ArgumentException("The PSN account ID is required.", nameof(accountId));
             if (string.IsNullOrWhiteSpace(pin))
-                throw new ArgumentException("PIN不能为空", nameof(pin));
+                throw new ArgumentException("The PIN is required.", nameof(pin));
 
             // 验证IP地址格式
             if (!System.Net.IPAddress.TryParse(hostIp, out _))
-                throw new ArgumentException("无效的IP地址格式", nameof(hostIp));
+                throw new ArgumentException("The console IP address is not valid.", nameof(hostIp));
 
             // 验证PIN格式（应该是数字）
             if (!pin.All(char.IsDigit))
-                throw new ArgumentException("PIN必须为数字", nameof(pin));
+                throw new ArgumentException("The PIN must contain digits only.", nameof(pin));
         }
     }
 }

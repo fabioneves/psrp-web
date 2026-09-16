@@ -53,11 +53,11 @@ namespace RemotePlay.Services.Session
             {
                 // 验证输入参数
                 if (string.IsNullOrEmpty(hostIp))
-                    throw new ArgumentException("主机IP不能为空", nameof(hostIp));
+                    throw new ArgumentException("The console IP address is required.", nameof(hostIp));
                 if (string.IsNullOrEmpty(accountId))
-                    throw new ArgumentException("账户ID不能为空", nameof(accountId));
+                    throw new ArgumentException("The PSN account ID is required.", nameof(accountId));
                 if (string.IsNullOrEmpty(pin))
-                    throw new ArgumentException("PIN不能为空", nameof(pin));
+                    throw new ArgumentException("The PIN is required.", nameof(pin));
 
                 // 先进行设备发现以确定主机类型
                 string hostType = "PS4"; // 默认使用 PS4，与常见环境一致
@@ -86,7 +86,7 @@ namespace RemotePlay.Services.Session
                     return new RegisterResult
                     {
                         Success = false,
-                        ErrorMessage = "设备未处于注册模式",
+                        ErrorMessage = "The console is not in Link Device mode.",
                         Duration = DateTime.UtcNow - startTime
                     };
                 }
@@ -119,7 +119,7 @@ namespace RemotePlay.Services.Session
                 return new RegisterResult
                 {
                     Success = false,
-                    ErrorMessage = "注册被取消",
+                    ErrorMessage = "Pairing was cancelled.",
                     Duration = DateTime.UtcNow - startTime
                 };
             }
@@ -269,7 +269,7 @@ namespace RemotePlay.Services.Session
             await tcpClient.ConnectAsync(host, RP_PORT, cancellationToken);
 
             if (!tcpClient.Connected)
-                throw new IOException($"连接到 {host}:{RP_PORT} 失败");
+                throw new IOException($"Could not connect to {host}:{RP_PORT}.");
 
             tcpClient.NoDelay = true;
             using var stream = tcpClient.GetStream();
@@ -428,7 +428,7 @@ namespace RemotePlay.Services.Session
             return new RegisterResult
             {
                 Success = false,
-                ErrorMessage = "注册失败 - 请检查日志获取详细错误信息"
+                ErrorMessage = "Pairing failed. Check the server log for details."
             };
         }
 
@@ -513,7 +513,7 @@ namespace RemotePlay.Services.Session
         private byte[] GenerateRandomBytes(int length)
         {
             if (length <= 0)
-                throw new ArgumentException("长度必须大于0", nameof(length));
+                throw new ArgumentException("Length must be greater than zero.", nameof(length));
 
             var bytes = new byte[length];
             using var rng = RandomNumberGenerator.Create();
