@@ -3,12 +3,15 @@
 # with host networking so console discovery and wake use LAN broadcasts.
 #   REPO=https://github.com/fabioneves/psrp-web.git sh install.sh
 # Optional: REF=main, APP_DIR=/opt/psrp, REMOTE_PLAY_DOMAIN=play.example.com (adds the
-# HTTPS proxy on ports 80/443), PORT=8080, DB_PASSWORD=...
+# HTTPS proxy), HTTP_PORT=80, HTTPS_PORT=443, PORT (app port: 80 without a domain,
+# 8080 behind the proxy), DB_PASSWORD=...
 set -eu
 REPO=${REPO:-https://github.com/fabioneves/psrp-web.git}
 REF=${REF:-main}
 APP_DIR=${APP_DIR:-/opt/psrp}
-PORT=${PORT:-8080}
+HTTP_PORT=${HTTP_PORT:-80}
+HTTPS_PORT=${HTTPS_PORT:-443}
+if [ -n "${REMOTE_PLAY_DOMAIN:-}" ]; then PORT=${PORT:-8080}; else PORT=${PORT:-$HTTP_PORT}; fi
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
@@ -41,6 +44,8 @@ if [ ! -f .env ]; then
     db_password=${DB_PASSWORD:-$(head -c 24 /dev/urandom | base64 | tr -d '/+=')}
     {
         echo "PORT=$PORT"
+        echo "HTTP_PORT=$HTTP_PORT"
+        echo "HTTPS_PORT=$HTTPS_PORT"
         echo "DB_PASSWORD=$db_password"
         echo "DISCOVERY_SUBNETS="
         if [ -n "${REMOTE_PLAY_DOMAIN:-}" ]; then
@@ -57,6 +62,6 @@ install -m 0755 deploy/proxmox/psrp /usr/local/bin/psrp
 docker compose up --build -d
 until curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; do sleep 3; done
 ip=$(hostname -I | awk '{print $1}')
-echo "Remote Play is running at http://$ip:$PORT"
+if [ "$PORT" = 80 ]; then echo "Remote Play is running at http://$ip/"; else echo "Remote Play is running at http://$ip:$PORT/"; fi
 echo "Later: 'psrp update' pulls and rebuilds, 'psrp status' and 'psrp logs' inspect it."
-[ -z "${REMOTE_PLAY_DOMAIN:-}" ] || echo "HTTPS: https://$REMOTE_PLAY_DOMAIN (point its DNS at $ip and open ports 80 and 443)"
+[ -z "${REMOTE_PLAY_DOMAIN:-}" ] || echo "HTTPS: https://$REMOTE_PLAY_DOMAIN (DNS must point at $ip; Caddy listens on $HTTP_PORT and $HTTPS_PORT)"

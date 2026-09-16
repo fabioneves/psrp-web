@@ -75,7 +75,8 @@ if [ -n "$DOMAIN" ]; then
     valid_domain "$DOMAIN" || fail "'$DOMAIN' is not a valid hostname."
     say "Before the certificate can be issued, the following must be true:"
     say "  1. A DNS A record for $DOMAIN points at your public IP."
-    say "  2. Your router forwards public TCP 80 and 443 to the container's address."
+    say "  2. Public TCP 80 and 443 reach the container's address (Caddy listens on them directly;"
+    say "     set HTTP_PORT and HTTPS_PORT before running this to use other ports)."
     confirm "Continue? You can also finish DNS and forwarding after the install" y || exit 1
 fi
 
@@ -115,7 +116,7 @@ fi
 say "Container address: $address"
 
 step "Installing Docker and the app (this builds the image; expect several minutes)"
-run pct exec "$CTID" -- bash -c "curl -fsSL '$RAW/deploy/proxmox/install.sh' -o /root/install.sh && REPO='$REPO' REF='$REF' REMOTE_PLAY_DOMAIN='$DOMAIN' sh /root/install.sh"
+run pct exec "$CTID" -- bash -c "curl -fsSL '$RAW/deploy/proxmox/install.sh' -o /root/install.sh && REPO='$REPO' REF='$REF' REMOTE_PLAY_DOMAIN='$DOMAIN' HTTP_PORT='${HTTP_PORT:-80}' HTTPS_PORT='${HTTPS_PORT:-443}' sh /root/install.sh"
 
 if [ -n "$DOMAIN" ] && [ "$DRY" != 1 ]; then
     step "Checking $DOMAIN"
@@ -135,7 +136,7 @@ if [ -n "$DOMAIN" ] && [ "$DRY" != 1 ]; then
 fi
 
 step "Done"
-say "  Local address   http://$address:8080"
+if [ -n "$DOMAIN" ]; then say "  Local address   http://$address:8080 (plain HTTP; the app sits behind the proxy)"; else say "  Local address   http://$address/"; fi
 [ -z "$DOMAIN" ] || say "  Public address  https://$DOMAIN/"
 say "  Root password   $password   (for 'pct enter $CTID' or SSH; change it with 'pct exec $CTID -- passwd')"
 say "  App directory   /opt/psrp in the container"

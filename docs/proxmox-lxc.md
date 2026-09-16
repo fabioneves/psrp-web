@@ -49,9 +49,11 @@ previous Debian release's packages if the new one has none yet), clones the
 repository into `/opt/psrp`, writes a `.env` with a generated database password
 and `COMPOSE_FILE=compose.yaml:compose.host.yaml`, builds the image and starts
 the stack. It prints the address when `/healthz` answers. Pass
-`REMOTE_PLAY_DOMAIN=play.example.com` to also start the Caddy HTTPS proxy on
-ports 80 and 443 through `compose.lxc.yaml`, which puts the proxy on the host
-network and points it at the app on 127.0.0.1.
+`REMOTE_PLAY_DOMAIN=play.example.com` to also start the Caddy HTTPS proxy
+through `compose.lxc.yaml`, which puts the proxy on the host network and
+points it at the app on 127.0.0.1. Caddy listens on 80 and 443; `HTTP_PORT`
+and `HTTPS_PORT` override that, and `PORT` sets the app's own port (80 when
+there is no proxy, 8080 behind it).
 
 `DISCOVERY_SUBNETS` is left empty because broadcasts work from the container's
 own LAN address. Set it only if the console is on another subnet.

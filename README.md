@@ -69,8 +69,10 @@ pct exec 120 -- sh /root/install.sh
 
 The installer adds Docker CE, clones this repository to `/opt/psrp`, writes a
 `.env` with a generated database password and host networking, builds the
-image and starts the stack. It prints `http://<container address>:8080` when
-the health check answers. To add HTTPS in the same step, run it as
+image and starts the stack. Without a domain the app answers on port 80, so it
+prints `http://<container address>/`; with a domain the app moves to 8080
+behind Caddy on 80 and 443. `PORT`, `HTTP_PORT` and `HTTPS_PORT` override
+all three. To add HTTPS in the same step, run it as
 `REMOTE_PLAY_DOMAIN=play.example.com sh /root/install.sh` after finishing the
 domain setup below.
 
@@ -135,9 +137,11 @@ restarting an existing container alone does not rebuild anything.
    COMPOSE_FILE=compose.yaml:compose.https.yaml
    ```
 
-   With rootless Docker the proxy cannot bind 80 and 443 directly; add
-   `HTTP_PORT=18090` and `HTTPS_PORT=18443` and forward public 80 → 18090 and
-   443 → 18443 instead.
+   Caddy answers on 80 and 443 by default: as listen ports in the LXC (host
+   networking) and as published ports in bridge mode. `HTTP_PORT` and
+   `HTTPS_PORT` in `.env` override both. With rootless Docker, which cannot
+   bind ports below 1024, set `HTTP_PORT=18090` and `HTTPS_PORT=18443` and
+   forward public 80 → 18090 and 443 → 18443.
 4. Run `docker compose up --build -d`. Caddy obtains and renews the Let's
    Encrypt certificate and proxies the app, including its WebSockets. No
    browser-facing UDP, STUN or TURN ports are needed.
