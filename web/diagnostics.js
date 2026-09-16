@@ -62,7 +62,8 @@ export function describeEvent(event) {
     'decode-backlog': e => `decoder backlog ${e.queued} frames`,
     'low-fps': e => `presentation fell to ${e.fps} fps`,
     'delivery-gap': e => `video packets paused ${e.maxMs} ms (arrival p95 ${e.p95Ms} ms)`,
-    stall: e => `${e.count} presentation stall${e.count === 1 ? '' : 's'}, ${e.ms} ms late`
+    stall: e => `${e.count} presentation stall${e.count === 1 ? '' : 's'}, ${e.ms} ms late`,
+    'decoder-reset': e => `decoder reset after a corrupt frame (${e.resets} in 30 s) · ${e.message}`
   };
   const seconds = (event.t / 1000).toFixed(1);
   return `${seconds}s · ${labels[event.type] ? labels[event.type](event) : `${event.type}${event.message ? ` · ${event.message}` : ''}`}`;

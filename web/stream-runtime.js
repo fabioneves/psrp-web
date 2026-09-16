@@ -14,6 +14,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
   }, {
     ...presentation, videoCodec, hardwareAcceleration,
     onError(message) { fail(message, failureType()); },
+    requestKeyframe() { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'keyframe' })); },
     onPresent(timestamp) {
       videoAgeMs = clock.age(timestamp);
       report({ type: 'sync', timestamp });

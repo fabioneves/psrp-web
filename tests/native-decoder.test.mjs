@@ -100,3 +100,38 @@ test('console H.264 key frames receive the separately delivered SPS/PPS header b
     assert.ok(decoded[1].timestamp > decoded[0].timestamp);
   } finally { decoder.destroy(); Object.assign(globalThis, saved); }
 });
+
+test('a corrupt frame after playback resets the decoder, asks for a keyframe and waits for it', async () => {
+  const instances = [], requests = [], reports = [];
+  const saved = { VideoDecoder: globalThis.VideoDecoder, EncodedVideoChunk: globalThis.EncodedVideoChunk, VideoFrame: globalThis.VideoFrame };
+  globalThis.EncodedVideoChunk = class { constructor(init) { Object.assign(this, init); } };
+  globalThis.VideoDecoder = class {
+    constructor(callbacks) { this.callbacks = callbacks; this.decodeQueueSize = 0; this.state = 'unconfigured'; this.decoded = []; instances.push(this); }
+    configure(config) { this.config = config; this.state = 'configured'; }
+    decode(chunk) { this.decoded.push(chunk); this.callbacks.output({ timestamp: chunk.timestamp, displayWidth: 16, displayHeight: 16, close() {} }); }
+    close() { this.state = 'closed'; }
+  };
+  const canvas = { width: 0, height: 0, getContext: () => ({ drawImage() {} }) };
+  let errors = 0;
+  const decoder = createNativeDecoder(canvas, message => reports.push(message), { videoCodec: 'h264', fps: 60, onError: () => errors++, requestKeyframe: () => requests.push(1) });
+  try {
+    const header = Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 0, 1, 104, 5]);
+    const idr = Uint8Array.from([0, 0, 0, 1, 101, 128, 9]);
+    const delta = Uint8Array.from([0, 0, 0, 1, 65, 128, 9]);
+    decoder.write(header.buffer, 1000); decoder.write(idr.buffer, 1016); decoder.write(delta.buffer, 1033);
+    assert.equal(instances.length, 1);
+    assert.equal(instances[0].decoded.length, 2);
+    instances[0].callbacks.error(new Error('corrupt slice'));
+    assert.equal(instances.length, 2, 'a fresh decoder replaces the failed one');
+    assert.equal(instances[1].config.codec, 'avc1.64002a');
+    assert.equal(requests.length, 1, 'a keyframe is requested once');
+    assert.equal(reports.filter(message => message.type === 'decoder-reset').length, 1);
+    decoder.write(delta.buffer, 1050);
+    assert.equal(instances[1].decoded.length, 0, 'delta frames wait for the next keyframe');
+    decoder.write(idr.buffer, 1066);
+    assert.equal(instances[1].decoded.length, 1);
+    assert.equal(errors, 0);
+    instances[1].callbacks.error(new Error('again')); instances[2].callbacks.error(new Error('again')); instances[3].callbacks.error(new Error('again'));
+    assert.equal(errors, 1, 'a fourth failure inside 30 s reports the error');
+  } finally { decoder.destroy(); Object.assign(globalThis, saved); }
+});

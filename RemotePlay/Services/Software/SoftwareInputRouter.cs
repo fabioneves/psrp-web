@@ -11,6 +11,7 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
     private readonly SoftwareInputState state = new();
     private SoftwareInputState.State previous = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+    public Func<Task>? RequestKeyframe { get; set; }
 
     public async Task BindSessionAsync(Guid? id, CancellationToken ct)
     {
@@ -54,6 +55,11 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
                     continue;
                 }
                 if (heartbeat.Elapsed > TimeSpan.FromSeconds(10)) throw new IOException("Browser heartbeat expired.");
+                if (input.Type == "keyframe")
+                {
+                    if (acknowledge && RequestKeyframe is { } request) await request();
+                    continue;
+                }
                 if (initializing) continue;
                 await ApplyAsync(source, input, ct);
             }

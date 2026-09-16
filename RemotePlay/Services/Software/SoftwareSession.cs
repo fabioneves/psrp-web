@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text.Json;
+using System.Threading.Channels;
 using Microsoft.EntityFrameworkCore;
 using RemotePlay.Contracts.Services;
 using RemotePlay.Models.Context;
@@ -79,6 +80,8 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 await streams.AttachReceiverAsync(session.Id, receiver, ct);
                 stream = await streams.GetStreamAsync(session.Id);
                 if (stream != null) await stream.RequestKeyframeAsync();
+                var console = stream;
+                input.RequestKeyframe = () => { receiver.EnterWaitForIdr(); return console?.RequestKeyframeAsync() ?? Task.CompletedTask; };
                 if (!await controller.ConnectAsync(session.Id, ct) || !await controller.StartAsync(session.Id, ct))
                     throw new IOException("Could not start console input.");
                 if (!native) feed = transcoder!.FeedAsync(receiver, ct);
@@ -88,7 +91,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             published.Input = input;
             var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
             var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
-            if (stream != null) _ = SendConsoleStatsAsync(socket, stream, sendGate, ct);
+            if (stream != null) { _ = SendConsoleStatsAsync(socket, stream, sendGate, ct); _ = SendRumbleAsync(socket, stream, sendGate, ct); }
             workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
             var completed = await Task.WhenAny(workers);
             await completed;
@@ -152,6 +155,30 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 WebSocketMessageType.Text, true, ct);
         }
         finally { sendGate?.Release(); }
+    }
+
+    private async Task SendRumbleAsync(WebSocket socket, RPStreamV2 stream, SemaphoreSlim sendGate, CancellationToken ct)
+    {
+        var latest = Channel.CreateBounded<(byte Left, byte Right)>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
+        void OnRumble(object? sender, RumbleEventArgs e) => latest.Writer.TryWrite((e.AdjustedLeft, e.AdjustedRight));
+        stream.RumbleReceived += OnRumble;
+        try
+        {
+            (byte Left, byte Right) sent = (0, 0);
+            await foreach (var rumble in latest.Reader.ReadAllAsync(ct))
+            {
+                if (rumble == sent) continue;
+                sent = rumble;
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(1));
+                await sendGate.WaitAsync(timeout.Token);
+                try { await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = "rumble", left = rumble.Left, right = rumble.Right }), WebSocketMessageType.Text, true, timeout.Token); }
+                finally { sendGate.Release(); }
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex) { logger.LogDebug(ex, "Rumble relay stopped"); }
+        finally { stream.RumbleReceived -= OnRumble; }
     }
 
     private async Task SendConsoleStatsAsync(WebSocket socket, RPStreamV2 stream, SemaphoreSlim sendGate, CancellationToken ct)

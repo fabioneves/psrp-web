@@ -94,7 +94,8 @@ export function h265Info(data) {
 export class NativeDecodeQueue {
   constructor(decoder, submit, onError) {
     this.decoder = decoder; this.submit = submit; this.items = []; this.stopped = false;
-    decoder.ondequeue = () => { try { this.drain(); } catch (error) { onError(error.message); } };
+    this.ondequeue = () => { try { this.drain(); } catch (error) { onError(error.message); } };
+    decoder.ondequeue = this.ondequeue;
   }
   push(item) {
     if (this.stopped) return;
@@ -141,7 +142,13 @@ export function createNativeDecoder(canvas, report, options = {}) {
     finally { frame.close(); }
     return frames.pending;
   }, globalThis, 1000 / (options.fps || 60));
-  const decoder = new VideoDecoder({
+  let decoder, resets = [], keyframeAskedAt = null;
+  const askKeyframe = () => {
+    if (keyframeAskedAt !== null && performance.now() - keyframeAskedAt < 1000) return;
+    keyframeAskedAt = performance.now();
+    options.requestKeyframe?.();
+  };
+  const openDecoder = () => new VideoDecoder({
     output(frame) {
       if (stopped) { frame.close(); return; }
       const timing = pending.get(frame.timestamp);
@@ -152,8 +159,21 @@ export function createNativeDecoder(canvas, report, options = {}) {
       frames.push({ frame, timestamp: timing?.mediaTimestamp ?? null, savedAt: performance.now() });
       presentation.request();
     },
-    error(error) { if (!stopped) options.onError?.(error.message); }
+    error(error) {
+      if (stopped) return;
+      resets = resets.filter(at => performance.now() - at < 30000);
+      if (!everDecoded || resets.length >= 3) { options.onError?.(error.message); return; }
+      resets.push(performance.now());
+      report({ type: 'decoder-reset', message: error.message, resets: resets.length });
+      try { if (decoder.state !== 'closed') decoder.close(); } catch {}
+      decoder = openDecoder(); queue.decoder = decoder;
+      decoder.ondequeue = queue.ondequeue;
+      queue.items.length = 0; pending.clear(); progressAt = null; waitingForKey = true;
+      if (configuration) decoder.configure({ ...nativeConfig(configuration), hardwareAcceleration });
+      askKeyframe();
+    }
   });
+  decoder = openDecoder();
   const queue = new NativeDecodeQueue(decoder, ({ timestamp, mediaTimestamp, data, key }) => {
     progressAt ??= performance.now();
     if (pending.size >= 30) pending.delete(pending.keys().next().value);
@@ -169,7 +189,8 @@ export function createNativeDecoder(canvas, report, options = {}) {
       configuration = info.codec;
       waitingForKey = true;
     }
-    if (!configuration || !info.picture || (waitingForKey && !info.key)) return;
+    if (!configuration || !info.picture) return;
+    if (waitingForKey && !info.key) { if (everDecoded) askKeyframe(); return; }
     if (info.key) {
       if (parameters.size < parameterTypes.length) return;
       if (info.parameters.length < parameterTypes.length) {

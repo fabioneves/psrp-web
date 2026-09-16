@@ -611,6 +611,20 @@ main {
   padding:16px;
   border-bottom:2px solid var(--line);
 }
+.keep-awake {
+  min-height:48px;
+  margin:12px 0 4px;
+}
+#controller-advanced summary {
+  font-weight:650;
+  color:var(--text);
+}
+#controller-advanced .settings-grid {
+  margin-top:8px;
+}
+#controller-reset {
+  margin:4px 0 12px;
+}
 .controller-preview {
   font-family:ui-monospace,monospace;
   color:var(--accent);

@@ -34,14 +34,20 @@ Browser → server JSON:
 {"type":"stick","stick":"left","x":-1,"y":0}
 {"type":"triggers","l2":0.4,"r2":0.8}
 {"type":"reset"}
+{"type":"keyframe"}
 ```
+
+`keyframe` (viewer connection only) makes the receiver wait for the next IDR and
+asks the console for one; the browser sends it after replacing a decoder that
+failed on a corrupt frame.
 
 The button names are the upstream `FeedbackEvent.ButtonType` names. `reset`
 releases buttons, centers both sticks and releases both triggers. L2/R2 update
 both the button event and analog trigger state. Directions are clamped to [-1,1].
 
 Server → browser text messages contain `type` (`status` or `error`) and `message`,
-a timestamped `pong`, or a once-per-second `console-stats` message with cumulative
+a timestamped `pong`, a `rumble` message with the console's left and right motor
+values (0–255) whenever they change, or a once-per-second `console-stats` message with cumulative
 console→server counters (packets lost, frames dropped/frozen/recovered, keyframe
 requests, FEC failures, pending packets) plus the console's frame rate and bitrate.
 The browser keeps a per-session diagnostics log of those counters, its own

@@ -50,6 +50,15 @@ docker compose down
 
 `/healthz` returns `{"status":"ready"}` when the application can reach PostgreSQL. `docker compose down` preserves the named data volumes.
 
+### Corrupt frames and keyframes
+
+WebCodecs closes the decoder on a corrupt frame, which the console produces
+after packet loss. The browser now replaces the decoder, keeps the session,
+asks the server for a keyframe (`{"type":"keyframe"}`, viewer only) and
+resumes at the next IDR. Four failures within 30 seconds reconnect instead.
+A console that reports "still occupied" after a drop is retried every four
+seconds for a minute before the attempt counter applies.
+
 ### Tesla theater
 
 The sign-in page and the library carry an **Open in Tesla theater** link. It goes
@@ -241,7 +250,7 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 - Keyboard: arrows = D-pad; WASD = left stick; IJKL = right stick; X/C/Z/V = cross/circle/square/triangle; Q/E = L1/R1; 1/3 = L2/R2; 2/4 = L3/R3; Enter = Options; Backspace = Share; Space = PS; T = touchpad click.
 - Input resets on focus loss, hidden tabs and disconnect. Opposing directions cancel; simultaneous touch and keyboard holds work together.
 - One active viewer/session per server, including browser test streams. Run diagnostics in a separate Compose project while a console viewer is active. An abandoned connection expires after missed heartbeats.
-- Optional gamepads supply analog sticks/triggers and positional PlayStation buttons. Tesla virtual-controller face swaps, source preference, manual index selection and dead zones are configurable. Polling detects devices even without browser connection events; only one local gamepad is selected to suppress mirrored input.
+- Optional gamepads supply analog sticks/triggers and positional PlayStation buttons and are detected automatically; the Controls tab shows the detected pad and a live readout of what the browser receives. Tesla virtual-controller face swaps, source preference, index override and dead zones sit under Advanced controller overrides, which opens by itself when an override is active or is the reason a connected pad is not used, with a Reset to automatic button. Nintendo pads without a standard browser mapping use the raw Switch layout. Console rumble reaches the pad through the browser's dual-rumble actuator (DualSense and Xbox pads in Chrome); the DualSense speaker, haptics and adaptive triggers are not reachable from a browser. Invert stick up / down is available under the overrides. Polling detects devices even without browser connection events; only one local gamepad is selected to suppress mirrored input.
 - No microphone, rumble, motion sensing or touchpad gestures. Touch direction buttons provide full stick deflection. Some games require features beyond these controls.
 - PSN sign-in and pinless registration use a server-side Chiaki helper. Media playback connects directly from the server to the LAN console; internet media relay is not implemented.
 

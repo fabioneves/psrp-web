@@ -425,6 +425,7 @@ test('gamepads poll without connection events and release when unplugged', async
     window.sentInputs = [];
     const Native = window.WebSocket;
     window.WebSocket = class extends Native {
+      constructor(...args) { super(...args); window.testSocket = this; }
       send(message) { window.sentInputs.push(JSON.parse(message)); super.send(message); }
     };
   });
@@ -434,11 +435,17 @@ test('gamepads poll without connection events and release when unplugged', async
   await page.evaluate(() => {
     const buttons = Array.from({ length: 18 }, () => ({ pressed: false, value: 0 }));
     buttons[0].pressed = true; buttons[6].value = 0.4;
-    window.pads = [{ id: 'TESLA VIRTUAL GAMEPAD (Vendor: 045a Product: 02d1)', index: 3, connected: true, mapping: 'standard', axes: [0.5, 0, 0, 0], buttons }];
+    window.effects = [];
+    window.pads = [{ id: 'TESLA VIRTUAL GAMEPAD (Vendor: 045a Product: 02d1)', index: 3, connected: true, mapping: 'standard', axes: [0.5, 0, 0, 0], buttons,
+      vibrationActuator: { playEffect(type, params) { window.effects.push({ type, ...params }); return Promise.resolve('complete'); }, reset() { window.effects.push({ type: 'reset' }); } } }];
   });
   await expect(page.locator('#controller-status')).toContainText('Controller 3');
   await expect.poll(() => page.evaluate(() => window.sentInputs.some(m => m.button === 'CIRCLE' && m.pressed))).toBe(true);
   await expect.poll(() => page.evaluate(() => window.sentInputs.some(m => m.type === 'triggers' && m.l2 === 0.4))).toBe(true);
+  await page.evaluate(() => window.testSocket.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'rumble', left: 255, right: 51 }) })));
+  await expect.poll(() => page.evaluate(() => window.effects.at(-1))).toEqual({ type: 'dual-rumble', startDelay: 0, duration: 400, strongMagnitude: 1, weakMagnitude: 0.2 });
+  await page.evaluate(() => window.testSocket.dispatchEvent(new MessageEvent('message', { data: JSON.stringify({ type: 'rumble', left: 0, right: 0 }) })));
+  await expect.poll(() => page.evaluate(() => window.effects.at(-1).type)).toBe('reset');
   await page.evaluate(() => { window.pads = []; });
   await expect.poll(() => page.evaluate(() => window.sentInputs.some(m => m.button === 'CIRCLE' && !m.pressed))).toBe(true);
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();

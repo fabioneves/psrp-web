@@ -56,7 +56,7 @@
 #audio-controls { grid-template-columns:1fr; padding:0 0 16px; gap:20px; }
 #audio-controls .check { min-height:48px; }
 #enable-audio { border-color:var(--accent); }
-.controller-settings h3 { font:500 1.25rem Jersey,monospace; }
+.controller-settings { margin-top:12px; }
 .console-utilities { border-top:2px solid var(--line); margin-top:20px; padding-top:16px; }
 .console-utilities>button,.console-utilities details button { width:100%; min-height:48px; }
 .console-utilities details { margin-top:8px; }

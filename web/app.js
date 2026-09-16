@@ -31,9 +31,19 @@ const retry = new Reconnect(() => connect());
 const log = new StreamLog();
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
   swap: $('controller-swap').value, deadZone: Number($('dead-zone').value),
-  invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked });
+  invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked, invertY: $('invert-y').checked, rumble: $('rumble').checked });
+const controllerOverridden = () => $('controller-mode').value !== 'auto' || $('controller-index').value !== '' || $('controller-swap').value !== 'auto' ||
+  $('dead-zone').value !== '0.12' || $('invert-ab').checked || $('invert-xy').checked || $('invert-y').checked || !$('rumble').checked;
 const gamepads = pollGamepads(resetInputs.state, () => playing && !document.hidden && document.hasFocus(),
-  settings, (text, preview = '') => { $('controller-status').textContent = text; $('controller-preview').textContent = preview; });
+  settings, (text, preview = '') => {
+    $('controller-status').textContent = text; $('controller-preview').textContent = preview;
+    if (/is not connected|excluded by/.test(text)) $('controller-advanced').open = true;
+  });
+$('controller-reset').onclick = () => {
+  $('controller-mode').value = 'auto'; $('controller-index').value = ''; $('controller-swap').value = 'auto'; $('dead-zone').value = '0.12';
+  $('invert-ab').checked = $('invert-xy').checked = $('invert-y').checked = false; $('rumble').checked = true;
+  for (const id of ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble']) $(id).dispatchEvent(new Event('change', { bubbles: true }));
+};
 for (const type of ['gamepadconnected', 'gamepaddisconnected']) window.addEventListener(type, event => {
   log.event(type, { id: event.gamepad?.id, index: event.gamepad?.index, mapping: event.gamepad?.mapping, buttons: event.gamepad?.buttons?.length, axes: event.gamepad?.axes?.length });
   gamepads.reset();
@@ -44,7 +54,7 @@ try {
 } catch {}
 let startInFullscreen = false;
 try { startInFullscreen = localStorage.getItem('remote-play:auto-fullscreen') === 'true'; } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -64,13 +74,16 @@ for (const id of preferenceIds) {
 if (!['mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'h264';
 if (!['detailed', 'minimal', 'horizontal'].includes($('hud-style').value)) $('hud-style').value = 'detailed';
 const query = new URLSearchParams(location.search);
+const launchOverrides = new Set();
 for (const [param, id] of [['controllerMode', 'controller-mode'], ['controllerIndex', 'controller-index'], ['teslaSwap', 'controller-swap'], ['bitrate', 'bitrate'], ['resolution', 'resolution-profile'], ['fps', 'fps-profile']]) {
   if (query.has(param)) {
     const element = $(id), value = query.get(param);
-    if (element.tagName !== 'SELECT' || [...element.options].some(option => option.value === value)) element.value = value;
+    if (element.tagName !== 'SELECT' || [...element.options].some(option => option.value === value)) { element.value = value; launchOverrides.add(id); }
+    element.addEventListener('change', () => launchOverrides.delete(id));
   }
 }
 const syncChoices = bindChoiceButtons();
+$('controller-advanced').open = controllerOverridden();
 const selectSessionTab = bindSessionTabs();
 $('browser-diagnostics').textContent = `${/Tesla/i.test(navigator.userAgent) ? 'Tesla browser' : 'Browser'} · ${isSecureContext ? 'Secure context' : 'HTTP context'} · ${typeof navigator.getGamepads === 'function' ? 'Gamepad API exposed' : 'Gamepad API unavailable'}`;
 async function updateWakeLock() {
@@ -516,9 +529,9 @@ function reconnect(message, workerFailed = false) {
   if (workerFailed) forceMain = true;
   stop(true);
   const consoleBusy = /occupied|still active|in use|wait for it to close/i.test(message);
-  if (!retry.schedule(consoleBusy ? 3000 : 0)) { failConnection(`${message} Automatic reconnection stopped after five attempts. Disconnect and press Play when ready.`); return; }
-  log.event('reconnect', { attempt: retry.count, message });
-  $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
+  if (!retry.schedule(consoleBusy ? 4000 : 0, consoleBusy)) { failConnection(`${message} Automatic reconnection stopped after ${consoleBusy ? 'a minute of waiting' : 'five attempts'}. Disconnect and press Play when ready.`); return; }
+  log.event('reconnect', { attempt: retry.count, waiting: consoleBusy, message });
+  $('stream-status').textContent = consoleBusy ? 'Waiting for the console to free the previous session…' : `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
 }
 function showPlayer({ hostId, title, demo, inputSession, profile }) {
@@ -615,6 +628,8 @@ function onStreamMessage(message) {
     if (delta) updateHud({ type: 'console-stats', ...delta }, activeCodec);
     return;
   }
+  if (message.type === 'rumble') { gamepads.rumble(message.left / 255, message.right / 255); return; }
+  if (message.type === 'decoder-reset') { log.event('decoder-reset', { message: message.message, resets: message.resets }); return; }
   if (message.type === 'stopped') { log.event('stopped', { message: message.message }); stop(); notify(message.message); }
   else if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
   else if (message.type === 'sync') audio?.sync(message.timestamp);
@@ -848,7 +863,7 @@ function savePlaybackPreferences() {
   syncChoices();
   if (profileScope) { consoleProfiles[profileScope] = readSettings(); persistConsoleProfiles(); }
   for (const id of preferenceIds) {
-    if (profileScope && Object.values(profileFields).includes(id)) continue;
+    if ((profileScope && Object.values(profileFields).includes(id)) || launchOverrides.has(id)) continue;
     const element = $(id);
     try { localStorage.setItem(`remote-play:${id}`, element.type === 'checkbox' ? element.checked : element.value); } catch {}
   }

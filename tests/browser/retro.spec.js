@@ -122,7 +122,24 @@ test('control deck sits beside a smaller player and keeps its toolbar on one row
   await page.getByRole('tab', { name: 'Sound', exact: true }).click();
   await expect(page.getByRole('radiogroup', { name: 'Audio startup buffer' })).toBeVisible();
   await page.getByRole('tab', { name: 'Controls', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Tesla virtual', exact: true })).toBeHidden();
+  await page.locator('#controller-advanced summary').click();
   await expect(page.getByRole('radio', { name: 'Tesla virtual', exact: true })).toBeVisible();
+  await page.locator('#controller-index').fill('5');
+  await page.locator('#controller-index').dispatchEvent('change');
+  await page.goto('/?controllerIndex=7');
+  await expect(page.locator('#library')).toBeVisible();
+  await expect(page.locator('#controller-index')).toHaveValue('7');
+  await page.goto('/');
+  await expect(page.locator('#library')).toBeVisible();
+  await expect(page.locator('#controller-index')).toHaveValue('5', { timeout: 5000 });
+  await page.locator('#demo').click();
+  await expect(page.locator('#stream-status')).toHaveText('Connection failed');
+  await page.getByRole('tab', { name: 'Controls', exact: true }).click();
+  await expect(page.locator('#controller-advanced')).toHaveAttribute('open', '');
+  await page.getByRole('button', { name: 'Reset to automatic', exact: true }).click();
+  await expect(page.locator('#controller-index')).toHaveValue('');
+  await page.getByRole('tab', { name: 'Picture', exact: true }).click();
   await page.getByRole('tab', { name: 'Picture', exact: true }).click();
   await page.screenshot({ path: '/tmp/psrp-touch-session-desktop.png', fullPage: true });
   for (const width of [1440, 1024, 768, 390, 320]) {

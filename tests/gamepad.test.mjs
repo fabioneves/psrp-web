@@ -109,3 +109,22 @@ test('status explains a stale controller index or an excluding source instead of
   tick();
   assert.match(reports.at(-1), /^Controller 2: DualSense/);
 });
+
+test('rumble drives the selected controller actuator and honours the rumble and invert overrides', () => {
+  const effects = [];
+  const device = pad('DualSense Wireless Controller (STANDARD GAMEPAD)');
+  device.vibrationActuator = { playEffect(type, params) { effects.push([type, params]); return Promise.resolve(); }, reset() { effects.push(['reset']); } };
+  device.axes = [0, -1, 0, 0];
+  let tick, options = {};
+  const environment = { navigator: { getGamepads: () => [device] }, document: { hasFocus: () => true }, setInterval(fn) { tick = fn; return 1; }, clearInterval() {} };
+  const poller = pollGamepads({ pad: null, gamepad() {} }, () => false, () => options, () => {}, environment);
+  tick();
+  assert.equal(poller.rumble(0.5, 0), true);
+  assert.deepEqual(effects.at(-1), ['dual-rumble', { startDelay: 0, duration: 400, strongMagnitude: 0.5, weakMagnitude: 0 }]);
+  assert.equal(poller.rumble(0, 0), true);
+  assert.deepEqual(effects.at(-1), ['reset']);
+  options = { rumble: false };
+  assert.equal(poller.rumble(1, 1), false);
+  assert.equal(readGamepad(device).left.y, -1);
+  assert.equal(readGamepad(device, { invertY: true }).left.y, 1);
+});
