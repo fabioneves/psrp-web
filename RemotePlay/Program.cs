@@ -338,8 +338,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
-app.MapGet("/healthz", async (RPContext db) =>
-    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ready" }) : Results.StatusCode(503)).AllowAnonymous();
+app.MapGet("/healthz", async (RPContext db, RemotePlay.Services.Software.ActiveSoftwareStreams streams) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ready", streams = streams.Any ? 1 : 0 }) : Results.StatusCode(503)).AllowAnonymous();
 
 
 

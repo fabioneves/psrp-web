@@ -48,7 +48,29 @@ docker compose logs --tail 100 remote-play
 docker compose down
 ```
 
-`/healthz` returns `{"status":"ready"}` when the application can reach PostgreSQL. `docker compose down` preserves the named data volumes.
+`/healthz` returns `{"status":"ready","streams":0}` when the application can reach
+PostgreSQL; `streams` is 1 while a console or test stream is running. Rebuilding
+or restarting the container ends that stream, so check it first. Recreating the
+container also discards its log, so save it before an update:
+
+```sh
+mkdir -p ~/psrp-logs && docker compose logs --timestamps remote-play > ~/psrp-logs/$(date -u +%Y%m%dT%H%M%SZ).log
+```
+
+`docker compose down` preserves the named data volumes.
+
+### Rootless Docker and periodic loss
+
+A real PS5 session logged a 2.5 to 3 second video blackout every 63 seconds:
+60 seconds of status-update interval plus a 3 second discovery timeout. The
+container's own UDP buffers never overflowed, but the host's did, in the
+sockets of `slirp4netns`, the user-space network relay that rootless Docker
+routes every container packet through. The background console status scan
+adds enough work to that relay to drop the stream for the length of the scan.
+The scan now skips while a stream is running. The relay remains the ceiling
+for a 10 Mbps, 850-packet-per-second stream on rootless Docker; rootful
+Docker with `compose.host.yaml`, or the `pasta` network driver for rootless
+Docker, takes it out of the path.
 
 ### Corrupt frames and keyframes
 

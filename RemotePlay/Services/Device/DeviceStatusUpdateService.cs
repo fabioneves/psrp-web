@@ -8,6 +8,7 @@ using RemotePlay.Models.Context;
 using RemotePlay.Models.DB.PlayStation;
 using RemotePlay.Models.PlayStation;
 using RemotePlay.Hubs;
+using RemotePlay.Services.Software;
 using System.Diagnostics;
 
 namespace RemotePlay.Services.Device
@@ -31,13 +32,17 @@ namespace RemotePlay.Services.Device
         private readonly Dictionary<string, int> _missedScans = new();
         private readonly object _missedScansLock = new();
 
+        private readonly ActiveSoftwareStreams _activeStreams;
+
         public DeviceStatusUpdateService(
             ILogger<DeviceStatusUpdateService> logger,
             IServiceProvider serviceProvider,
-            IOptions<DeviceStatusUpdateConfig> config)
+            IOptions<DeviceStatusUpdateConfig> config,
+            ActiveSoftwareStreams activeStreams)
         {
             _logger = logger;
             _serviceProvider = serviceProvider;
+            _activeStreams = activeStreams;
             _updateInterval = TimeSpan.FromSeconds(config.Value.UpdateIntervalSeconds);
             _discoveryTimeoutMs = config.Value.DiscoveryTimeoutMs;
             _batchSize = config.Value.BatchSize;
@@ -57,7 +62,8 @@ namespace RemotePlay.Services.Device
             {
                 try
                 {
-                    await UpdateDeviceStatusesAsync(stoppingToken);
+                    if (_activeStreams.Any) _logger.LogDebug("Skipping the console status scan while a stream is active");
+                    else await UpdateDeviceStatusesAsync(stoppingToken);
                 }
                 catch (Exception ex)
                 {

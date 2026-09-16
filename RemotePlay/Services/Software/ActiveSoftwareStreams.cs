@@ -69,6 +69,7 @@ public sealed class ActiveSoftwareStreams
 {
     private ActiveSoftwareStream? current;
     public void Set(ActiveSoftwareStream stream) => Interlocked.Exchange(ref current, stream);
+    public bool Any => Volatile.Read(ref current) is { IsOpen: true };
     public void Remove(ActiveSoftwareStream stream) => Interlocked.CompareExchange(ref current, null, stream);
     public async Task<bool> StopConsoleAsync(string hostId, CancellationToken ct)
     {
