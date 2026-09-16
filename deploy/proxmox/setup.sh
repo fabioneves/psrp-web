@@ -62,8 +62,8 @@ if [ "$IP" != dhcp ]; then
     default_gw=$(printf '%s' "$IP" | sed -E 's#\.[0-9]+/[0-9]+$#.1#')
     ask GATEWAY "Gateway" "$default_gw"
 fi
-ask CORES "CPU cores (2 for H.264/H.265 only, 4 if you also use Canvas mode)" "4"
-ask MEMORY "Memory in MB" "2048"
+ask CORES "CPU cores (4 keeps builds quick; streaming itself needs 2)" "4"
+ask MEMORY "Memory in MB (the image build peaks well above 1 GB)" "4096"
 ask DISK "Disk in GB" "16"
 
 step "Domain (HTTPS)"

@@ -54,8 +54,10 @@ CTID=120 HOSTNAME=psrp BRIDGE=vmbr0 STORAGE=local-lvm \
 ```
 
 This downloads the newest Debian standard template, creates the container with
-`nesting=1,keyctl=1` (required by Docker), 4 cores, 2 GB RAM, 16 GB disk and a
-bridged interface on DHCP, then starts it. Set `IP=192.168.1.60/24
+`nesting=1,keyctl=1` (required by Docker), 4 cores, 4 GB RAM, 16 GB disk and a
+bridged interface on DHCP, then starts it. Streaming needs little of either;
+the memory covers the image build, which runs inside the container on every
+update, and both are ceilings rather than reservations. Set `IP=192.168.1.60/24
 GATEWAY=192.168.1.1` for a static address; `CORES`, `MEMORY`, `DISK`,
 `TEMPLATE_STORAGE` and `PASSWORD` are also accepted. Give the container a DHCP
 reservation or a static address so bookmarks keep working.

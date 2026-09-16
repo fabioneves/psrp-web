@@ -1,7 +1,7 @@
 #!/bin/sh
 # Run on the Proxmox node. Creates an unprivileged Debian LXC prepared for Docker.
 #   CTID=120 HOSTNAME=psrp BRIDGE=vmbr0 STORAGE=local-lvm ./create-lxc.sh
-# Optional: IP=192.168.1.60/24 GATEWAY=192.168.1.1 (default DHCP), CORES=4, MEMORY=2048,
+# Optional: IP=192.168.1.60/24 GATEWAY=192.168.1.1 (default DHCP), CORES=4, MEMORY=4096,
 # DISK=16, SSH_KEY=~/.ssh/id_ed25519.pub, TEMPLATE_STORAGE=local, PASSWORD=...
 set -eu
 CTID=${CTID:?Set CTID to a free container id}
@@ -10,7 +10,7 @@ BRIDGE=${BRIDGE:-vmbr0}
 STORAGE=${STORAGE:-local-lvm}
 TEMPLATE_STORAGE=${TEMPLATE_STORAGE:-local}
 CORES=${CORES:-4}
-MEMORY=${MEMORY:-2048}
+MEMORY=${MEMORY:-4096}
 DISK=${DISK:-16}
 IP=${IP:-dhcp}
 GATEWAY=${GATEWAY:-}

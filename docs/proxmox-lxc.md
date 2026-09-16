@@ -28,11 +28,14 @@ CTID=120 HOSTNAME=psrp BRIDGE=vmbr0 STORAGE=local-lvm \
 
 The script downloads the newest Debian standard template that `pveam` offers,
 creates an unprivileged container with `nesting=1,keyctl=1` (both required by
-Docker), 4 cores, 2 GB RAM and a 16 GB root disk on a bridged interface using
+Docker), 4 cores, 4 GB RAM and a 16 GB root disk on a bridged interface using
 DHCP, and starts it. Override `IP=192.168.1.60/24 GATEWAY=192.168.1.1` for a
 static address, `CORES`, `MEMORY`, `DISK`, `TEMPLATE_STORAGE` or `PASSWORD` as
-needed. Two cores are enough for H.264/H.265 sessions; Canvas mode encodes
-MPEG-1 on the server and benefits from four.
+needed. The running stack idles around 200 MB and H.264/H.265 sessions add
+little, but `docker compose up --build`, which every update runs inside the
+container, publishes the .NET app and compiles the pairing helper with four
+jobs and peaks well above 1 GB with no swap configured. Both limits are
+ceilings, not reservations, so the unused share stays with the node.
 
 Give the container a DHCP reservation, or a static address, so the console and
 any bookmarks keep finding it.
