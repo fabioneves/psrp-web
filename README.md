@@ -78,7 +78,7 @@ all three. To add HTTPS in the same step, run it as
 `REMOTE_PLAY_DOMAIN=play.example.com sh /root/install.sh` after finishing the
 domain setup below.
 
-Updates: `pct exec 120 -- psrp update` from the node, or `psrp update` inside
+Updates: `pct exec 120 -- /usr/local/bin/psrp update` from the node, or `psrp update` inside
 the container. It refuses while a stream is running (`--force` overrides),
 saves the current log to `~/psrp-logs`, fast-forwards the checkout, rebuilds,
 waits for the health check and prunes the old image. `psrp status`,

@@ -105,7 +105,7 @@ Delete the dump and archive afterwards; they contain credentials.
 From the Proxmox node:
 
 ```sh
-pct exec 120 -- psrp update
+pct exec 120 -- /usr/local/bin/psrp update
 ```
 
 or `psrp update` inside the container. The command refuses while a stream is
