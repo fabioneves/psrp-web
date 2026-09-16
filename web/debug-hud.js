@@ -5,7 +5,7 @@ export function resetHud() {
   history = []; video = audio = null;
   for (const id of ['hud-fps', 'hud-codec', 'hud-size', 'hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-decode', 'hud-audio']) $(id).textContent = '—';
   $('fps-history').setAttribute('points', '');
-  $('hud-health').textContent = 'Waiting for stream metrics';
+  $('hud-health').textContent = 'Waiting for audio';
 }
 export function updateHud(message, codec) {
   if (message.type === 'audio-stats') audio = message;
@@ -27,7 +27,7 @@ export function updateHud(message, codec) {
     $('fps-history').setAttribute('points', history.map((fps, index) => `${index * 180 / 29},${42 - Math.max(0, Math.min(65, fps)) / 65 * 40}`).join(' '));
   }
   if (audio) $('hud-audio').textContent = `${Math.round(audio.bufferedMs)} ms`;
-  $('hud-health').textContent = `${video?.engine || 'Measuring'} · ${audio?.underruns ?? 0} audio underruns`;
+  $('hud-health').textContent = `${audio?.underruns ?? 0} underruns`;
 }
 export async function copyDiagnostics() {
   const text = JSON.stringify({ video, audio, recentFps: history, secureContext: isSecureContext }, null, 2);

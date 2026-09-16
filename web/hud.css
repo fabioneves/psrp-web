@@ -14,23 +14,36 @@
 #debug-overlay[data-layout=minimal] .hud-grid { display:none; }
 #debug-overlay[data-layout=minimal] .hud-hero { border:0; padding:6px 0 0; gap:12px; }
 #debug-overlay[data-layout=minimal] .hud-hero>strong { font-size:28px; }
-#debug-overlay[data-layout=horizontal] { display:flex; flex-wrap:wrap; align-items:center; gap:3px 10px; top:0; left:0; width:100%; max-width:100%; padding:4px 8px; border:0; background:rgba(8,18,39,.56); font-size:9px; line-height:1.35; }
+.hud-group,.hud-group dl { display:contents; }
+.hud-group-title { display:none; }
+.hud-grid #hud-health { grid-column:1/-1; }
+#debug-overlay[data-layout=horizontal] { display:flex; flex-wrap:wrap; align-items:center; gap:3px 6px; top:0; left:0; width:100%; max-width:100%; padding:4px 6px; border:0; background:rgba(8,18,39,.56); font-size:9px; line-height:1.3; }
 #debug-overlay[data-layout=horizontal] .hud-hero,
 #debug-overlay[data-layout=horizontal] .hud-grid { display:contents; }
-#debug-overlay[data-layout=horizontal] .hud-heading { font-size:9px; }
-#debug-overlay[data-layout=horizontal] .hud-hero>strong { font-size:12px; }
-#debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:10px; margin-left:-7px; font-size:9px; }
+#debug-overlay[data-layout=horizontal] .hud-group { display:flex; align-items:center; gap:6px; padding:2px 5px; max-width:100%; border-left:2px solid var(--hud-color); background:var(--hud-tint); }
+.hud-video { --hud-color:#90efd0; --hud-tint:#90efd00e; }
+.hud-network { --hud-color:#8eb8ff; --hud-tint:#8eb8ff0e; }
+.hud-timing { --hud-color:#ffd390; --hud-tint:#ffd3900e; }
+.hud-sound { --hud-color:#f1a5c9; --hud-tint:#f1a5c90e; }
+#debug-overlay[data-layout=horizontal] .hud-group-title { display:block; color:var(--hud-color); font:600 10px/1 Pixelify,monospace; letter-spacing:.04em; }
+#debug-overlay[data-layout=horizontal] .hud-heading { font-size:9px; color:var(--hud-color); white-space:nowrap; }
+#debug-overlay[data-layout=horizontal] .hud-hero>strong { font:600 12px/1 Pixelify,monospace; }
+#debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:6px; margin-left:-4px; font-size:9px; }
 #debug-overlay[data-layout=horizontal] #hud-size { font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-break { display:none; }
-#debug-overlay[data-layout=horizontal] #fps-chart { display:block; width:48px; height:16px; margin:0; flex-shrink:0; }
-#debug-overlay[data-layout=horizontal] .hud-grid>div { display:flex; align-items:center; gap:4px; white-space:nowrap; }
+#debug-overlay[data-layout=horizontal] #fps-chart { display:block; width:32px; height:14px; margin:0; flex-shrink:0; }
+#debug-overlay[data-layout=horizontal] .hud-group dl>div { display:flex; align-items:center; gap:3px; white-space:nowrap; }
 #debug-overlay[data-layout=horizontal] .hud-grid dt { font-size:0; }
 #debug-overlay[data-layout=horizontal] .hud-grid dt::after { content:attr(data-short); font-size:9px; }
-#debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; font-size:9px; }
-#debug-overlay[data-layout=horizontal] #hud-health { display:block; font-size:9px; margin:0; white-space:nowrap; }
-#debug-overlay[data-layout=horizontal] .hud-note { display:block; font-size:8px; margin:0; }
-#player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; padding-top:calc(4px + env(safe-area-inset-top, 0px)); padding-left:calc(8px + env(safe-area-inset-left, 0px)); padding-right:calc(8px + env(safe-area-inset-right, 0px)); }
+#debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; font-size:9px; color:var(--hud-color); }
+#debug-overlay[data-layout=horizontal] #hud-health { display:block; font-size:9px; margin:0; white-space:nowrap; color:var(--hud-color); }
+#debug-overlay[data-layout=horizontal] .hud-note { display:none; }
+#player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; padding-top:calc(4px + env(safe-area-inset-top, 0px)); padding-left:calc(6px + env(safe-area-inset-left, 0px)); padding-right:calc(6px + env(safe-area-inset-right, 0px)); }
 @media(max-width:600px) {
-  #debug-overlay[data-layout=horizontal] { gap:2px 8px; padding-top:3px; padding-bottom:3px; }
-  #debug-overlay[data-layout=horizontal] #fps-chart,#debug-overlay[data-layout=horizontal] .hud-note { display:none; }
+  #debug-overlay[data-layout=horizontal] { gap:2px 4px; padding-top:3px; padding-bottom:3px; font-size:8px; line-height:1.25; }
+  #debug-overlay[data-layout=horizontal] .hud-group { padding:1px 4px; gap:4px; }
+  #debug-overlay[data-layout=horizontal] .hud-group-title { font-size:9px; }
+  #debug-overlay[data-layout=horizontal] .hud-heading,#debug-overlay[data-layout=horizontal] .hud-hero>span,#debug-overlay[data-layout=horizontal] #hud-size,#debug-overlay[data-layout=horizontal] .hud-grid dt::after,#debug-overlay[data-layout=horizontal] .hud-grid dd,#debug-overlay[data-layout=horizontal] #hud-health { font-size:8px; }
+  #debug-overlay[data-layout=horizontal] .hud-hero>strong { font-size:10px; }
+  #debug-overlay[data-layout=horizontal] #fps-chart { display:none; }
 }

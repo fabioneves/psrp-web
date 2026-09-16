@@ -202,6 +202,11 @@ test('three translucent HUD layouts show live data, stay compact and switch with
       expect(box.height).toBeLessThan(40);
       for (const id of ['hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-decode', 'hud-audio', 'hud-health', 'fps-chart']) await expect(page.locator(`#${id}`)).toBeVisible();
       expect(await hud.evaluate(element => getComputedStyle(element).borderTopWidth)).toBe('0px');
+      const groups = hud.locator('.hud-group');
+      await expect(groups).toHaveCount(4);
+      const colors = await groups.evaluateAll(elements => elements.map(element => getComputedStyle(element).borderLeftColor));
+      expect(new Set(colors).size).toBe(4);
+      for (const name of ['Video metrics', 'Network metrics', 'Timing metrics', 'Audio metrics']) await expect(hud.getByRole('group', { name })).toBeVisible();
       expect(await page.locator('#hud-fps').evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeLessThanOrEqual(12);
     }
     await page.locator('#stage').screenshot({ path: `/tmp/psrp-hud-${layout}.png` });

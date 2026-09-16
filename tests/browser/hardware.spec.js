@@ -154,6 +154,13 @@ test('native H.264 runs in the video worker with direct audio output', async ({ 
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
   const worker = page.workers().find(worker => worker.url().endsWith('/stream-worker.js'));
   expect(await worker.evaluate(() => globalThis.decoderPreferences)).toEqual(['prefer-hardware']);
+  await page.locator('#debug-mode').check();
+  await chooseSetting(page, 'hud-style', 'horizontal');
+  await expect(page.locator('#hud-codec')).toHaveText('H.264');
+  await expect(page.locator('#hud-health')).toContainText('underruns');
+  const hudText = await page.locator('#debug-overlay').innerText();
+  expect(hudText.match(/H\.264/g)).toHaveLength(1);
+  expect(hudText).not.toMatch(/hardware|preferred/i);
   await page.locator('#stop').click();
 });
 
