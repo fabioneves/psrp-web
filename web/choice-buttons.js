@@ -1,14 +1,14 @@
 const titles = {
-  'video-mode': ['Canvas', 'H.264', 'H.265'],
+  'video-mode': ['Automatic', 'H.264', 'H.265', 'Canvas'],
   'resolution-profile': ['360p', '540p', '720p', '1080p'],
   'frame-pacing': ['Smooth', 'Responsive'],
   'audio-delay': ['40 ms', '120 ms', '240 ms'],
   'controller-mode': ['Automatic', 'Physical', 'Tesla virtual'],
   'controller-swap': ['Automatic', 'On', 'Off']
 };
-const codecArt = ['/art/codec-canvas.svg', '/art/codec-h264.svg', '/art/codec-h265.svg'];
+const codecArt = { auto: '/art/codec-auto.svg', h264: '/art/codec-h264.svg', h265: '/art/codec-h265.svg', mpeg1: '/art/codec-canvas.svg' };
 const hudArt = { detailed: '/art/hud-detailed.svg', minimal: '/art/hud-minimal.svg', horizontal: '/art/hud-horizontal.svg' };
-const codecDescriptions = ['Software', 'Browser', 'PS5 · browser'];
+const codecDescriptions = { auto: 'Best available', h264: 'Browser', h265: 'PS5 · browser', mpeg1: 'Software' };
 
 export function bindChoiceButtons(root = document) {
   const groups = [];
@@ -29,9 +29,9 @@ export function bindChoiceButtons(root = document) {
       const title = titles[select.id]?.[index] || option.textContent.split(' · ')[0];
       button.setAttribute('aria-label', title);
       if (select.id === 'video-mode') {
-        const icon = document.createElement('img'); icon.src = codecArt[index]; icon.width = 32; icon.height = 32; icon.alt = '';
+        const icon = document.createElement('img'); icon.src = codecArt[option.value]; icon.width = 32; icon.height = 32; icon.alt = '';
         const text = document.createElement('strong'); text.textContent = title;
-        const detail = document.createElement('small'); detail.textContent = codecDescriptions[index];
+        const detail = document.createElement('small'); detail.textContent = codecDescriptions[option.value];
         button.append(icon, text, detail);
       } else if (select.id === 'hud-style') {
         const icon = document.createElement('img'); icon.src = hudArt[option.value]; icon.width = 48; icon.height = 28; icon.alt = '';

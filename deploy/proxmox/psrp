@@ -5,6 +5,8 @@
 #   psrp logs [n]           last n log lines (default 100)
 #   psrp save-log           archive the current log to ~/psrp-logs
 #   psrp restart            restart the app without rebuilding
+#   psrp backup             save the database and encryption keys to ~/psrp-backups/<timestamp>
+#   psrp restore <dir>      replace every account, pairing and setting with a backup
 set -eu
 APP_DIR=${APP_DIR:-/opt/psrp}
 cd "$APP_DIR"
@@ -35,7 +37,7 @@ case "${1:-}" in
         git merge -q --ff-only "origin/$branch"
         after=$(git rev-parse --short HEAD)
         install -m 0755 deploy/proxmox/psrp /usr/local/bin/psrp && install -m 0755 deploy/proxmox/psrp /usr/bin/psrp
-        docker compose up --build -d
+        APP_VERSION=$after docker compose up --build -d
         until [ -n "$(health)" ]; do sleep 3; done
         docker image prune -f >/dev/null
         docker builder prune -f --keep-storage 3GB >/dev/null 2>&1 || true
@@ -50,5 +52,26 @@ case "${1:-}" in
     logs) docker compose logs --tail "${2:-100}" remote-play ;;
     save-log) save_log ;;
     restart) docker compose restart remote-play && until [ -n "$(health)" ]; do sleep 3; done && health && echo ;;
+    backup)
+        dir=~/psrp-backups/$(date -u +%Y%m%dT%H%M%SZ)
+        mkdir -p "$dir"
+        docker compose exec -T database sh -c 'pg_dump --clean --if-exists -U "$POSTGRES_USER" "$POSTGRES_DB"' | gzip > "$dir/database.sql.gz"
+        docker compose cp remote-play:/data "$dir/app-data" >/dev/null
+        echo "Saved $dir ($(du -sh "$dir" | cut -f1)): accounts, pairings, settings and the keys that decrypt saved PSN tokens. Copy it off this container."
+        ;;
+    restore)
+        dir=${2:?usage: psrp restore ~/psrp-backups/<timestamp>}
+        [ -f "$dir/database.sql.gz" ] && [ -d "$dir/app-data" ] || { echo "$dir is not a psrp backup." >&2; exit 1; }
+        if [ "$(streams)" = 1 ]; then echo "A stream is running; restoring would end it." >&2; exit 1; fi
+        printf 'This replaces every account, pairing and setting with %s. Continue? [y/N] ' "$dir"; read -r answer
+        [ "$answer" = y ] || [ "$answer" = Y ] || exit 1
+        docker compose stop remote-play
+        gunzip -c "$dir/database.sql.gz" | docker compose exec -T database sh -c 'psql -q -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" "$POSTGRES_DB"' >/dev/null
+        docker compose cp "$dir/app-data/." remote-play:/data/ >/dev/null
+        docker compose run --rm --no-deps --user root --entrypoint chown remote-play -R app:app /data >/dev/null
+        docker compose start remote-play
+        until [ -n "$(health)" ]; do sleep 3; done
+        echo "Restored $dir. $(health)"
+        ;;
     *) sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;
 esac

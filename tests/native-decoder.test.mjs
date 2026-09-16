@@ -45,6 +45,10 @@ test('video selection respects Canvas, console support and ordered native fallba
   assert.equal(await selectVideoCodec('h265', profile, new Set(), 'PS4', platform), 'h264');
   assert.equal(await selectVideoCodec('h265', profile, new Set(['h265']), 'PS5', platform), 'h264');
   assert.equal(await selectVideoCodec('h265', profile, new Set(['h265', 'h264']), 'PS5', platform), 'mpeg1');
+  assert.equal(await selectVideoCodec('auto', profile, new Set(), 'PS5', platform), 'h265', 'automatic prefers H.265 on a PS5');
+  assert.equal(await selectVideoCodec('auto', profile, new Set(), 'PS4', platform), 'h264', 'automatic uses H.264 on a PS4');
+  assert.equal(await selectVideoCodec('auto', profile, new Set(), null, platform), 'h264', 'automatic uses H.264 for the test stream');
+  assert.equal(await selectVideoCodec('auto', profile, new Set(['h265']), 'PS5', platform), 'h264', 'automatic skips a codec that failed');
   assert.equal(await selectVideoCodec('h265', profile, new Set(), 'PS5', {}), 'mpeg1');
 });
 

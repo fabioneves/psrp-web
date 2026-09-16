@@ -36,7 +36,7 @@
     </section>
 
     <section id="library" hidden>
-      <div class="lobby-banner"><header class="banner-nav"><a class="brand" href="/"><img src="/art/controller.svg" width="48" height="32" alt=""> PLAYER ONE <span>REMOTE PLAY</span></a><div class="nav-actions"><a class="tesla-link quiet" href="https://www.youtube.com/redirect" rel="noopener">Tesla theater ↗</a><button id="logout" class="quiet" hidden>Sign out</button></div></header><div class="banner-copy"><p class="eyebrow">YOUR NEXT SESSION STARTS HERE</p><h2>Press play.<br>Go somewhere.</h2><p>The classics never leave you.</p><div class="symbol-row" aria-hidden="true"><span>△</span><span>○</span><span>×</span><span>□</span></div></div></div><div class="lobby-grid"><div class="console-column"><div class="section-heading"><div><p class="eyebrow">01 / CONSOLE SELECT</p><h1>Your consoles</h1></div><div class="setup-actions"><button id="refresh" class="quiet">Refresh</button><button id="add-console" class="primary">Add console</button></div></div>
+      <div class="lobby-banner"><header class="banner-nav"><a class="brand" href="/"><img src="/art/controller.svg" width="48" height="32" alt=""> PLAYER ONE <span>REMOTE PLAY</span></a><div class="nav-actions"><a class="tesla-link quiet" href="https://www.youtube.com/redirect" rel="noopener">Tesla theater ↗</a><span id="update-notice" class="update-notice" role="status" hidden></span><button id="logout" class="quiet" hidden>Sign out</button></div></header><div class="banner-copy"><p class="eyebrow">YOUR NEXT SESSION STARTS HERE</p><h2>Press play.<br>Go somewhere.</h2><p>The classics never leave you.</p><div class="symbol-row" aria-hidden="true"><span>△</span><span>○</span><span>×</span><span>□</span></div></div></div><div class="lobby-grid"><div class="console-column"><div class="section-heading"><div><p class="eyebrow">01 / CONSOLE SELECT</p><h1>Your consoles</h1></div><div class="setup-actions"><button id="refresh" class="quiet">Refresh</button><button id="add-console" class="primary">Add console</button></div></div>
       <section id="attach-panel" class="panel" hidden>
         <h2>Stream running on another screen</h2>
         <p>Attach this device as a controller. The other screen keeps playing.</p>
@@ -115,11 +115,11 @@
       <div id="library-profile"><div id="profile-settings">
       <div class="preset-grid" aria-label="Quick video profiles">
         <button type="button" data-preset="tesla"><span class="preset-icon">△</span><strong>Compatibility</strong><small>720p · 60 fps · Canvas fallback</small></button>
-        <button type="button" data-preset="balanced"><span class="preset-icon">×</span><strong>Balanced</strong><small>720p · 60 fps · H.264 · default</small></button>
-        <button type="button" data-preset="detail"><span class="preset-icon">□</span><strong>Maximum detail</strong><small>1080p · 60 fps · H.264</small></button>
+        <button type="button" data-preset="balanced"><span class="preset-icon">×</span><strong>Balanced</strong><small>720p · 60 fps · automatic codec · default</small></button>
+        <button type="button" data-preset="detail"><span class="preset-icon">□</span><strong>Maximum detail</strong><small>1080p · 60 fps · automatic codec</small></button>
       </div>
-      <label for="video-mode">Video mode</label><select id="video-mode" aria-describedby="video-mode-status"><option value="mpeg1">Canvas · software fallback</option><option value="h264" selected>H.264 · browser decoding</option><option value="h265">H.265 · PS5, browser decoding</option></select>
-      <p id="video-mode-status" class="hint" role="status">H.264 and H.265 prefer hardware decoding. Unsupported modes fall back automatically.</p>
+      <label for="video-mode">Video mode</label><select id="video-mode" aria-describedby="video-mode-status"><option value="auto" selected>Automatic · best for this console</option><option value="h264">H.264 · browser decoding</option><option value="h265">H.265 · PS5, browser decoding</option><option value="mpeg1">Canvas · software fallback</option></select>
+      <p id="video-mode-status" class="hint" role="status">Automatic uses H.265 on a PS5 and H.264 elsewhere when the browser decodes them in hardware; Canvas is the fallback.</p>
       <div class="settings-grid">
       <label>Resolution<select id="resolution-profile"><option value="360p">360p · 640 × 360</option><option value="540p">540p · 960 × 540</option><option value="720p" selected>720p · 1280 × 720</option><option value="1080p">1080p · 1920 × 1080</option></select></label>
       <label>Frame rate<select id="fps-profile"><option value="60" selected>60 fps</option><option value="30">30 fps</option></select></label>
@@ -141,7 +141,7 @@
     </section>
 
     <section id="player" hidden>
-      <div class="player-bar"><div class="session-title"><img src="/art/console.svg" width="36" height="40" alt=""><div><strong id="stream-title">Remote Play</strong><span class="session-status"><span id="stream-status" role="status">Connecting…</span><span id="stream-profile"></span></span></div></div><div class="player-actions"><button id="fullscreen" aria-label="Full screen" title="Full screen"><img src="/art/fullscreen.svg" width="20" height="20" alt=""><span>Full screen</span></button><button id="stop" class="danger" aria-label="Disconnect" title="Disconnect"><span class="stop-icon" aria-hidden="true"></span><span>Disconnect</span></button></div></div>
+      <div class="player-bar"><div class="session-title"><img src="/art/console.svg" width="36" height="40" alt=""><div><strong id="stream-title">Remote Play</strong><span class="session-status"><span id="stream-health" class="health-dot" data-level="good" role="img" aria-label="Connection good" title="Connection good"></span><span id="stream-status" role="status">Connecting…</span><span id="stream-profile"></span></span></div></div><div class="player-actions"><button id="fullscreen" aria-label="Full screen" title="Full screen"><img src="/art/fullscreen.svg" width="20" height="20" alt=""><span>Full screen</span></button><button id="stop" class="danger" aria-label="Disconnect" title="Disconnect"><span class="stop-icon" aria-hidden="true"></span><span>Disconnect</span></button></div></div>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing video…</div>
       <p id="connection-message" class="stage-banner" role="status" aria-live="polite"></p>
       <button id="fullscreen-exit" hidden><img src="/art/fullscreen.svg" width="20" height="20" alt="">Exit fullscreen</button>

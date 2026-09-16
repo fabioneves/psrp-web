@@ -94,15 +94,17 @@ test('theater fallback keeps fullscreen clean and touch gestures can exit it', a
   await page.locator('#stop').click();
 });
 
-test('codec tiles default to H.264, support keyboard selection and save preferences with the automatic quality choice', async ({ page }) => {
+test('codec tiles default to Automatic, support keyboard selection and save preferences with the automatic quality choice', async ({ page }) => {
   await register(page);
   const modes = page.getByRole('radiogroup', { name: 'Video mode', exact: true });
-  await expect(modes.getByRole('radio', { name: 'H.264', exact: true })).toBeChecked();
+  await expect(modes.getByRole('radio', { name: 'Automatic', exact: true })).toBeChecked();
   await expect(page.locator('#video-mode')).toBeHidden();
-  await modes.getByRole('radio', { name: 'Canvas', exact: true }).click();
-  await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
+  await modes.getByRole('radio', { name: 'H.264', exact: true }).click();
+  await expect(page.locator('#video-mode')).toHaveValue('h264');
   await page.keyboard.press('End');
-  await expect(modes.getByRole('radio', { name: 'H.265', exact: true })).toBeFocused();
+  await expect(modes.getByRole('radio', { name: 'Canvas', exact: true })).toBeFocused();
+  await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
+  await modes.getByRole('radio', { name: 'H.265', exact: true }).click();
   await expect(page.locator('#video-mode')).toHaveValue('h265');
   await page.getByLabel('Automatically adjust quality').check();
   await page.reload();

@@ -29,6 +29,7 @@ await DiscoveryTests.RunAsync(Check);
 await PsnTests.RunAsync(Check);
 UserSettingsTests.Run(Check);
 LoginAttemptsTests.Run(Check);
+UpdateCheckTests.Run(Check);
 var browserRequest = new Microsoft.AspNetCore.Http.DefaultHttpContext().Request;
 browserRequest.Host = new Microsoft.AspNetCore.Http.HostString("play.example.test");
 Check(!BrowserSession.IsSameOrigin(browserRequest), "session restoration requires an explicit browser request header");

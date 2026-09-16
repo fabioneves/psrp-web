@@ -20,7 +20,10 @@ services:
       retries: 20
     restart: unless-stopped
   remote-play:
-    build: .
+    build:
+      context: .
+      args:
+        APP_VERSION: ${APP_VERSION:-dev}
     logging: *logging
     ports:
       - "${PORT:-8080}:8080"

@@ -91,7 +91,7 @@ export function pollGamepads(state, enabled, settings, report, environment = glo
     const shown = pad && pad.mapping !== 'standard' ? `${describeSnapshot(seen)} · ${describeRaw(pad)}` : describeSnapshot(seen);
     if (preview !== shown) { preview = shown; report(next, shown); }
   };
-  timer = environment.setInterval(tick, 1000 / 60);
+  timer = environment.setInterval(tick, 4); // 250 Hz: a press waits at most 4 ms before it is sent
   return {
     reset() { signature = ''; state.gamepad(null); },
     close() { environment.clearInterval(timer); state.gamepad(null); },

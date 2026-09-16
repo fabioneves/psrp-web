@@ -33,6 +33,8 @@ COPY tests/backend/ tests/backend/
 RUN dotnet run --project tests/backend/BackendTests.csproj -c Release
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl libjson-c5 libminiupnpc17 libevent-2.1-7t64 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /out/app/ ./

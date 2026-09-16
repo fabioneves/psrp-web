@@ -84,7 +84,7 @@ test('native video falls back when the decoder genuinely stops producing frames'
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(60);
-  await expect(page.locator('#video-mode')).toHaveValue('h264');
+  await expect(page.locator('#video-mode')).toHaveValue('auto');
   await page.locator('#stop').click();
 });
 
@@ -102,10 +102,10 @@ test('a decoder that stalls after producing frames reconnects with the same code
   await page.locator('#stop').click();
 });
 
-test('H.264 defaults on, unavailable decoding falls back, and Canvas survives refresh', async ({ page }) => {
+test('Automatic defaults on, unavailable decoding falls back, and Canvas survives refresh', async ({ page }) => {
   await page.addInitScript(() => { window.VideoDecoder = undefined; });
   await register(page);
-  await expect(page.locator('#video-mode')).toHaveValue('h264');
+  await expect(page.locator('#video-mode')).toHaveValue('auto');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
   await expect(page.locator('#video-mode-status')).toContainText('unavailable');
@@ -155,7 +155,7 @@ test('native decoder failure automatically retries in software without changing 
   expect(codecs[0]).toBe('h264');
   expect(codecs.slice(1).every(codec => codec === 'mpeg1')).toBe(true);
   await expect(page.locator('#message')).toHaveText('');
-  await expect(page.locator('#video-mode')).toHaveValue('h264');
+  await expect(page.locator('#video-mode')).toHaveValue('auto');
   await page.locator('#stop').click();
 });
 
@@ -247,6 +247,6 @@ test('H.264 stays native when Chrome can decode it without a hardware preference
   await expect(page.locator('#video-mode-status')).toContainText('hardware preference unavailable');
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(120);
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
-  await expect(page.locator('#video-mode')).toHaveValue('h264');
+  await expect(page.locator('#video-mode')).toHaveValue('auto');
   await page.locator('#stop').click();
 });

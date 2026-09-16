@@ -3,6 +3,7 @@ import { bindChoiceButtons } from './choice-buttons.js';
 import { bindSessionTabs } from './session-tabs.js';
 import { updateHud, resetHud, copyDiagnostics } from './debug-hud.js';
 import { selectVideoCodec, nativeVideoConfig } from './native-decoder.js';
+import { StreamHealth } from './stream-health.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
@@ -43,6 +44,7 @@ let decoderFailure = '', sleepingHost = null;
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const log = new StreamLog();
+const health = new StreamHealth();
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
   swap: $('controller-swap').value, deadZone: Number($('dead-zone').value),
   invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked, invertY: $('invert-y').checked, rumble: $('rumble').checked });
@@ -85,7 +87,7 @@ for (const id of preferenceIds) {
     updateWakeLock();
   });
 }
-if (!['mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'h264';
+if (!['auto', 'mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'auto';
 if (!['detailed', 'minimal', 'horizontal'].includes($('hud-style').value)) $('hud-style').value = 'detailed';
 const query = new URLSearchParams(location.search);
 const launchOverrides = new Set();
@@ -284,7 +286,7 @@ function applySettings(saved) {
     }
     if (saved.consoleProfiles && typeof saved.consoleProfiles === 'object') { consoleProfiles = saved.consoleProfiles; persistConsoleProfiles(); }
     if (typeof saved.autoFullscreen === 'boolean') setStartInFullscreen(saved.autoFullscreen);
-    if (!['mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'h264';
+    if (!['auto', 'mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'auto';
     if (!['detailed', 'minimal', 'horizontal'].includes($('hud-style').value)) $('hud-style').value = 'detailed';
     $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
     $('controller-advanced').open = controllerOverridden();
@@ -306,7 +308,7 @@ function writeSettings(values) {
   savePlaybackPreferences();
 }
 function describeProfile(profile) {
-  return `${profile.resolution}${profile.fps} · ${{ mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[profile.codec] || profile.codec} · ${Number(profile.bitrateKbps) / 1000} Mbps${profile.pacing === 'responsive' ? ' · responsive' : ''}`;
+  return `${profile.resolution}${profile.fps} · ${{ auto: 'Automatic', mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[profile.codec] || profile.codec} · ${Number(profile.bitrateKbps) / 1000} Mbps${profile.pacing === 'responsive' ? ' · responsive' : ''}`;
 }
 function enterConsoleScope(hostId) {
   if (profileScope === hostId) return;
@@ -357,7 +359,15 @@ function fullscreenToggle() {
   label.append(checkbox, icon, text);
   return label;
 }
+async function checkForUpdate() {
+  try {
+    const status = await api('version');
+    $('update-notice').hidden = !status.updateAvailable;
+    if (status.updateAvailable) $('update-notice').textContent = `Update available · ${status.version} → ${status.latest} · run psrp update on the server`;
+  } catch { $('update-notice').hidden = true; }
+}
 async function refresh() {
+  void checkForUpdate();
   await refreshActive();
   const devices = await api('playstation/my-devices');
   knownDevices = devices;
@@ -582,7 +592,7 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
   stop();
   if (hostId && !inputSession && consoleProfiles[hostId]) enterConsoleScope(hostId);
   target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile(), codec: $('video-mode').value, pacing: $('frame-pacing').value, auto: $('auto-quality').checked };
-  resetHud(); log.reset(); renderEvents();
+  resetHud(); log.reset(); health.reset(); showHealth({ level: 'good', reason: '' }); renderEvents();
   log.event('play', { hostId, demo, inputSession: !!inputSession, profile: target.profile, codec: $('video-mode').value });
   quality = new AdaptiveQuality(target.profile);
   $('connection-message').textContent = '';
@@ -623,6 +633,12 @@ async function connect() {
       else reconnect(error.message);
     }
   }
+}
+function showHealth({ level, reason }) {
+  const dot = $('stream-health');
+  dot.dataset.level = level;
+  const text = { good: 'Connection good', fair: `Connection degraded: ${reason}`, poor: `Connection poor: ${reason}` }[level];
+  dot.title = text; dot.setAttribute('aria-label', text);
 }
 function failConnection(message) {
   stop(true);
@@ -672,8 +688,9 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   if (current !== attempt) return;
   activeCodec = codec;
   const label = { mpeg1: 'Canvas software video', h264: 'H.264', h265: 'H.265' }[codec];
-  $('video-mode-status').textContent = codec === preferred
-    ? (codec === 'mpeg1' ? 'Canvas software video selected.' : `${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware decoding preferred' : 'browser decoding; hardware preference unavailable'}.`)
+  const automatic = preferred === 'auto';
+  $('video-mode-status').textContent = codec === preferred || (automatic && codec !== 'mpeg1')
+    ? (codec === 'mpeg1' ? 'Canvas software video selected.' : `${automatic ? 'Automatic · ' : ''}${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware decoding preferred' : 'browser decoding; hardware preference unavailable'}.`)
     : `Using ${label}; ${decoderFailure || 'the selected mode is unavailable for this browser or console'}.${!isSecureContext ? ' Open the HTTPS address for browser decoding.' : ''}`;
   await audio?.ready;
   if (current !== attempt) return;
@@ -775,6 +792,8 @@ function onStreamMessage(message) {
       $('connecting').hidden = true;
       $('stream-status').textContent = 'Playing';
       $('connection-message').textContent = '';
+      showHealth(health.sample({ stalls: message.stalls, underruns: message.underruns, arrivalMaxMs: message.arrivalMaxMs, transportMs: message.transportMs,
+        consoleLost: log.server?.lost ?? null, audioUnderruns: log.audio?.underruns ?? null }));
     }
     if (target?.auto && !target.inputSession) {
       const change = quality?.sample(message, performance.now(), !document.hidden);
@@ -960,8 +979,8 @@ $('apply-profile').onclick = () => {
 
 const presets = {
   tesla: { codec: 'mpeg1', resolution: '720p', fps: 60, bitrateKbps: 10000 },
-  balanced: { codec: 'h264', resolution: '720p', fps: 60, bitrateKbps: 10000 },
-  detail: { codec: 'h264', resolution: '1080p', fps: 60, bitrateKbps: 20000 }
+  balanced: { codec: 'auto', resolution: '720p', fps: 60, bitrateKbps: 10000 },
+  detail: { codec: 'auto', resolution: '1080p', fps: 60, bitrateKbps: 20000 }
 };
 function savePlaybackPreferences() {
   syncChoices();

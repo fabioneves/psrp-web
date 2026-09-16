@@ -115,6 +115,10 @@ branch it was installed from, rebuilds the image, waits for the health check
 and prunes the previous image. `psrp status` shows the version, health and
 containers; `psrp logs [n]` prints the last lines; `psrp save-log` archives
 the log without updating; `psrp restart` restarts the app without a rebuild.
+`psrp backup` writes the database dump and the encryption keys for saved PSN
+tokens to `~/psrp-backups/<timestamp>`; copy that folder off the container.
+`psrp restore <dir>` replaces every account, pairing and setting with a backup
+after confirming, and refuses while a stream is running.
 
 The equivalent by hand is `cd /opt/psrp && git pull && docker compose up --build -d`.
 

@@ -157,8 +157,10 @@ a {
 .nav-actions {
   display:flex;
   align-items:center;
+  justify-content:flex-end;
+  flex-wrap:wrap;
   gap:8px;
-  flex-shrink:0;
+  min-width:0;
 }
 a.tesla-link {
   display:inline-flex;
@@ -476,6 +478,26 @@ main:has(#account:not([hidden])) {
   flex:1;
   min-width:130px;
 }
+.update-notice {
+  font-size:.72rem;
+  color:var(--accent);
+  border:1px solid var(--accent);
+  padding:4px 8px;
+  align-self:center;
+  max-width:100%;
+  overflow-wrap:anywhere;
+}
+.health-dot {
+  display:inline-block;
+  width:10px;
+  height:10px;
+  border-radius:50%;
+  background:var(--accent);
+  box-shadow:0 0 0 2px #0b1023;
+  vertical-align:middle;
+}
+.health-dot[data-level=fair] { background:#f4c95d; }
+.health-dot[data-level=poor] { background:#ff6b6b; }
 .session-status {
   display:block;
   min-height:1.6em;

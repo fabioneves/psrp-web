@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+  pull_request:
+jobs:
+  unit:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci
+      - run: npm run test:unit
+  backend:
+    name: Backend checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build --target test -t player-one-tests .
+  browser:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    env:
+      PORT: "8080"
+      DISCOVERY_SUBNETS: ""
+      ALLOW_REGISTRATION: "true"
+      TEST_URL: http://127.0.0.1:8080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 24 }
+      - run: npm ci
+      - name: Start an isolated instance
+        run: |
+          docker compose up --build -d
+          for i in $(seq 1 90); do curl -fsS "$TEST_URL/healthz" && break; sleep 2; done
+          curl -fsS -X POST "$TEST_URL/api/auth/register" -H 'content-type: application/json' \
+            -d '{"username":"owner_ci","email":"owner_ci@example.test","password":"LocalTestPassword_123"}' > /dev/null
+      - run: npx playwright test
+      - name: Server log
+        if: failure()
+        run: docker compose logs --timestamps remote-play | tail -300
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: playwright-results, path: test-results/, if-no-files-found: ignore }
+      - if: always()
+        run: docker compose down -v

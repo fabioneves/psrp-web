@@ -27,7 +27,8 @@ export async function supportsNativeVideo(profile, platform = globalThis, videoC
 }
 
 export async function selectVideoCodec(preferred, profile, failed = new Set(), hostType = null, platform = globalThis) {
-  const candidates = { mpeg1: ['mpeg1'], h264: ['h264', 'mpeg1'], h265: ['h265', 'h264', 'mpeg1'] }[preferred] || ['h264', 'mpeg1'];
+  // Automatic prefers H.265 on a PS5 (more detail at the same bitrate) and H.264 elsewhere, Canvas last.
+  const candidates = { mpeg1: ['mpeg1'], h264: ['h264', 'mpeg1'], h265: ['h265', 'h264', 'mpeg1'], auto: hostType === 'PS5' ? ['h265', 'h264', 'mpeg1'] : ['h264', 'mpeg1'] }[preferred] || ['h264', 'mpeg1'];
   for (const codec of candidates) {
     if (codec === 'mpeg1') return codec;
     if (failed.has(codec) || (codec === 'h265' && hostType && hostType !== 'PS5')) continue;

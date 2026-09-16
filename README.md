@@ -82,7 +82,9 @@ Updates: `pct exec 120 -- /usr/local/bin/psrp update` from the node, or `psrp up
 the container. It refuses while a stream is running (`--force` overrides),
 saves the current log to `~/psrp-logs`, fast-forwards the checkout, rebuilds,
 waits for the health check and prunes the old image. `psrp status`,
-`psrp logs` and `psrp restart` are there too.
+`psrp logs`, `psrp restart`, `psrp backup` and `psrp restore <dir>` are there too. Signed-in users see an
+"Update available" notice in the header when the repository's main branch has moved on (set
+`UPDATE_CHECK_REPO=` to disable the check, or to `owner/name` for a fork).
 
 ### Option B: Docker Compose
 
@@ -374,12 +376,13 @@ Smooth frame pacing primes one frame interval, keeps up to three decoded images 
 
 ## Video modes
 
-**Video mode** in Stream settings offers three choices, saved per browser:
+**Video mode** in Stream settings offers four choices, saved to your account:
 
 | Mode | Server work | Browser work |
 | --- | --- | --- |
 | Canvas · software | Decode H.264, encode MPEG-1 | Software WASM decoding and Canvas 2D |
-| H.264 · browser decoding (default) | Forward each H.264 access unit as-is | WebCodecs decoding and Canvas 2D |
+| Automatic (default) | H.265 on a PS5, H.264 otherwise, whichever the browser decodes in hardware | WebCodecs decoding and Canvas 2D |
+| H.264 · browser decoding | Forward each H.264 access unit as-is | WebCodecs decoding and Canvas 2D |
 | H.265 · PS5, browser decoding | Request PS5 HEVC SDR, forward each access unit as-is | WebCodecs HEVC decoding and Canvas 2D |
 
 H.264 and H.265 first request `prefer-hardware`. If that is unsupported, the app
