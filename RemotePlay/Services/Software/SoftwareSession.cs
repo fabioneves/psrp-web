@@ -79,7 +79,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                     throw new IOException("Could not start the console video stream.");
                 await streams.AttachReceiverAsync(session.Id, receiver, ct);
                 stream = await streams.GetStreamAsync(session.Id);
-                if (stream != null) await stream.RequestKeyframeAsync();
+                if (stream != null) { stream.PeriodicIdrInterval = null; await stream.RequestKeyframeAsync(); }
                 var console = stream;
                 input.RequestKeyframe = () => { receiver.EnterWaitForIdr(); return console?.RequestKeyframeAsync() ?? Task.CompletedTask; };
                 if (!await controller.ConnectAsync(session.Id, ct) || !await controller.StartAsync(session.Id, ct))

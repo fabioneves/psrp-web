@@ -28,6 +28,18 @@ and the browser's TS demuxer completed a frame only at the next PES start
 (median 32.6 ms, p95 33.6 ms). Access units now travel as one message each
 and go straight to WebCodecs; no FFmpeg process runs in H.264/H.265 mode.
 
+### Periodic keyframe requests (2026-09-16)
+
+A six-minute 1080p60 H.265 diagnostics capture from a Mac on the console
+network showed the server's keyframe-request counter rising by exactly one
+every 2,000 ms (177 requests) with zero console packet loss, and a stall of
+50-110 ms plus an arrival gap of about 110 ms in the same rhythm, holding
+presentation at 52-55 fps. The upstream stream core sends a maintenance
+IDR request every 2 seconds for its HLS segmenter. The browser path now sets
+`PeriodicIdrInterval` to null after the startup burst; loss recovery (reorder
+timeout, health degradation and the browser's own request after a decoder
+reset) still asks for keyframes when they are needed.
+
 Smooth pacing also carried its startup depth as permanent latency, because the
 presenter draws at most one frame per animation tick. It now releases a frame
 that has waited 1.5 intervals when a newer one is queued.

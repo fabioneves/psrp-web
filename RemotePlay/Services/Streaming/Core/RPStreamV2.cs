@@ -174,6 +174,12 @@ namespace RemotePlay.Services.Streaming.Core
         private DateTime _lastKeyframeRequest = DateTime.MinValue;
 		private readonly TimeSpan _keyframeRequestCooldown = TimeSpan.FromSeconds(1.0); // 冷却时间 1 秒，避免过度请求
         private readonly TimeSpan _idrMetricsWindow = TimeSpan.FromSeconds(30);
+        /// <summary>
+        /// Interval of the maintenance IDR requests sent after startup. The upstream HLS path needs a keyframe
+        /// every 1-2 segments; the direct browser path sets this to null because every forced keyframe is a
+        /// multi-hundred-kilobyte burst that stalls presentation, and loss recovery requests keyframes on its own.
+        /// </summary>
+        public TimeSpan? PeriodicIdrInterval { get; set; } = TimeSpan.FromSeconds(2);
         private readonly Queue<DateTime> _idrRequestHistory = new();
         private readonly object _idrMetricsLock = new();
         private int _totalIdrRequests = 0;
@@ -1814,9 +1820,10 @@ namespace RemotePlay.Services.Streaming.Core
                 // - 既满足 HLS 低延迟需求，又不会过度请求
                 while (!_cancellationToken.IsCancellationRequested)
                 {
-                    await Task.Delay(2000, _cancellationToken); // 2 秒间隔
+                    if (PeriodicIdrInterval is not { } interval) break;
+                    await Task.Delay(interval, _cancellationToken);
                     
-                    if (_cancellationToken.IsCancellationRequested) 
+                    if (_cancellationToken.IsCancellationRequested || PeriodicIdrInterval == null) 
                         break;
                     
                     await SendIdrRequestAsync();
