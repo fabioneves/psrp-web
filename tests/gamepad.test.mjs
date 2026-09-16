@@ -93,3 +93,19 @@ test('a nonstandard Nintendo pad maps its raw layout, hat switch and digital tri
   assert.deepEqual(readGamepad(pro).buttons.at(-1), 'DOWN');
   assert.match(describeRaw(pro), /raw · buttons 14, axes 10 · pressed 1, 6, 9, 12 · axes \[0\] 0\.90 \[9\] 0\.14/);
 });
+
+test('status explains a stale controller index or an excluding source instead of claiming no controller', () => {
+  const sense = pad('DualSense Wireless Controller (STANDARD GAMEPAD)', 2);
+  let tick, options = { index: '0' };
+  const reports = [];
+  const environment = { navigator: { getGamepads: () => [null, null, sense, null] }, document: { hasFocus: () => true }, setInterval(fn) { tick = fn; return 1; }, clearInterval() {} };
+  pollGamepads({ pad: null, gamepad() {} }, () => false, () => options, status => reports.push(status), environment);
+  tick();
+  assert.match(reports.at(-1), /Controller index 0 is not connected\. Connected: 2 · DualSense/);
+  options = { mode: 'virtual' };
+  tick();
+  assert.match(reports.at(-1), /excluded by the Tesla virtual source setting/);
+  options = {};
+  tick();
+  assert.match(reports.at(-1), /^Controller 2: DualSense/);
+});

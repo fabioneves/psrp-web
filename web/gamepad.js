@@ -71,11 +71,15 @@ export function pollGamepads(state, enabled, settings, report, environment = glo
       if (typeof environment.navigator.getGamepads !== 'function') next = 'Gamepad API unavailable. Try HTTPS or attach another device.';
       else {
         const pads = environment.navigator.getGamepads();
-        const pad = selectGamepad(pads, settings());
-        seen = pad ? readGamepad(pad, settings()) : null;
+        const options = settings();
+        const pad = selectGamepad(pads, options);
+        seen = pad ? readGamepad(pad, options) : null;
         if (active) snapshot = seen;
-        next = pad ? `Controller ${pad.index}: ${pad.id}${pad.mapping !== 'standard' ? ' · nonstandard mapping' : ''}${active ? '' : environment.document?.hasFocus?.() === false ? ' · click the page to send input' : ' · input starts with playback'}`
-          : 'No controller detected. Press a controller button to activate it.';
+        const connected = Array.from(pads).filter(candidate => candidate?.connected);
+        if (pad) next = `Controller ${pad.index}: ${pad.id}${pad.mapping !== 'standard' ? ' · nonstandard mapping' : ''}${active ? '' : environment.document?.hasFocus?.() === false ? ' · click the page to send input' : ' · input starts with playback'}`;
+        else if (connected.length && options.index && options.index !== 'auto') next = `Controller index ${options.index} is not connected. Connected: ${connected.map(candidate => `${candidate.index} · ${candidate.id}`).join(', ')}. Clear the index to use it.`;
+        else if (connected.length) next = `Connected controllers are excluded by the ${options.mode === 'virtual' ? 'Tesla virtual' : 'Physical'} source setting: ${connected.map(candidate => `${candidate.index} · ${candidate.id}`).join(', ')}.`;
+        else next = 'No controller detected. Press a controller button to activate it.';
       }
     } catch { next = 'Controller access blocked. Try HTTPS or attach another device.'; }
     const value = JSON.stringify(snapshot);
