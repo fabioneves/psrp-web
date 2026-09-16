@@ -50,7 +50,7 @@ Smooth's measured server-ready-to-canvas age was about 46 ms versus about 11 ms 
 
 ## HUD layouts
 
-Detailed preserves the original graph, timing grid, health readout and actions with a 78% opaque navy background. Minimal shows FPS, codec and resolution in a 180 px wide panel. Horizontal puts those readings, network RTT and bitrate in a single narrow strip, omitting the secondary readings at narrow viewport widths. Both compact backgrounds use 64% opacity and let pointer events through to the video. Text remains fully opaque; no backdrop blur or extra video processing is used.
+Detailed preserves the original graph, timing grid, health readout and actions with a 78% opaque navy background. Minimal shows FPS, codec and resolution in a 180 px wide panel. Horizontal spans the top edge without borders, with all six timing/audio readings, decoder health, and a small FPS graph. It uses 9 px metric text, 12 px FPS and a 56% opaque background, wrapping on narrow screens while hiding only the graph and timing footnote. Minimal uses 64% opacity and let pointer events through to the video. Text remains fully opaque; no backdrop blur or extra video processing is used.
 
 HUD layout buttons are revealed when debug is enabled and saved with the other browser preferences. Shift+H cycles layouts in fullscreen; Shift+D still toggles the overlay. All three layouts reuse the same live metrics and DOM, so switching does not start a second sampler or reconnect playback.
 
@@ -71,3 +71,5 @@ Final gesture validation: 20 UI/connection browser tests and 37 JavaScript tests
 ## Compact console actions
 
 Each Play button has a Start in fullscreen toggle and icon immediately to its left. Its native checkbox is visually hidden, stays keyboard-accessible, and highlights the whole label when selected. The default-off browser preference is shared across cards and survives refresh. The manual Try again button is removed; automatic reconnect still runs, and exhausted attempts leave readable feedback with guidance to disconnect and press Play.
+
+Horizontal HUD refinement: all metric groups and decoder/audio health remain visible, including at 320 px. The borderless full-width strip uses smaller FPS text and a lighter background. Three live HUD/gesture cases and 37 JavaScript tests passed; screenshots were checked at desktop and mobile widths. For this frontend-only release, the tested versioned asset bundle and then the HTML entry point can be published into the running container without restarting active streams. The Compose image tag also points to the tested build for the next recreation; existing asset bundles stay available to open clients.

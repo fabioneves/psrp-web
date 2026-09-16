@@ -7,27 +7,30 @@
 #debug-overlay[data-layout=minimal] { width:180px; }
 #debug-overlay[data-layout=minimal] .hud-heading>span:first-child,
 #debug-overlay[data-layout=horizontal] .hud-heading>span:first-child,
-#debug-overlay:not([data-layout=detailed]) #fps-chart,
-#debug-overlay:not([data-layout=detailed]) #hud-health,
-#debug-overlay:not([data-layout=detailed]) .hud-note,
+#debug-overlay[data-layout=minimal] #fps-chart,
+#debug-overlay[data-layout=minimal] #hud-health,
+#debug-overlay[data-layout=minimal] .hud-note,
 #debug-overlay:not([data-layout=detailed]) .hud-actions,
 #debug-overlay[data-layout=minimal] .hud-grid { display:none; }
 #debug-overlay[data-layout=minimal] .hud-hero { border:0; padding:6px 0 0; gap:12px; }
 #debug-overlay[data-layout=minimal] .hud-hero>strong { font-size:28px; }
-#debug-overlay[data-layout=horizontal] { display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px; width:max-content; padding:6px 10px; font-size:10px; }
+#debug-overlay[data-layout=horizontal] { display:flex; flex-wrap:wrap; align-items:center; gap:3px 10px; top:0; left:0; width:100%; max-width:100%; padding:4px 8px; border:0; background:rgba(8,18,39,.56); font-size:9px; line-height:1.35; }
 #debug-overlay[data-layout=horizontal] .hud-hero,
 #debug-overlay[data-layout=horizontal] .hud-grid { display:contents; }
-#debug-overlay[data-layout=horizontal] .hud-hero>strong { font-size:18px; }
-#debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:12px; margin-left:-10px; }
+#debug-overlay[data-layout=horizontal] .hud-heading { font-size:9px; }
+#debug-overlay[data-layout=horizontal] .hud-hero>strong { font-size:12px; }
+#debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:10px; margin-left:-7px; font-size:9px; }
+#debug-overlay[data-layout=horizontal] #hud-size { font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-break { display:none; }
-#debug-overlay[data-layout=horizontal] .hud-grid>div { display:flex; align-items:center; gap:5px; }
-#debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; }
-#debug-overlay[data-layout=horizontal] .hud-grid>div:nth-child(2),
-#debug-overlay[data-layout=horizontal] .hud-grid>div:nth-child(n+4) { display:none; }
-#player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; }
-@media(max-width:1100px) {
-  #debug-overlay[data-layout=horizontal] .hud-grid>div:first-child { display:none; }
-}
+#debug-overlay[data-layout=horizontal] #fps-chart { display:block; width:48px; height:16px; margin:0; flex-shrink:0; }
+#debug-overlay[data-layout=horizontal] .hud-grid>div { display:flex; align-items:center; gap:4px; white-space:nowrap; }
+#debug-overlay[data-layout=horizontal] .hud-grid dt { font-size:0; }
+#debug-overlay[data-layout=horizontal] .hud-grid dt::after { content:attr(data-short); font-size:9px; }
+#debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; font-size:9px; }
+#debug-overlay[data-layout=horizontal] #hud-health { display:block; font-size:9px; margin:0; white-space:nowrap; }
+#debug-overlay[data-layout=horizontal] .hud-note { display:block; font-size:8px; margin:0; }
+#player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; padding-top:calc(4px + env(safe-area-inset-top, 0px)); padding-left:calc(8px + env(safe-area-inset-left, 0px)); padding-right:calc(8px + env(safe-area-inset-right, 0px)); }
 @media(max-width:600px) {
-  #debug-overlay[data-layout=horizontal] .hud-grid>div { display:none; }
+  #debug-overlay[data-layout=horizontal] { gap:2px 8px; padding-top:3px; padding-bottom:3px; }
+  #debug-overlay[data-layout=horizontal] #fps-chart,#debug-overlay[data-layout=horizontal] .hud-note { display:none; }
 }

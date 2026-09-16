@@ -125,8 +125,8 @@
       <aside id="debug-overlay" aria-label="Stream debug overlay" hidden>
         <div class="hud-heading"><span>● LIVE TELEMETRY</span><span id="hud-codec">—</span></div>
         <div class="hud-hero"><strong id="hud-fps">—</strong><span><span class="hud-fps-label">FPS</span><br class="hud-break"><small id="hud-size">—</small></span><svg id="fps-chart" viewBox="0 0 180 44" role="img" aria-label="Last 30 seconds of frame rate"><path d="M0 8H180M0 36H180" class="chart-grid"/><polyline id="fps-history" points=""/></svg></div>
-        <dl class="hud-grid"><div><dt>Network RTT</dt><dd id="hud-rtt">—</dd></div><div><dt>Video age*</dt><dd id="hud-age">—</dd></div><div><dt>Bitrate</dt><dd id="hud-bitrate">—</dd></div><div><dt>Frame p95</dt><dd id="hud-pacing">—</dd></div><div><dt>Decode / draw</dt><dd id="hud-decode">—</dd></div><div><dt>Audio queue</dt><dd id="hud-audio">—</dd></div></dl>
-        <p id="hud-health">Waiting for stream metrics</p><p class="hud-note">*Server media ready → canvas, not input latency.</p>
+        <dl class="hud-grid"><div><dt data-short="RTT">Network RTT</dt><dd id="hud-rtt">—</dd></div><div><dt data-short="Age*">Video age*</dt><dd id="hud-age" aria-describedby="hud-age-note">—</dd></div><div><dt data-short="Rate">Bitrate</dt><dd id="hud-bitrate">—</dd></div><div><dt data-short="p95">Frame p95</dt><dd id="hud-pacing">—</dd></div><div><dt data-short="Dec/draw">Decode / draw</dt><dd id="hud-decode">—</dd></div><div><dt data-short="Audio">Audio queue</dt><dd id="hud-audio">—</dd></div></dl>
+        <p id="hud-health">Waiting for stream metrics</p><p id="hud-age-note" class="hud-note">*Server media ready → canvas, not input latency.</p>
         <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button></div>
       </aside></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
