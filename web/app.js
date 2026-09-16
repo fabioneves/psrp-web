@@ -181,6 +181,7 @@ $('auth-form').onsubmit = event => {
     token = result.token;
     setup.reset();
     $('password').value = '';
+    await loadSettings();
     showAccount();
     await refresh();
     void setup.restore();
@@ -205,7 +206,7 @@ async function restoreSession() {
   try {
     const session = await api('auth/session');
     token = session.token;
-    if (token) { await refresh(); void setup.restore(); }
+    if (token) { await loadSettings(); await refresh(); void setup.restore(); }
   } catch (error) { notify(`Could not restore your session: ${error.message}`, 'error'); }
   finally { showAccount(); }
   if (token) resumeRoute();
@@ -225,7 +226,65 @@ const defaultBitrate = { '360p': '3000', '540p': '6000', '720p': '10000', '1080p
 const profileFields = { codec: 'video-mode', resolution: 'resolution-profile', fps: 'fps-profile', bitrateKbps: 'bitrate', pacing: 'frame-pacing' };
 let consoleProfiles = {}, profileScope = null, sharedSettings = null, dialogConsole = null;
 try { consoleProfiles = JSON.parse(localStorage.getItem('remote-play:console-profiles') || '{}') || {}; } catch {}
-function persistConsoleProfiles() { try { localStorage.setItem('remote-play:console-profiles', JSON.stringify(consoleProfiles)); } catch {} }
+function persistConsoleProfiles() { try { localStorage.setItem('remote-play:console-profiles', JSON.stringify(consoleProfiles)); } catch {} scheduleSettingsUpload(); }
+// Settings follow the account: every local save also uploads, and sign-in applies the account copy
+// (or uploads this browser's copy when the account has none yet). Launch overrides never travel.
+let settingsUploadTimer = null, applyingSettings = false, settingsChangedAt = 0, settingsReady = false;
+try { settingsChangedAt = Number(localStorage.getItem('remote-play:settings-changed-at')) || 0; } catch {}
+function collectSettings() {
+  const preferences = {};
+  for (const id of preferenceIds) {
+    const element = $(id);
+    const profileKey = profileScope ? Object.keys(profileFields).find(key => profileFields[key] === id) : null;
+    if (launchOverrides.has(id)) { try { const saved = localStorage.getItem(`remote-play:${id}`); if (saved !== null) preferences[id] = saved; } catch {} }
+    else if (profileKey) preferences[id] = String(sharedSettings[profileKey]);
+    else preferences[id] = element.type === 'checkbox' ? String(element.checked) : element.value;
+  }
+  return { preferences, consoleProfiles, autoFullscreen: startInFullscreen, updatedAt: settingsChangedAt };
+}
+function uploadSettings(keepalive = false) {
+  clearTimeout(settingsUploadTimer); settingsUploadTimer = null;
+  if (!token) return;
+  const body = JSON.stringify(collectSettings());
+  fetch('/api/settings', { method: 'PUT', keepalive, headers: { 'Content-Type': 'application/json', 'X-Remote-Play-Session': '1', Authorization: `Bearer ${token}` }, body })
+    .then(response => { if (!response.ok) throw new Error(`Request failed (${response.status}).`); })
+    .catch(error => log.event('settings-upload-failed', { message: error.message }));
+}
+function scheduleSettingsUpload() {
+  if (applyingSettings || !settingsReady) return;
+  settingsChangedAt = Date.now();
+  try { localStorage.setItem('remote-play:settings-changed-at', String(settingsChangedAt)); } catch {}
+  if (!token) return;
+  clearTimeout(settingsUploadTimer);
+  settingsUploadTimer = setTimeout(uploadSettings, 300);
+}
+window.addEventListener('pagehide', () => { if (settingsUploadTimer) uploadSettings(true); });
+function applySettings(saved) {
+  applyingSettings = true;
+  try {
+    for (const [id, value] of Object.entries(saved.preferences || {})) {
+      if (!preferenceIds.includes(id) || launchOverrides.has(id)) continue;
+      const element = $(id);
+      if (element.type === 'checkbox') element.checked = value === 'true' || value === true;
+      else if (element.tagName !== 'SELECT' || [...element.options].some(option => option.value === String(value))) element.value = String(value);
+    }
+    if (saved.consoleProfiles && typeof saved.consoleProfiles === 'object') { consoleProfiles = saved.consoleProfiles; persistConsoleProfiles(); }
+    if (typeof saved.autoFullscreen === 'boolean') setStartInFullscreen(saved.autoFullscreen);
+    if (!['mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'h264';
+    if (!['detailed', 'minimal', 'horizontal'].includes($('hud-style').value)) $('hud-style').value = 'detailed';
+    $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+    $('controller-advanced').open = controllerOverridden();
+    savePlaybackPreferences(); updateQuality(); updateDebug(); syncAudio(); updateTouchOverlay(); gamepads.reset(); void updateWakeLock();
+  } finally { applyingSettings = false; }
+}
+async function loadSettings() {
+  try {
+    const { settings } = await api('settings');
+    // Last writer wins: a change made here moments before a reload outranks an older account copy.
+    if (settings && (settings.updatedAt || 0) >= settingsChangedAt) applySettings(settings);
+    else uploadSettings();
+  } catch (error) { notify(`Could not load your saved settings: ${error.message}`, 'error'); }
+}
 function readSettings() { return Object.fromEntries(Object.entries(profileFields).map(([key, id]) => [key, $(id).value])); }
 function writeSettings(values) {
   for (const [key, id] of Object.entries(profileFields)) if (values[key] !== undefined && [...$(id).options].some(option => option.value === String(values[key]))) $(id).value = String(values[key]);
@@ -264,18 +323,20 @@ function setDeviceStatus(card, hostType, ip, status) {
   card.querySelector('.wake').hidden = state === 'ready';
   card.querySelector('.sleep').hidden = state === 'rest';
 }
+function setStartInFullscreen(value) {
+  startInFullscreen = value;
+  try { localStorage.setItem('remote-play:auto-fullscreen', String(startInFullscreen)); } catch {}
+  for (const input of document.querySelectorAll('.fullscreen-toggle input')) {
+    input.checked = startInFullscreen;
+    input.closest('label').classList.toggle('is-selected', startInFullscreen);
+  }
+  scheduleSettingsUpload();
+}
 function fullscreenToggle() {
   const label = document.createElement('label'); label.className = 'check fullscreen-toggle'; label.title = 'Start in fullscreen';
   const checkbox = document.createElement('input'); checkbox.type = 'checkbox'; checkbox.checked = startInFullscreen;
   checkbox.setAttribute('aria-label', 'Start in fullscreen');
-  checkbox.onchange = () => {
-    startInFullscreen = checkbox.checked;
-    try { localStorage.setItem('remote-play:auto-fullscreen', String(startInFullscreen)); } catch {}
-    for (const input of document.querySelectorAll('.fullscreen-toggle input')) {
-      input.checked = startInFullscreen;
-      input.closest('label').classList.toggle('is-selected', startInFullscreen);
-    }
-  };
+  checkbox.onchange = () => setStartInFullscreen(checkbox.checked);
   const icon = document.createElement('img'); icon.src = '/art/fullscreen.svg'; icon.width = icon.height = 20; icon.alt = '';
   const text = document.createElement('span'); text.textContent = 'Start in fullscreen';
   label.classList.toggle('is-selected', startInFullscreen);
@@ -900,6 +961,7 @@ function savePlaybackPreferences() {
     const preset = presets[button.dataset.preset], selected = selectedProfile();
     button.setAttribute('aria-pressed', String(preset.codec === $('video-mode').value && preset.resolution === selected.resolution && preset.fps === selected.fps && preset.bitrateKbps === selected.bitrateKbps));
   }
+  scheduleSettingsUpload();
 }
 for (const button of document.querySelectorAll('[data-preset]')) button.onclick = () => {
   const preset = presets[button.dataset.preset];
@@ -912,4 +974,5 @@ for (const button of document.querySelectorAll('[data-preset]')) button.onclick 
 };
 document.addEventListener('change', event => { if (preferenceIds.includes(event.target.id)) { savePlaybackPreferences(); updateQuality(); } });
 savePlaybackPreferences();
+settingsReady = true; // startup restores are not user changes
 

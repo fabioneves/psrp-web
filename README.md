@@ -362,7 +362,7 @@ scheduling. No one-second TV buffer is added to game video.
 
 Bookmarks accept `?resolution=1080p&fps=60&bitrate=20000`, `controllerMode=auto`,
 `controllerIndex=0`, `teslaSwap=on` and `mainThread=1`. Launch overrides do not
-change saved controller preferences. Settings apply on the next Play/test launch. During playback, changes to video mode, resolution, frame rate, bitrate, pacing and automatic quality are a draft until you press **Apply**; the saved selection survives reloads either way.
+change saved controller preferences. Settings are saved to your account and follow you to any browser you sign in from; the first sign-in from a browser that already has local settings uploads them. Settings apply on the next Play/test launch. During playback, changes to video mode, resolution, frame rate, bitrate, pacing and automatic quality are a draft until you press **Apply**; the saved selection survives reloads either way.
 
 ## Adaptive quality and performance
 
