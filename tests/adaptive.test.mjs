@@ -20,12 +20,12 @@ test('transient stalls and hidden tabs do not reduce quality; sustained CPU pres
 
 test('congestion lowers bitrate first; cooldown and stable recovery prevent oscillation and exceed no ceiling', () => {
   const quality = new AdaptiveQuality(ceiling, 0), congested = { ...healthy, transportMs: 200 };
-  quality.sample(congested, 15000); quality.sample(congested, 16000);
-  assert.deepEqual(quality.sample(congested, 17000).profile, { ...ceiling, bitrateKbps: 15000 });
-  for (let time = 18000; time < 32000; time += 1000) assert.equal(quality.sample(congested, time), null);
-  for (let time = 32000; time < 62000; time += 1000) assert.equal(quality.sample(healthy, time), null);
-  assert.equal(quality.sample(healthy, 62000).profile.bitrateKbps, 19000);
-  for (let time = 63000; time <= 160000; time += 1000) quality.sample(healthy, time);
+  for (let time = 15000; time < 20000; time += 1000) assert.equal(quality.sample(congested, time), null, 'a burst under six seconds keeps the bitrate');
+  assert.deepEqual(quality.sample(congested, 20000).profile, { ...ceiling, bitrateKbps: 15000 });
+  for (let time = 21000; time < 35000; time += 1000) assert.equal(quality.sample(congested, time), null);
+  for (let time = 35000; time < 65000; time += 1000) assert.equal(quality.sample(healthy, time), null);
+  assert.equal(quality.sample(healthy, 65000).profile.bitrateKbps, 19000);
+  for (let time = 66000; time <= 163000; time += 1000) quality.sample(healthy, time);
   assert.deepEqual(quality.current, ceiling);
 });
 

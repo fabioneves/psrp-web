@@ -74,7 +74,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 };
                 var options = new SessionStartOptions
                 {
-                    Resolution = grant.Resolution, Fps = grant.Fps.ToString(), Bitrate = Math.Min(grant.BitrateKbps, 15000).ToString(), StreamType = grant.VideoCodec == "h265" ? "2" : "1",
+                    Resolution = grant.Resolution, Fps = grant.Fps.ToString(), Bitrate = Math.Min(grant.BitrateKbps, device.HostType == "PS5" ? 30000 : 15000).ToString(), StreamType = grant.VideoCodec == "h265" ? "2" : "1",
                     AutoStartStream = false, AutoConnectController = false
                 };
                 RemoteSession session;

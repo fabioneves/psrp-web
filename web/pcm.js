@@ -23,7 +23,7 @@ export class PcmQueue {
     this.right = new Float32Array(this.capacity);
     this.timestamps = new Float64Array(this.capacity);
     this.trimmed = 0; this.outputDelayMs = 0;
-    this.delayMs = delayMs;
+    this.delayMs = delayMs; this.baseDelayMs = delayMs; this.maxDelayMs = 240; this.lastUnderrunMs = 0; this.playedMs = 0;
     this.underruns = 0;
     this.clear();
   }
@@ -66,6 +66,9 @@ export class PcmQueue {
     }
     if (!this.primed && this.length < this.rate * this.delayMs / 1000) return;
     this.primed = true;
+    // Priming grows by 40 ms after each underrun and relaxes back toward the chosen value after a calm minute.
+    this.playedMs += left.length * 1000 / this.rate;
+    if (this.delayMs > this.baseDelayMs && this.playedMs - this.lastUnderrunMs > 60000) { this.delayMs = Math.max(this.baseDelayMs, this.delayMs - 40); this.lastUnderrunMs = this.playedMs; }
     this.skewMs = null;
     const trimmedBefore = this.trimmed;
     if (target != null && Number.isFinite(this.timestamps[this.offset]) && this.length) {
@@ -109,6 +112,8 @@ export class PcmQueue {
     if (count < left.length) {
       this.underruns++;
       this.primed = false;
+      this.delayMs = Math.min(this.maxDelayMs, this.delayMs + 40);
+      this.lastUnderrunMs = this.playedMs;
       for (let i = Math.max(0, count - 32); i < count; i++) {
         const fade = (count - i) / Math.min(32, count);
         left[i] *= fade; right[i] *= fade;

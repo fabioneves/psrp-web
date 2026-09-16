@@ -40,7 +40,8 @@ export class AdaptiveQuality {
     const cpu = cost > budget * 0.8 || (!network && stats.fps < this.current.fps * 0.8);
     if (cpu || network) {
       this.goodSince = null;
-      if (++this.bad >= 3) return this.change(this.lower(cpu), cpu ? 'Browser needs a lighter profile' : 'Connection is queuing video', time);
+      // Browser overload acts after 3 s; delivery queuing waits 6 s so a short Wi-Fi burst does not cost bitrate.
+      if (++this.bad >= (cpu ? 3 : 6)) return this.change(this.lower(cpu), cpu ? 'Browser needs a lighter profile' : 'Connection is queuing video', time);
     } else {
       this.bad = 0;
       if (cost < budget * 0.55 && stats.fps >= this.current.fps * 0.9) this.goodSince ??= time;

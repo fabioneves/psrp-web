@@ -34,6 +34,7 @@ case "${1:-}" in
         save_log
         git merge -q --ff-only "origin/$branch"
         after=$(git rev-parse --short HEAD)
+        install -m 0755 deploy/proxmox/psrp /usr/local/bin/psrp && install -m 0755 deploy/proxmox/psrp /usr/bin/psrp
         docker compose up --build -d
         until [ -n "$(health)" ]; do sleep 3; done
         docker image prune -f >/dev/null

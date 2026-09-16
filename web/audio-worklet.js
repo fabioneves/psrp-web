@@ -20,7 +20,7 @@ class RemoteAudio extends AudioWorkletProcessor {
     else if (data.type === 'sync') this.queue.sync(data.timestamp);
     else if (data.type === 'output-delay') this.queue.outputDelayMs = data.value;
     else if (data.type === 'reset') this.queue.clear();
-    else if (data.type === 'delay') { this.queue.delayMs = data.value; this.queue.clear(); }
+    else if (data.type === 'delay') { this.queue.delayMs = this.queue.baseDelayMs = data.value; this.queue.clear(); }
   }
   process(inputs, outputs) {
     const [left, right] = outputs[0];

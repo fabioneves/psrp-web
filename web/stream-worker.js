@@ -4,7 +4,9 @@ let audioPort;
 let audioEnabled = false;
 self.onmessage = async ({ data }) => {
   try {
-    if (data.type === 'start') {
+    if (data.type === 'probe') {
+      postMessage({ type: 'capabilities', animationFrames: typeof requestAnimationFrame === 'function' });
+    } else if (data.type === 'start') {
       audioPort = data.audioPort;
       audioEnabled = data.audioEnabled;
       const { startStream } = await import('./stream-runtime.js');

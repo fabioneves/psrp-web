@@ -23,6 +23,20 @@ const resetInputs = bindInputs($('controls'), message => {
 }, () => playing);
 
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
+// Presentation needs display-aligned animation frames. A worker without them (Safari) would pace by
+// timer and judder, so those browsers render on the main thread instead; probed once at startup.
+const workerAnimationFrames = new Promise(resolve => {
+  if (typeof Worker !== 'function') { resolve(false); return; }
+  let probe = null;
+  const done = value => { resolve(value); probe?.terminate(); probe = null; };
+  try {
+    probe = new Worker('/stream-worker.js');
+    probe.onmessage = event => { if (event.data?.type === 'capabilities') done(!!event.data.animationFrames); };
+    probe.onerror = () => done(false);
+    probe.postMessage({ type: 'probe' });
+    setTimeout(() => done(false), 5000);
+  } catch { done(false); }
+});
 let audio = null, quality = null, activeCodec = 'mpeg1';
 const failedCodecs = new Set();
 let decoderFailure = '', sleepingHost = null;
@@ -677,7 +691,7 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   try {
     const useWorker = !inputSession && !forceMain && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
       typeof OffscreenCanvas === 'function' && !!new OffscreenCanvas(1, 1).getContext('2d') &&
-      !new URLSearchParams(location.search).has('mainThread');
+      !new URLSearchParams(location.search).has('mainThread') && await workerAnimationFrames;
     if (useWorker) {
       worker = new Worker('/stream-worker.js');
       worker.onmessage = event => report(event.data);
@@ -685,7 +699,7 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
       const offscreen = canvas.transferControlToOffscreen();
       const audioPort = audio?.workerPort();
       worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort, videoCodec: activeCodec, hardwareAcceleration,
-        presentation: { fps: profile.fps, pacing: $('frame-pacing').value },
+        presentation: { fps: profile.fps, pacing },
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {

@@ -28,6 +28,22 @@ test('audio queue waits for jitter buffer, plays both channels and bounds backlo
   assert.equal(left.at(-1), 0);
 });
 
+test('audio priming grows after an underrun and relaxes back after a calm minute', () => {
+  const queue = new PcmQueue(48000, 40);
+  const sample = { rate: 48000, left: new Float32Array(960).fill(0.2), right: new Float32Array(960).fill(-0.2) };
+  const left = new Float32Array(128), right = new Float32Array(128);
+  for (let i = 0; i < 3; i++) queue.push(sample);
+  while (queue.length > 128) queue.read(left, right);
+  queue.read(left, right);
+  assert.equal(queue.underruns, 1);
+  assert.equal(queue.delayMs, 80, 'one underrun adds 40 ms of priming');
+  assert.equal(queue.baseDelayMs, 40);
+  for (let i = 0; i < 40; i++) queue.push(sample);
+  for (let i = 0; i < 48000 * 61 / 128; i++) { if (queue.length < 4800) for (let j = 0; j < 10; j++) queue.push(sample); queue.read(left, right); }
+  assert.equal(queue.underruns, 1, 'steady feeding causes no further underruns');
+  assert.equal(queue.delayMs, 40, 'a calm minute restores the chosen priming');
+});
+
 test('audio follows presented video, discards stale samples and holds future samples', () => {
   const queue = new PcmQueue(48000, 40);
   const sample = { rate: 48000, timestamp: 1000, left: new Float32Array(9600).fill(0.2), right: new Float32Array(9600).fill(-0.2) };

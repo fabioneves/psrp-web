@@ -59,6 +59,7 @@ if [ ! -f .env ]; then
 fi
 
 install -m 0755 deploy/proxmox/psrp /usr/local/bin/psrp
+install -m 0755 deploy/proxmox/psrp /usr/bin/psrp
 docker compose up --build -d
 until curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; do sleep 3; done
 ip=$(hostname -I 2>/dev/null | awk '{print $1}')

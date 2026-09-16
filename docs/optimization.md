@@ -46,6 +46,18 @@ refreshes with no new frame, rebuilds and the display refresh interval. The
 simulated cost is about one extra refresh interval of latency in smooth mode;
 responsive mode is unchanged.
 
+### Worker presentation, audio priming and bitrate ceiling (2026-09-16)
+
+The worker renderer is only used when the worker reports animation frames
+(probed once at startup through the stream worker); a browser whose workers
+lack them, such as Safari, renders on the main thread automatically instead
+of pacing by timer. Audio priming (the "startup buffer" setting) now grows by
+40 ms after each underrun, up to 240 ms, and relaxes back to the chosen value
+after a calm minute, so a low setting recovers on its own. The bitrate sent
+to the console is capped at 30 Mbps for a PS5 and 15 Mbps for a PS4, matching
+the highest selectable profile; the previous 15 Mbps cap silently limited the
+"30 Mbps" option.
+
 ### Periodic keyframe requests (2026-09-16)
 
 A six-minute 1080p60 H.265 diagnostics capture from a Mac on the console
