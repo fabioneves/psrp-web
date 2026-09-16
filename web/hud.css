@@ -1,0 +1,33 @@
+#debug-overlay { background:rgba(8,18,39,.78); text-shadow:0 1px 2px #000; }
+.hud-settings { margin:0 0 20px; }
+.hud-settings .hint { margin-bottom:0; font-size:.7rem; }
+.hud-settings .choice-buttons button { display:flex; flex-direction:column; align-items:center; gap:8px; padding:10px 4px; }
+.hud-settings img { image-rendering:pixelated; }
+#debug-overlay[data-layout=minimal],#debug-overlay[data-layout=horizontal] { background:rgba(8,18,39,.64); top:10px; left:10px; max-width:calc(100% - 20px); padding:8px 10px; border-width:1px; border-top-width:2px; }
+#debug-overlay[data-layout=minimal] { width:180px; }
+#debug-overlay[data-layout=minimal] .hud-heading>span:first-child,
+#debug-overlay[data-layout=horizontal] .hud-heading>span:first-child,
+#debug-overlay:not([data-layout=detailed]) #fps-chart,
+#debug-overlay:not([data-layout=detailed]) #hud-health,
+#debug-overlay:not([data-layout=detailed]) .hud-note,
+#debug-overlay:not([data-layout=detailed]) .hud-actions,
+#debug-overlay[data-layout=minimal] .hud-grid { display:none; }
+#debug-overlay[data-layout=minimal] .hud-hero { border:0; padding:6px 0 0; gap:12px; }
+#debug-overlay[data-layout=minimal] .hud-hero>strong { font-size:28px; }
+#debug-overlay[data-layout=horizontal] { display:flex; flex-wrap:wrap; align-items:center; gap:4px 14px; width:max-content; padding:6px 10px; font-size:10px; }
+#debug-overlay[data-layout=horizontal] .hud-hero,
+#debug-overlay[data-layout=horizontal] .hud-grid { display:contents; }
+#debug-overlay[data-layout=horizontal] .hud-hero>strong { font-size:18px; }
+#debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:12px; margin-left:-10px; }
+#debug-overlay[data-layout=horizontal] .hud-break { display:none; }
+#debug-overlay[data-layout=horizontal] .hud-grid>div { display:flex; align-items:center; gap:5px; }
+#debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; }
+#debug-overlay[data-layout=horizontal] .hud-grid>div:nth-child(2),
+#debug-overlay[data-layout=horizontal] .hud-grid>div:nth-child(n+4) { display:none; }
+#player:fullscreen.debug #debug-overlay[data-layout=horizontal],#player.theater.debug #debug-overlay[data-layout=horizontal] { display:flex; }
+@media(max-width:1100px) {
+  #debug-overlay[data-layout=horizontal] .hud-grid>div:first-child { display:none; }
+}
+@media(max-width:600px) {
+  #debug-overlay[data-layout=horizontal] .hud-grid>div { display:none; }
+}

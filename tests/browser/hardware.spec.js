@@ -1,3 +1,4 @@
+import { chooseSetting } from './settings.js';
 import { test, expect } from '@playwright/test';
 
 async function register(page, suffix = '?mainThread=1') {
@@ -9,7 +10,7 @@ async function register(page, suffix = '?mainThread=1') {
   await page.getByLabel('Password', { exact: true }).fill('LocalTestPassword_123');
   await page.getByRole('button', { name: 'Create account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Your consoles', exact: true })).toBeVisible();
-  await expect(page.locator('#video-mode')).toBeVisible();
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
 }
 
 async function useNativeSoftwareDecoder(page, fail = false, dropOutputs = false, hevcMode = null) {
@@ -95,9 +96,9 @@ test('H.264 defaults on, unavailable decoding falls back, and Canvas survives re
   await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
   await expect(page.locator('#video-mode-status')).toContainText('unavailable');
   await page.locator('#stop').click();
-  await page.locator('#video-mode').selectOption('mpeg1');
+  await chooseSetting(page, 'video-mode', 'mpeg1');
   await page.reload();
-  await expect(page.locator('#video-mode')).toBeVisible();
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
   await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
 });
 
@@ -105,11 +106,12 @@ for (const resolution of ['720p', '1080p']) {
   test(`native H.264 ${resolution}60 renders real frames with audio and switches to software`, async ({ page }) => {
     await useNativeSoftwareDecoder(page);
     await register(page);
-    await page.locator('#resolution-profile').selectOption(resolution);
+    await chooseSetting(page, 'resolution-profile', resolution);
     await page.getByRole('button', { name: 'Start test stream' }).click();
     await expect(page.locator('#engine')).toContainText('H.264 · hardware preferred', { timeout: 30000 });
     await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
     await expect(page.locator('#resolution')).toHaveText(resolution === '720p' ? '1280 × 720' : '1920 × 1080');
+    await page.getByRole('tab', { name: 'Sound', exact: true }).click();
     await page.getByRole('button', { name: 'Enable sound' }).click();
     await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
     expect(await page.evaluate(() => window.decoderPreferences.every(value => value === 'prefer-hardware'))).toBe(true);
@@ -117,8 +119,9 @@ for (const resolution of ['720p', '1080p']) {
     const before = Number(await page.locator('#fps').getAttribute('data-frames'));
     await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(before + 60);
     await page.locator('#stage').dblclick();
+    await page.getByRole('tab', { name: 'Picture', exact: true }).click();
     await expect(page.locator('#playing-profile')).toBeVisible();
-    await page.locator('#video-mode').selectOption('mpeg1');
+    await chooseSetting(page, 'video-mode', 'mpeg1');
     await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
     await page.locator('#stop').click();
   });
@@ -146,6 +149,7 @@ test('native H.264 runs in the video worker with direct audio output', async ({ 
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toHaveText('H.264 · hardware preferred · Canvas 2D · worker', { timeout: 30000 });
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
+  await page.getByRole('tab', { name: 'Sound', exact: true }).click();
   await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
   const worker = page.workers().find(worker => worker.url().endsWith('/stream-worker.js'));
@@ -161,10 +165,10 @@ test.afterEach(async ({ page }, testInfo) => {
 test('saved acceleration opt-out migrates to Canvas and a new codec choice survives refresh', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('remote-play:hardware-acceleration', 'false'));
   await register(page);
-  await expect(page.getByLabel('Video mode', { exact: true })).toHaveValue('mpeg1');
-  await page.locator('#video-mode').selectOption('h265');
+  await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
+  await chooseSetting(page, 'video-mode', 'h265');
   await page.reload();
-  await expect(page.locator('#video-mode')).toBeVisible();
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
   await expect(page.locator('#video-mode')).toHaveValue('h265');
 });
 
@@ -172,7 +176,7 @@ for (const failure of ['unsupported', 'fail']) {
   test(`HEVC ${failure} falls back to H.264 without changing the saved choice`, async ({ page }) => {
     await useNativeSoftwareDecoder(page, false, false, failure);
     await register(page);
-    await page.locator('#video-mode').selectOption('h265');
+    await chooseSetting(page, 'video-mode', 'h265');
     const codecs = [];
     page.on('request', request => { if (request.url().includes('/api/software/tickets')) codecs.push(request.postDataJSON().videoCodec); });
     await page.getByRole('button', { name: 'Start test stream' }).click();
@@ -189,7 +193,7 @@ for (const failure of ['unsupported', 'fail']) {
 test('real HEVC transport reaches a stubbed WebCodecs boundary with codec configuration and keyframe parameter sets', async ({ page }) => {
   await useNativeSoftwareDecoder(page, false, false, 'boundary');
   await register(page);
-  await page.locator('#video-mode').selectOption('h265');
+  await chooseSetting(page, 'video-mode', 'h265');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toContainText('H.265', { timeout: 30000 });
   const received = await page.evaluate(() => ({ chunks: globalThis.hevcChunks, configurations: globalThis.hevcConfigurations }));
@@ -198,6 +202,7 @@ test('real HEVC transport reaches a stubbed WebCodecs boundary with codec config
   const key = received.chunks.find(chunk => chunk.type === 'key');
   expect(key.types).toEqual(expect.arrayContaining([32, 33, 34]));
   expect(received.chunks.some(chunk => chunk.type === 'delta')).toBe(true);
+  await page.getByRole('tab', { name: 'Sound', exact: true }).click();
   await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect.poll(() => page.locator('#audio-status').getAttribute('data-rms').then(Number)).toBeGreaterThan(0.01);
   await page.locator('#stop').click();

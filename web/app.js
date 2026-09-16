@@ -1,3 +1,5 @@
+import { bindChoiceButtons } from './choice-buttons.js';
+import { bindSessionTabs } from './session-tabs.js';
 import { updateHud, resetHud, copyDiagnostics } from './debug-hud.js';
 import { selectVideoCodec, nativeVideoConfig } from './native-decoder.js';
 import { bindInputs } from './input.js';
@@ -33,7 +35,7 @@ try {
   if (localStorage.getItem('remote-play:video-mode') === null && localStorage.getItem('remote-play:hardware-acceleration') === 'false')
     $('video-mode').value = 'mpeg1';
 } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'auto-fullscreen', 'hud-style'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -50,6 +52,7 @@ for (const id of preferenceIds) {
   });
 }
 if (!['mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'h264';
+if (!['detailed', 'minimal', 'horizontal'].includes($('hud-style').value)) $('hud-style').value = 'detailed';
 const query = new URLSearchParams(location.search);
 for (const [param, id] of [['controllerMode', 'controller-mode'], ['controllerIndex', 'controller-index'], ['teslaSwap', 'controller-swap'], ['bitrate', 'bitrate'], ['resolution', 'resolution-profile'], ['fps', 'fps-profile']]) {
   if (query.has(param)) {
@@ -57,6 +60,8 @@ for (const [param, id] of [['controllerMode', 'controller-mode'], ['controllerIn
     if (element.tagName !== 'SELECT' || [...element.options].some(option => option.value === value)) element.value = value;
   }
 }
+const syncChoices = bindChoiceButtons();
+const selectSessionTab = bindSessionTabs();
 $('browser-diagnostics').textContent = `${/Tesla/i.test(navigator.userAgent) ? 'Tesla browser' : 'Browser'} · ${isSecureContext ? 'Secure context' : 'HTTP context'} · ${typeof navigator.getGamepads === 'function' ? 'Gamepad API exposed' : 'Gamepad API unavailable'}`;
 async function updateWakeLock() {
   const request = ++wakeRequest;
@@ -319,6 +324,8 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
   $('connection-message').textContent = '';
   showPlayer(target);
   $('player').scrollIntoView({ block: 'start' });
+  selectSessionTab(inputSession ? 'input-panel' : 'picture-panel');
+  if (hostId && !inputSession && $('auto-fullscreen').checked) void enterFullscreen();
   if (!inputSession) {
     try {
       const output = new AudioOutput(message => { if (audio === output) onAudioMessage(message); });
@@ -373,6 +380,8 @@ function showPlayer({ hostId, title, demo, inputSession, profile }) {
   $('stage').hidden = !!inputSession; document.querySelector('.stats').hidden = !!inputSession;
   $('input-only-hint').hidden = !inputSession;
   $('disconnect-all').hidden = demo || !hostId;
+  document.querySelector('.console-utilities').hidden = demo || !hostId;
+  $('picture-tab').disabled = $('sound-tab').disabled = !!inputSession;
   $('sleep-console').hidden = demo || !hostId;
   $('player').classList.toggle('input-only', !!inputSession);
   $('audio-controls').hidden = !!inputSession; $('audio-status').hidden = !!inputSession;
@@ -509,13 +518,18 @@ $('stop').onclick = () => stop();
 $('retry-stream').onclick = () => { retry.reset(); void connect(); };
 $('show-controls').onchange = () => { resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
 $('controls').hidden = !$('show-controls').checked;
+async function enterFullscreen() {
+  if ($('player').hidden || document.fullscreenElement === $('player')) return;
+  try {
+    if (!$('player').requestFullscreen) throw new Error();
+    await $('player').requestFullscreen();
+    if ($('player').hidden && document.fullscreenElement) await document.exitFullscreen();
+  } catch { if (!$('player').hidden) $('player').classList.add('theater'); }
+}
 async function toggleFullscreen() {
   if (document.fullscreenElement) await document.exitFullscreen();
   else if ($('player').classList.contains('theater')) $('player').classList.remove('theater');
-  else {
-    try { if (!$('player').requestFullscreen) throw new Error(); await $('player').requestFullscreen(); }
-    catch { $('player').classList.add('theater'); }
-  }
+  else await enterFullscreen();
 }
 $('fullscreen').onclick = () => run($('fullscreen'), toggleFullscreen, false);
 $('hud-exit').onclick = () => {
@@ -524,8 +538,11 @@ $('hud-exit').onclick = () => {
 function updateDebug() {
   $('player').classList.toggle('debug', $('debug-mode').checked);
   $('debug-overlay').hidden = !$('debug-mode').checked;
+  $('debug-overlay').dataset.layout = $('hud-style').value;
+  $('hud-settings').hidden = !$('debug-mode').checked;
 }
 $('debug-mode').onchange = updateDebug;
+$('hud-style').onchange = updateDebug;
 updateDebug();
 $('copy-debug').onclick = () => run($('copy-debug'), copyDiagnostics, false);
 let lastTouch = 0;
@@ -542,6 +559,11 @@ $('stage').ondblclick = () => {
 document.addEventListener('keydown', event => {
   if (event.target.closest('input,select,textarea') || event.repeat) return;
   if (event.code === 'Escape') $('player').classList.remove('theater');
+  if (event.shiftKey && event.code === 'KeyH' && !$('player').hidden && $('debug-mode').checked) {
+    event.preventDefault(); event.stopPropagation();
+    $('hud-style').selectedIndex = ($('hud-style').selectedIndex + 1) % $('hud-style').options.length;
+    $('hud-style').dispatchEvent(new Event('change', { bubbles: true }));
+  }
   if (event.shiftKey && event.code === 'KeyD' && !$('player').hidden) {
     event.preventDefault();
     event.stopPropagation();
@@ -632,6 +654,7 @@ const presets = {
   detail: { codec: 'h264', resolution: '1080p', fps: 60, bitrateKbps: 20000 }
 };
 function savePlaybackPreferences() {
+  syncChoices();
   for (const id of preferenceIds) {
     const element = $(id);
     try { localStorage.setItem(`remote-play:${id}`, element.type === 'checkbox' ? element.checked : element.value); } catch {}

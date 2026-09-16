@@ -244,7 +244,7 @@ When your browser and server are on the same LAN, use the server's local address
 and configured port to avoid routing the stream through a public proxy. For this
 workspace that is `http://192.0.2.10:18080`. Use your own server address elsewhere.
 The same database accounts and paired consoles are available, but a different
-origin needs its own sign-in. Compare **Playback timing and quality → Round trip**.
+origin needs its own sign-in. Compare **Stream diagnostics → Round trip**.
 A powerful encoder cannot remove internet routing delay. Keep 720p60 as a starting
 profile; use lower resolution if browser decoding cannot sustain the frame rate.
 
@@ -278,7 +278,7 @@ change saved controller preferences. Settings apply on the next Play/test launch
 
 Enable **Automatically adjust quality** to let playback reduce bitrate for network queues, or resolution for browser overload. The chosen profile is the ceiling. It keeps 60 fps where possible, uses 30 fps at the minimum resolution if necessary, and restores quality slowly after sustained healthy playback. Changes reconnect the Remote Play session briefly; attached controllers reconnect through their existing retry flow.
 
-During playback, expand **Playback timing and quality** for separate processing costs, queue delays and the actual profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
+During playback, expand **Stream diagnostics** below the player for separate processing costs and queue delays; use the **Picture** tab for the selected profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
 Smooth frame pacing retains up to three decoded images and primes a small buffer to absorb uneven delivery. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
@@ -335,7 +335,7 @@ player, with an AudioWorklet jitter buffer where available. This audio path uses
 no browser codec decoder. Stereo at 48 kHz adds about **1.54 Mbps** before overhead,
 separate from the displayed video bitrate.
 
-Audio starts with Play. If autoplay is blocked, tap **Enable sound** or the player.
+Audio starts with Play. If autoplay is blocked, open the **Sound** tab and tap **Enable sound**, or tap the player.
 Use **Mute**, **Volume**, and the **40/120/240 ms audio startup buffer** selector. The default is 120 ms. After priming, gradual sample-clock correction follows the displayed video. Only large timing discontinuities trim stale samples or hold early audio; the selected startup buffer is not a fixed playback delay. HTTPS enables
 AudioWorklet in browsers requiring a secure context; a scheduled Web Audio
 fallback handles browsers without it. Browser UI stalls can interrupt that fallback.
@@ -403,11 +403,12 @@ See [source attribution](docs/sources.md), [architecture and protocol](docs/arch
 
 ## Player One interface
 
-The retro interface uses custom pixel art and self-hosted fonts. Video settings are always visible in the console library and below the player. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
+The retro interface uses custom pixel art and self-hosted fonts. Video settings are always visible in the console library. Custom Canvas, H.264 (default), and H.265 tiles replace the codec dropdown. During a session, a smaller player sits beside the Control deck on wide screens; the deck stacks below on phones. Picture, Sound, and Controls tabs keep settings easy to reach, with touch buttons for short option lists. Quick presets select Tesla/Canvas 720p60, balanced H.264 720p60, or H.264 1080p60. Resolution, bitrate, frame pacing, sound, touch controls, and debug preferences persist in this browser.
 
 - **Full screen** hides app controls and statistics. Exit with Escape or double-click/double-tap on the picture. Browsers without the Fullscreen API use a viewport-filling theater view; browser chrome cannot be hidden by the app in that fallback.
+- **Start in fullscreen** in the console list is off by default and saved per browser. When checked, Play enters fullscreen immediately while connecting. Test streams and input-only attachments keep their normal view.
 - **Touch controls** are off by default and can be enabled before fullscreen. They remain available over the video when enabled.
-- **Debug HUD** (or **Shift+D**) shows actual codec, resolution, FPS history, frame interval p95, network RTT, estimated video age, bitrate, decode/draw times and audio queue/underruns. It is also visible in fullscreen. Copy diagnostics includes timing data, not account credentials or stream tickets.
+- **Debug HUD** (or **Shift+D**) has three saved layouts, selected with illustrated buttons: **Detailed** keeps all metrics and the FPS graph; **Minimal** shows FPS, codec, and resolution; **Horizontal** uses a slim strip, adding network RTT and bitrate when space allows. All have translucent backgrounds. **Shift+H** cycles layouts while debug is on, including in fullscreen. Compact layouts let taps pass through to the picture. Detailed includes frame interval p95, estimated video age, decode/draw times, audio queue/underruns and Copy diagnostics; copied data contains no account credentials or stream tickets.
 - **Smooth** pacing trades a small video buffer for fewer dropped frames. **Responsive** minimizes delay. See [comparison and timing limits](docs/retro-player.md).
 - **Put console to sleep** requests rest mode from a paired console, then releases this server's session. It works from the library or player. An idle console uses a short authenticated control connection; an already sleeping console is left asleep. Enable network wake in the console's rest-mode settings to wake it again remotely.
 

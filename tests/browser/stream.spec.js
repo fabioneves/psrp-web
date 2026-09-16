@@ -1,3 +1,4 @@
+import { chooseSetting } from './settings.js';
 import { test, expect } from '@playwright/test';
 
 async function register(page, suffix = '') {
@@ -284,10 +285,11 @@ test('JavaScript decoder fallback also renders without WebAssembly or native med
 
 test('1080p60 software profile renders with real stereo audio', async ({ page }, testInfo) => {
   await register(page);
-  await expect(page.locator('#video-mode')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('1080p');
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
+  await chooseSetting(page, 'resolution-profile', '1080p');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
+  await page.getByRole('tab', { name: 'Sound', exact: true }).click();
   await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect.poll(async () => Number(await page.locator('#audio-status').getAttribute('data-rms')), { timeout: 10000 }).toBeGreaterThan(0.01);
   await expect.poll(async () => Number(await page.locator('#fps').getAttribute('data-frames')), { timeout: 20000 }).toBeGreaterThan(600);
@@ -316,9 +318,10 @@ test('manual profile changes reconnect at 540p30 and burst frames recover with J
   await register(page, '?mainThread=1');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#connecting')).toBeHidden({ timeout: 30000 });
+  await page.getByRole('tab', { name: 'Picture', exact: true }).click();
   await expect(page.locator('#playing-profile')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('540p');
-  await page.getByRole('combobox', { name: 'Frame rate', exact: true }).selectOption('30');
+  await chooseSetting(page, 'resolution-profile', '540p');
+  await chooseSetting(page, 'fps-profile', '30');
   await page.getByRole('button', { name: 'Apply selected profile' }).click();
   await expect(page.locator('#resolution')).toHaveText('960 × 540', { timeout: 30000 });
   await expect(page.locator('#quality-status')).toContainText('Manual · active 540p30');
@@ -337,12 +340,13 @@ test('automatic quality responds to sustained CPU pressure and manual apply over
     await route.fulfill({ response, body: script });
   });
   await register(page, '?mainThread=1');
-  await expect(page.locator('#video-mode')).toBeVisible();
-  await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption('1080p');
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
+  await chooseSetting(page, 'resolution-profile', '1080p');
   await page.getByLabel('Automatically adjust quality').check();
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#resolution')).toHaveText('1920 × 1080', { timeout: 30000 });
   await expect(page.locator('#resolution')).toHaveText('1280 × 720', { timeout: 30000 });
+  await page.getByRole('tab', { name: 'Picture', exact: true }).click();
   await expect(page.locator('#playing-profile')).toBeVisible();
   await expect(page.locator('#quality-status')).toContainText('active 720p60');
   await page.getByRole('button', { name: 'Apply selected profile' }).click();
@@ -474,6 +478,7 @@ test('audio fallback and automatic video worker fallback remain playable', async
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
   await expect(page.locator('#engine')).toHaveText('WebAssembly · Canvas 2D');
+  await page.getByRole('tab', { name: 'Sound', exact: true }).click();
   await page.getByRole('button', { name: 'Enable sound' }).click();
   await expect(page.locator('#audio-status')).toContainText('Web Audio fallback', { timeout: 10000 });
   await expect.poll(async () => Number(await page.locator('#audio-status').getAttribute('data-rms'))).toBeGreaterThan(0.01);
@@ -482,10 +487,10 @@ test('audio fallback and automatic video worker fallback remain playable', async
 
 test('lower profiles use the selected dimensions and frame rate', async ({ page }) => {
   await register(page);
-  await expect(page.locator('#video-mode')).toBeVisible();
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
   for (const [resolution, fps, dimensions] of [['360p', '30', '640 × 360'], ['540p', '60', '960 × 540']]) {
-    await page.getByRole('combobox', { name: 'Resolution', exact: true }).selectOption(resolution);
-    await page.getByRole('combobox', { name: 'Frame rate', exact: true }).selectOption(fps);
+    await chooseSetting(page, 'resolution-profile', resolution);
+    await chooseSetting(page, 'fps-profile', fps);
     await page.getByRole('button', { name: 'Start test stream' }).click();
     await expect(page.locator('#resolution')).toHaveText(dimensions, { timeout: 30000 });
     await expect.poll(async () => Number.parseFloat(await page.locator('#fps').textContent())).toBeGreaterThan(Number(fps) - 4);

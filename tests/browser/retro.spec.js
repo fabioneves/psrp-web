@@ -1,3 +1,4 @@
+import { chooseSetting } from './settings.js';
 import { test, expect } from '@playwright/test';
 
 async function register(page) {
@@ -13,7 +14,7 @@ async function register(page) {
 
 test('retro lobby exposes presets, saves custom profiles and fits desktop and mobile', async ({ page }) => {
   await register(page);
-  await expect(page.locator('#video-mode')).toBeVisible();
+  await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
   await page.locator('[data-preset=detail]').click();
   await expect(page.locator('#resolution-profile')).toHaveValue('1080p');
   await expect(page.locator('#bitrate')).toHaveValue('20000');
@@ -90,4 +91,134 @@ test('theater fallback keeps fullscreen clean and touch gestures can exit it', a
   await expect(page.locator('#player')).not.toHaveClass(/theater/);
   await expect(page.locator('#connection-message')).toHaveText('Test console busy.');
   await page.locator('#stop').click();
+});
+
+test('codec tiles default to H.264, support keyboard selection and save preferences', async ({ page }) => {
+  await register(page);
+  const modes = page.getByRole('radiogroup', { name: 'Video mode', exact: true });
+  await expect(modes.getByRole('radio', { name: 'H.264', exact: true })).toBeChecked();
+  await expect(page.locator('#video-mode')).toBeHidden();
+  await modes.getByRole('radio', { name: 'Canvas', exact: true }).click();
+  await expect(page.locator('#video-mode')).toHaveValue('mpeg1');
+  await page.keyboard.press('End');
+  await expect(modes.getByRole('radio', { name: 'H.265', exact: true })).toBeFocused();
+  await expect(page.locator('#video-mode')).toHaveValue('h265');
+  await page.reload();
+  await expect(modes.getByRole('radio', { name: 'H.265', exact: true })).toBeChecked();
+  await expect(page.locator('.banner-nav #logout')).toBeVisible();
+  await expect(page.locator('.site-header')).toHaveCount(0);
+});
+
+test('control deck sits beside a smaller player and keeps its toolbar on one row', async ({ page }) => {
+  await register(page);
+  await page.route('**/api/software/tickets', route => route.fulfill({ status: 409, json: { message: 'Test console busy.' } }));
+  await page.locator('#demo').click();
+  await expect(page.locator('#retry-stream')).toBeEnabled();
+  const stage = await page.locator('#stage').boundingBox();
+  const sidebar = await page.locator('#session-sidebar').boundingBox();
+  expect(sidebar.x).toBeGreaterThan(stage.x + stage.width);
+  expect(stage.width).toBeLessThan(1000);
+  await page.getByRole('tab', { name: 'Sound', exact: true }).click();
+  await expect(page.getByRole('radiogroup', { name: 'Audio startup buffer' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Controls', exact: true }).click();
+  await expect(page.getByRole('radio', { name: 'Tesla virtual', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Picture', exact: true }).click();
+  await page.screenshot({ path: '/tmp/psrp-touch-session-desktop.png', fullPage: true });
+  for (const width of [1440, 1024, 768, 390, 320]) {
+    await page.setViewportSize({ width, height: 1080 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const fullscreen = await page.locator('#fullscreen').boundingBox();
+    const stop = await page.locator('#stop').boundingBox();
+    const title = await page.locator('.session-title').boundingBox();
+    expect(fullscreen.y).toBe(stop.y);
+    expect(Math.abs(title.y + title.height / 2 - stop.y - stop.height / 2)).toBeLessThan(2);
+    expect(fullscreen.height).toBeGreaterThanOrEqual(48);
+    for (const tab of await page.getByRole('tab').all()) {
+      expect(await tab.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+    }
+  }
+  await page.screenshot({ path: '/tmp/psrp-touch-session-mobile.png', fullPage: true });
+  await page.locator('#stop').click();
+});
+
+for (const fallback of [false, true]) {
+  test(`fullscreen on Play is opt-in, saved and enters before connection (${fallback ? 'theater' : 'native'})`, async ({ page }) => {
+    if (fallback) await page.addInitScript(() => { Element.prototype.requestFullscreen = undefined; });
+    await register(page);
+    await page.route('**/api/playstation/my-devices', route => route.fulfill({ json: [{ hostId: 'test-ps5', hostName: 'Living room', hostType: 'PS5', isRegistered: true, status: 'OK' }] }));
+    await page.locator('#refresh').click();
+    const pending = [];
+    await page.route('**/api/software/tickets', route => { pending.push(route); });
+    await expect(page.locator('#auto-fullscreen')).not.toBeChecked();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(() => pending.length).toBe(1);
+    expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+    await expect(page.locator('#player')).not.toHaveClass(/theater/);
+    await page.locator('#stop').click();
+    await page.locator('#auto-fullscreen').check();
+    await page.reload();
+    await expect(page.locator('#auto-fullscreen')).toBeChecked();
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(() => pending.length).toBe(2);
+    if (fallback) await expect(page.locator('#player')).toHaveClass(/theater/);
+    else await expect.poll(() => page.evaluate(() => document.fullscreenElement?.id)).toBe('player');
+    await expect(page.locator('#session-sidebar')).toBeHidden();
+    await expect(page.locator('.player-bar')).toBeHidden();
+    await page.locator('#stage').dblclick();
+    await page.locator('#stop').click();
+    await page.locator('#demo').click();
+    await expect.poll(() => pending.length).toBe(3);
+    await expect(page.locator('.player-bar')).toBeVisible();
+    await page.locator('#stop').click();
+  });
+}
+
+test('three translucent HUD layouts show live data, stay compact and switch without reconnecting', async ({ page }) => {
+  await register(page);
+  await page.locator('[data-preset=tesla]').click();
+  let tickets = 0;
+  page.on('request', request => { if (request.url().includes('/api/software/tickets')) tickets++; });
+  await page.locator('#demo').click();
+  await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+  await page.locator('#debug-mode').check();
+  const hud = page.locator('#debug-overlay');
+  await expect(hud).toHaveAttribute('data-layout', 'detailed');
+  await expect.poll(() => page.locator('#hud-fps').textContent().then(Number.parseFloat)).toBeGreaterThan(50);
+  await expect(page.locator('#hud-rtt')).toBeVisible();
+  const initialTickets = tickets;
+  for (const layout of ['detailed', 'minimal', 'horizontal']) {
+    await chooseSetting(page, 'hud-style', layout);
+    await expect(hud).toHaveAttribute('data-layout', layout);
+    await expect(page.locator('#hud-fps')).toBeVisible();
+    await expect(page.locator('#hud-codec')).toHaveText('MPEG-1 / CANVAS');
+    const alpha = await hud.evaluate(element => Number(getComputedStyle(element).backgroundColor.match(/[\d.]+/g).at(-1)));
+    expect(alpha).toBeGreaterThan(0.5);
+    expect(alpha).toBeLessThan(0.85);
+    const box = await hud.boundingBox();
+    if (layout === 'minimal') { expect(box.width).toBeLessThanOrEqual(180); expect(box.height).toBeLessThan(90); }
+    if (layout === 'horizontal') expect(box.height).toBeLessThan(40);
+    await page.locator('#stage').screenshot({ path: `/tmp/psrp-hud-${layout}.png` });
+  }
+  expect(tickets).toBe(initialTickets);
+  await page.locator('#fullscreen').click();
+  await expect(page.locator('#session-sidebar')).toBeHidden();
+  await expect(hud).toHaveAttribute('data-layout', 'horizontal');
+  expect((await hud.boundingBox()).height).toBeLessThan(40);
+  await page.keyboard.press('Shift+H');
+  await expect(hud).toHaveAttribute('data-layout', 'detailed');
+  await page.keyboard.press('Shift+H');
+  await expect(hud).toHaveAttribute('data-layout', 'minimal');
+  await page.keyboard.press('Shift+H');
+  await expect(hud).toHaveAttribute('data-layout', 'horizontal');
+  await page.locator('#stage').dblclick();
+  await page.setViewportSize({ width: 320, height: 900 });
+  const box = await hud.boundingBox(), stage = await page.locator('#stage').boundingBox();
+  expect(box.x + box.width).toBeLessThanOrEqual(stage.x + stage.width);
+  expect(box.height).toBeLessThan(40);
+  expect(await hud.evaluate(element => getComputedStyle(element).pointerEvents)).toBe('none');
+  await page.locator('#stop').click();
+  await page.reload();
+  await expect(page.locator('#library')).toBeVisible();
+  await expect(page.locator('#hud-style')).toHaveValue('horizontal');
+  expect(await page.locator('#debug-mode').isChecked()).toBe(true);
 });
