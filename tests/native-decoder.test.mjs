@@ -1,11 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { h264Info, h265Info, supportsNativeVideo, nativeVideoConfig, selectVideoCodec, NativeDecodeQueue } from '../web/native-decoder.js';
+import { h264Info, h265Info, supportsNativeVideo, nativeVideoConfig, selectVideoCodec, NativeDecodeQueue, createNativeDecoder } from '../web/native-decoder.js';
 
 test('H.264 detects three/four byte Annex B start codes, SPS profile and IDR frames', () => {
-  assert.deepEqual(h264Info(Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 1, 101, 128])),
-    { codec: 'avc1.64002a', key: true, picture: true });
-  assert.deepEqual(h264Info(Uint8Array.from([0, 0, 1, 65, 128])), { codec: undefined, key: false, picture: true });
+  const info = h264Info(Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 1, 104, 5, 0, 0, 1, 101, 128]));
+  assert.equal(info.codec, 'avc1.64002a'); assert.equal(info.key, true); assert.equal(info.picture, true);
+  assert.deepEqual(info.parameters.map(parameter => [parameter.type, [...parameter.data]]), [[7, [0, 0, 0, 1, 103, 100, 0, 42]], [8, [0, 0, 0, 1, 104, 5]]]);
+  assert.deepEqual(h264Info(Uint8Array.from([0, 0, 1, 65, 128])), { codec: undefined, key: false, picture: true, parameters: [] });
   assert.equal(h264Info(Uint8Array.from([0, 0, 1, 103])).codec, undefined);
 });
 test('capability probe requests hardware decoding at selected dimensions and handles unavailable APIs', async () => {
@@ -73,4 +74,29 @@ test('browser H.264 remains available when the GPU preference is unsupported', a
   assert.equal(config.hardwareAcceleration, 'no-preference');
   assert.deepEqual(seen, ['prefer-hardware', 'no-preference']);
   assert.equal(await selectVideoCodec('h264', { resolution: '1080p' }, new Set(), 'PS5', platform), 'h264');
+});
+
+test('console H.264 key frames receive the separately delivered SPS/PPS header before decoding', async () => {
+  const decoded = [];
+  const saved = { VideoDecoder: globalThis.VideoDecoder, EncodedVideoChunk: globalThis.EncodedVideoChunk };
+  globalThis.EncodedVideoChunk = class { constructor(init) { Object.assign(this, init); } };
+  globalThis.VideoDecoder = class {
+    constructor() { this.decodeQueueSize = 0; this.state = 'unconfigured'; }
+    configure(config) { this.config = config; this.state = 'configured'; }
+    decode(chunk) { decoded.push(chunk); }
+    close() { this.state = 'closed'; }
+  };
+  const canvas = { width: 0, height: 0, getContext: () => ({ drawImage() {} }) };
+  const decoder = createNativeDecoder(canvas, () => {}, { videoCodec: 'h264', fps: 60 });
+  try {
+    const header = Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 0, 1, 104, 5, 0, 0, 0, 0]);
+    const idr = Uint8Array.from([0, 0, 0, 1, 101, 128, 9]);
+    const delta = Uint8Array.from([0, 0, 0, 1, 65, 128, 9]);
+    decoder.write(header.buffer, 1000); decoder.write(delta.buffer, 1016); decoder.write(idr.buffer, 1033); decoder.write(delta.buffer, 1050);
+    assert.equal(decoded.length, 2);
+    assert.equal(decoded[0].type, 'key');
+    assert.deepEqual([...decoded[0].data], [0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 0, 1, 104, 5, ...idr]);
+    assert.equal(decoded[1].type, 'delta');
+    assert.ok(decoded[1].timestamp > decoded[0].timestamp);
+  } finally { decoder.destroy(); Object.assign(globalThis, saved); }
 });

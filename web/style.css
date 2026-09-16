@@ -448,6 +448,14 @@ main {
 .stage-banner:empty {
   display:none;
 }
+.stage-banner[data-tone=error] {
+  border-color:var(--red);
+  background:#2a1620f2;
+  color:var(--text);
+}
+.stage-banner[data-tone=busy] {
+  border-color:var(--accent);
+}
 #stage {
   position:relative;
   background:#000;
@@ -517,7 +525,7 @@ summary {
 }
 .toast {
   position:fixed;
-  top:16px;
+  bottom:calc(16px + env(safe-area-inset-bottom, 0px));
   left:50%;
   transform:translateX(-50%);
   z-index:200;
@@ -531,6 +539,9 @@ summary {
   background:#101a31f8;
   color:var(--text);
   box-shadow:5px 5px #060c1b;
+}
+.toast[data-open=false] {
+  visibility:hidden;
 }
 .toast[data-tone=error] {
   border-color:var(--red);

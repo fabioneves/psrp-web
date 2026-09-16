@@ -83,14 +83,18 @@ window.addEventListener('focus', () => gamepads.reset());
 let toastTimer;
 function notify(message, tone = 'info') {
   if ($('setup-dialog').open) { $('psn-status').textContent = message; $('psn-status').hidden = !message; return; }
-  if (!$('player').hidden) { $('connection-message').textContent = message; return; }
+  if (!$('player').hidden && !$('stage').hidden) {
+    $('connection-message').textContent = message;
+    $('connection-message').dataset.tone = tone;
+    return;
+  }
   clearTimeout(toastTimer);
   $('message').textContent = message;
   $('toast').dataset.tone = tone;
-  $('toast').hidden = !message;
-  if (message && tone === 'info') toastTimer = setTimeout(() => { $('toast').hidden = true; }, 8000);
+  $('toast').dataset.open = String(!!message);
+  if (message && tone === 'info') toastTimer = setTimeout(() => { $('toast').dataset.open = 'false'; }, 8000);
 }
-$('dismiss-message').onclick = () => notify('');
+$('dismiss-message').onclick = () => { clearTimeout(toastTimer); $('toast').dataset.open = 'false'; };
 async function api(path, body, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout || 15000);

@@ -382,6 +382,25 @@ test('phone attaches input only without interrupting video and detaches independ
   await context.close();
 });
 
+test('controller-only sessions show connection feedback in the toast instead of the hidden stage', async ({ page, browser }) => {
+  const name = await register(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#connecting')).toBeHidden({ timeout: 30000 });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const phone = await context.newPage();
+  await phone.goto(page.url());
+  await phone.getByLabel('Username or email').fill(name);
+  await phone.getByLabel('Password', { exact: true }).fill('LocalTestPassword_123');
+  await phone.getByRole('button', { name: 'Sign in', exact: true }).click();
+  await phone.getByRole('button', { name: 'Attach input only' }).click();
+  await expect(phone.locator('#stream-status')).toHaveText('Controller connected');
+  await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await expect(phone.locator('#message')).toContainText('Waiting for the same console stream', { timeout: 15000 });
+  await expect(phone.locator('#toast')).toBeVisible();
+  await phone.getByRole('button', { name: 'Disconnect', exact: true }).click();
+  await context.close();
+});
+
 test('gamepads poll without connection events and release when unplugged', async ({ page }) => {
   await page.addInitScript(() => {
     window.pads = [];

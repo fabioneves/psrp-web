@@ -14,7 +14,7 @@
    session with H.264 and the selected resolution/frame rate, attaches `SoftwareReceiver`, requests an IDR
    and enables controller input. Secrets are never returned in a session response.
 5. `SoftwareReceiver` removes the upstream `0x02` video packet prefix, caches
-   codec headers, waits for an IDR and feeds Annex B bytes to FFmpeg. Opus audio packets lose their `0x01` prefix and are CPU-decoded to PCM.
+   codec headers, waits for an IDR and queues Annex B units with their arrival time. Opus audio packets lose their `0x01` prefix and are CPU-decoded to PCM.
 6. In Canvas mode FFmpeg decodes on the CPU and encodes MPEG-1 without B frames at the selected profile. Its
    MPEG-TS output is sent as binary WebSocket messages. The browser demuxes,
    software-decodes reference frames, retains one pending image and renders the newest image on each presentation tick.

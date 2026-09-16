@@ -280,7 +280,7 @@ Enable **Automatically adjust quality** to let playback reduce bitrate for netwo
 
 During playback, expand **Stream diagnostics** below the player for separate processing costs and queue delays; use the **Picture** tab for the selected profile. **Apply selected profile** disables adaptation and applies your manual choice. Manual mode is the default.
 
-Smooth frame pacing retains up to three decoded images and primes a small buffer to absorb uneven delivery. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
+Smooth frame pacing primes one frame interval, keeps up to three decoded images to absorb uneven delivery, and skips an image that has waited 1.5 intervals when a newer one is ready. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
 ## Video modes
 

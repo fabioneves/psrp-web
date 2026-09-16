@@ -76,7 +76,7 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
     private void Write(byte[] packet)
     {
         if (!packets.Writer.TryWrite(new VideoUnit(packet, MediaPacket.Now)))
-            packets.Writer.TryComplete(new IOException("Software encoder cannot keep up. Reconnect or lower the bitrate."));
+            packets.Writer.TryComplete(new IOException("Video delivery cannot keep up. Reconnect or lower the bitrate."));
     }
 
     public static bool ContainsIdr(ReadOnlySpan<byte> packet, string codec = "h264")

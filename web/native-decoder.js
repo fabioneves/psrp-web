@@ -36,34 +36,47 @@ export async function selectVideoCodec(preferred, profile, failed = new Set(), h
   return 'mpeg1';
 }
 
+function annexBUnits(data) {
+  const starts = [];
+  for (let i = 0; i + 3 < data.length; i++)
+    if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 1) { starts.push(i + 3); i += 2; }
+  return starts.map((start, index) => {
+    let end = index + 1 < starts.length ? starts[index + 1] - 3 : data.length;
+    while (end > start && data[end - 1] === 0) end--;
+    return data.subarray(start, end);
+  });
+}
+const withStartCode = nal => Uint8Array.from([0, 0, 0, 1, ...nal]);
+
 export function h264Info(data) {
   let codec, key = false, picture = false;
-  for (let i = 0; i + 3 < data.length; i++) {
-    if (data[i] !== 0 || data[i + 1] !== 0 || data[i + 2] !== 1) continue;
-    const type = data[i + 3] & 31;
+  const parameters = [];
+  for (const nal of annexBUnits(data)) {
+    if (!nal.length) continue;
+    const type = nal[0] & 31;
     if (type === 5) key = true;
     if (type === 1 || type === 5) picture = true;
-    if (type === 7 && i + 6 < data.length)
-      codec = 'avc1.' + [...data.subarray(i + 4, i + 7)].map(value => value.toString(16).padStart(2, '0')).join('');
-    i += 3;
+    if (type === 7 || type === 8) {
+      if (nal.length > 65536) throw new Error('H.264 parameter set exceeds its size limit.');
+      parameters.push({ type, data: withStartCode(nal) });
+    }
+    if (type === 7 && nal.length >= 4)
+      codec = 'avc1.' + [...nal.subarray(1, 4)].map(value => value.toString(16).padStart(2, '0')).join('');
   }
-  return { codec, key, picture };
+  return { codec, key, picture, parameters };
 }
 
 export function h265Info(data) {
   let codec, key = false, picture = false;
-  const starts = [], parameters = [];
-  for (let i = 0; i + 3 < data.length; i++)
-    if (data[i] === 0 && data[i + 1] === 0 && data[i + 2] === 1) { starts.push(i + 3); i += 2; }
-  for (let index = 0; index < starts.length; index++) {
-    const nal = data.subarray(starts[index], index + 1 < starts.length ? starts[index + 1] - 3 : data.length);
+  const parameters = [];
+  for (const nal of annexBUnits(data)) {
     if (nal.length < 2) continue;
     const type = (nal[0] >> 1) & 63;
     if (type <= 31) picture = true;
     if (type >= 16 && type <= 21) key = true;
     if (type >= 32 && type <= 34) {
       if (nal.length > 65536) throw new Error('HEVC parameter set exceeds its size limit.');
-      parameters.push({ type, data: Uint8Array.from([0, 0, 0, 1, ...nal]) });
+      parameters.push({ type, data: withStartCode(nal) });
     }
     if (type !== 33) continue;
     const rbsp = nal.subarray(2).filter((byte, i, bytes) => !(i >= 2 && byte === 3 && bytes[i - 1] === 0 && bytes[i - 2] === 0));
@@ -99,6 +112,7 @@ export class NativeDecodeQueue {
 export function createNativeDecoder(canvas, report, options = {}) {
   const hevc = options.videoCodec === 'h265';
   const label = hevc ? 'H.265' : 'H.264';
+  const parameterTypes = hevc ? [32, 33, 34] : [7, 8];
   const hardwareAcceleration = options.hardwareAcceleration || 'prefer-hardware';
   const engine = `${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware preferred' : 'browser decoding'}`;
   const parameters = new Map();
@@ -149,20 +163,22 @@ export function createNativeDecoder(canvas, report, options = {}) {
   function accessUnit(data, mediaTimestamp) {
     if (data.length > 2 * 1024 * 1024) throw new Error(`${label} frame exceeds its size limit.`);
     const info = hevc ? h265Info(data) : h264Info(data);
-    for (const parameter of info.parameters || []) parameters.set(parameter.type, parameter.data);
+    for (const parameter of info.parameters) parameters.set(parameter.type, parameter.data);
     if (info.codec && info.codec !== configuration) {
       decoder.configure({ ...nativeConfig(info.codec), hardwareAcceleration });
       configuration = info.codec;
       waitingForKey = true;
     }
     if (!configuration || !info.picture || (waitingForKey && !info.key)) return;
-    if (hevc && info.key) {
-      if (parameters.size !== 3) return;
-      const headers = [32, 33, 34].map(type => parameters.get(type));
-      const prefixed = new Uint8Array(headers.reduce((sum, header) => sum + header.length, data.length));
-      let position = 0;
-      for (const header of headers) { prefixed.set(header, position); position += header.length; }
-      prefixed.set(data, position); data = prefixed;
+    if (info.key) {
+      if (parameters.size < parameterTypes.length) return;
+      if (info.parameters.length < parameterTypes.length) {
+        const headers = parameterTypes.map(type => parameters.get(type));
+        const prefixed = new Uint8Array(headers.reduce((sum, header) => sum + header.length, data.length));
+        let position = 0;
+        for (const header of headers) { prefixed.set(header, position); position += header.length; }
+        prefixed.set(data, position); data = prefixed;
+      }
     }
     waitingForKey = false;
     firstMedia ??= mediaTimestamp;

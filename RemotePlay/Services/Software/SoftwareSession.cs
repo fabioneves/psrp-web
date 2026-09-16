@@ -155,7 +155,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
     {
         await foreach (var unit in receiver.Packets.ReadAllAsync(ct))
         {
-            var packet = MediaPacket.Wrap(unit.Data, MediaPacket.VideoUnit, unit.Ready, unit.Ready);
+            var packet = MediaPacket.Wrap(unit.Data, MediaPacket.AccessUnit, unit.Ready, unit.Ready);
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(1));
             await sendGate.WaitAsync(timeout.Token);
