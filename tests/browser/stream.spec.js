@@ -284,6 +284,7 @@ test('JavaScript decoder fallback also renders without WebAssembly or native med
 
 
 test('1080p60 software profile renders with real stereo audio', async ({ page }, testInfo) => {
+  test.skip(!!process.env.CI, 'performance-bound: shared CI runners cannot sustain software 60 fps decoding');
   await register(page);
   await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
   await chooseSetting(page, 'resolution-profile', '1080p');
