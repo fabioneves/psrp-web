@@ -29,6 +29,11 @@
 #debug-overlay[data-layout=horizontal] .hud-heading { font-size:9px; color:var(--hud-color); white-space:nowrap; }
 #debug-overlay[data-layout=horizontal] .hud-hero>strong { font:600 12px/1 Pixelify,monospace; }
 #debug-overlay[data-layout=horizontal] .hud-hero>span { display:flex; align-items:center; gap:6px; margin-left:-4px; font-size:9px; }
+#debug-overlay[data-layout=horizontal] .hud-video>.hud-group-title { order:-2; }
+#debug-overlay[data-layout=horizontal] .hud-video>.hud-heading { order:-1; }
+#debug-overlay[data-layout=horizontal] .hud-hero>strong { order:-4; }
+#debug-overlay[data-layout=horizontal] .hud-hero>span { display:contents; }
+#debug-overlay[data-layout=horizontal] .hud-fps-label { order:-3; margin-left:-3px; font-size:9px; }
 #debug-overlay[data-layout=horizontal] #hud-size { font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-break { display:none; }
 #debug-overlay[data-layout=horizontal] #fps-chart { display:block; width:32px; height:14px; margin:0; flex-shrink:0; }
@@ -45,5 +50,6 @@
   #debug-overlay[data-layout=horizontal] .hud-group-title { font-size:9px; }
   #debug-overlay[data-layout=horizontal] .hud-heading,#debug-overlay[data-layout=horizontal] .hud-hero>span,#debug-overlay[data-layout=horizontal] #hud-size,#debug-overlay[data-layout=horizontal] .hud-grid dt::after,#debug-overlay[data-layout=horizontal] .hud-grid dd,#debug-overlay[data-layout=horizontal] #hud-health { font-size:8px; }
   #debug-overlay[data-layout=horizontal] .hud-hero>strong { font-size:10px; }
+  #debug-overlay[data-layout=horizontal] .hud-fps-label { font-size:8px; }
   #debug-overlay[data-layout=horizontal] #fps-chart { display:none; }
 }
