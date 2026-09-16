@@ -511,7 +511,7 @@ function onStreamMessage(message) {
     }
   } else if (message.type === 'status') $('stream-status').textContent = message.message;
   else if (message.type === 'error' || message.type === 'closed') {
-    if ($('auto-quality').checked && quality && message.message.includes('Software decoding cannot keep up')) {
+    if ($('auto-quality').checked && quality && /cannot keep up|falling behind/.test(message.message)) {
       const change = quality.change(quality.lower(true), 'Browser decoding exceeded its time limit', performance.now());
       if (change) { changeProfile(change.profile, change.reason); return; }
     }

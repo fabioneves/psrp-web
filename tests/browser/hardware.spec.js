@@ -25,7 +25,7 @@ async function useNativeSoftwareDecoder(page, fail = false, dropOutputs = false,
       constructor(options) {
         let frames = 0;
         super({ ...options,
-          output(frame) { if (dropOutputs === 'all' || (dropOutputs && ++frames % 5 === 0)) frame.close(); else options.output(frame); },
+          output(frame) { if (dropOutputs === 'all' || (dropOutputs === 'late' && ++frames > 60) || (dropOutputs === true && ++frames % 5 === 0)) frame.close(); else options.output(frame); },
           error(error) { globalThis.nativeErrors.push(error.message); options.error(error); } });
         this.output = options.output;
       }
@@ -85,6 +85,20 @@ test('native video falls back when the decoder genuinely stops producing frames'
   await expect(page.locator('#engine')).toContainText('WebAssembly · Canvas 2D', { timeout: 30000 });
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(60);
   await expect(page.locator('#video-mode')).toHaveValue('h264');
+  await page.locator('#stop').click();
+});
+
+test('a decoder that stalls after producing frames reconnects with the same codec instead of downgrading', async ({ page }) => {
+  await useNativeSoftwareDecoder(page, false, 'late');
+  await register(page);
+  const codecs = [];
+  page.on('request', request => { if (request.url().includes('/api/software/tickets')) codecs.push(request.postDataJSON().videoCodec); });
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#engine')).toContainText('H.264', { timeout: 30000 });
+  await expect.poll(() => codecs.length, { timeout: 30000 }).toBeGreaterThan(1);
+  expect(codecs.every(codec => codec === 'h264')).toBe(true);
+  await expect(page.locator('#video-mode-status')).not.toContainText('Using');
+  await expect(page.locator('#engine')).toContainText('H.264');
   await page.locator('#stop').click();
 });
 

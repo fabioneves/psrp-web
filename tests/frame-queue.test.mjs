@@ -26,3 +26,14 @@ test('backlog is bounded and responsive mode presents the newest frame immediate
   immediate.push({ id: 1, savedAt: 0 }); immediate.push({ id: 2, savedAt: 1 });
   assert.equal(immediate.take(1).id, 2);
 });
+test('smooth pacing drains a burst back to one queued frame instead of carrying the backlog as latency', () => {
+  const queue = new FrameQueue(() => {});
+  const interval = 1000 / 60;
+  for (let id = 0; id < 3; id++) queue.push({ id, savedAt: 0 });
+  assert.equal(queue.take(interval).id, 0);
+  assert.equal(queue.take(2 * interval).id, 2, 'a frame that has waited 1.5 intervals behind a newer one is skipped');
+  assert.equal(queue.dropped, 1);
+  queue.push({ id: 3, savedAt: 2 * interval + 5 });
+  assert.equal(queue.take(5 * interval).id, 3, 'a lone late frame is never dropped');
+  assert.equal(queue.dropped, 1);
+});

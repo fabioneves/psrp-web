@@ -10,7 +10,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
     serverQueueMs = 0;
   }, {
     ...presentation, videoCodec, hardwareAcceleration,
-    onError(message) { fail(message, 'renderer-error'); },
+    onError(message) { fail(message, decoder?.healthy ? 'error' : 'renderer-error'); },
     onPresent(timestamp) {
       videoAgeMs = clock.age(timestamp);
       report({ type: 'sync', timestamp });
@@ -54,7 +54,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
           decoder?.write(media.bytes, media.timestamp);
         }
       }
-    } catch (error) { fail(error.message, videoCodec !== 'mpeg1' ? 'renderer-error' : 'error'); }
+    } catch (error) { fail(error.message, videoCodec !== 'mpeg1' && !decoder?.healthy ? 'renderer-error' : 'error'); }
   };
   socket.onerror = () => fail('Could not open the streaming connection. Check your connection to the server.');
   socket.onclose = event => {

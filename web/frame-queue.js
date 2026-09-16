@@ -3,7 +3,8 @@ export class FrameQueue {
     this.release = release;
     this.interval = 1000 / fps;
     this.capacity = smooth ? 3 : 1;
-    this.reserve = smooth ? this.interval * 1.5 : 0;
+    this.reserve = smooth ? this.interval : 0;
+    this.stale = smooth ? this.interval * 1.5 : 0;
     this.frames = [];
     this.started = false;
     this.last = null;
@@ -20,6 +21,7 @@ export class FrameQueue {
     if (!this.frames.length) return null;
     if (!this.started && now - this.frames[0].savedAt < this.reserve) return null;
     if (this.capacity > 1 && this.last != null && now - this.last < this.interval - 2) return null;
+    while (this.frames.length > 1 && now - this.frames[0].savedAt > this.stale) { this.release(this.frames.shift()); this.dropped++; }
     this.started = true;
     this.last = now;
     return this.frames.shift();

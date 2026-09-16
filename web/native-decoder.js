@@ -134,7 +134,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
       for (const timestamp of pending.keys()) if (timestamp <= frame.timestamp) pending.delete(timestamp);
       progressAt = pending.size ? performance.now() : null;
       if (timing) decodeMs += performance.now() - timing.started;
-      decoded++;
+      decoded++; everDecoded = true;
       frames.push({ frame, timestamp: timing?.mediaTimestamp ?? null, savedAt: performance.now() });
       presentation.request();
     },
@@ -170,9 +170,10 @@ export function createNativeDecoder(canvas, report, options = {}) {
     lastTimestamp = timestamp;
     queue.push({ timestamp, mediaTimestamp, data, key: info.key });
   }
+  let everDecoded = false;
   const timer = setInterval(() => {
     if (progressAt !== null && performance.now() - progressAt > 3000) {
-      options.onError?.('Native video decoder stopped producing frames.');
+      options.onError?.('Video decoding stalled. Reconnecting…');
       return;
     }
     const elapsed = performance.now() - start;
@@ -184,6 +185,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     decoded = drawn = bytesReceived = decodeMs = drawMs = 0; start = performance.now();
   }, 1000);
   return {
+    get healthy() { return everDecoded; },
     write(data, timestamp) {
       if (stopped) return;
       bytesReceived += data.byteLength;
