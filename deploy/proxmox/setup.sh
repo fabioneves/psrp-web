@@ -136,7 +136,7 @@ fi
 say "Container address: $address"
 
 step "Installing Docker and the app (this builds the image; expect several minutes)"
-run pct exec "$CTID" -- bash -c "export DEBIAN_FRONTEND=noninteractive; command -v curl >/dev/null || { apt-get update -q && apt-get install -y -q curl ca-certificates; } && curl -fsSL '$RAW/deploy/proxmox/install.sh' -o /root/install.sh && REPO='$REPO' REF='$REF' REMOTE_PLAY_DOMAIN='$DOMAIN' HTTP_PORT='${HTTP_PORT:-80}' HTTPS_PORT='${HTTPS_PORT:-443}' sh /root/install.sh"
+run pct exec "$CTID" -- bash -c "export DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8; command -v curl >/dev/null || { apt-get update -q && apt-get install -y -q curl ca-certificates; } && curl -fsSL '$RAW/deploy/proxmox/install.sh' -o /root/install.sh && REPO='$REPO' REF='$REF' REMOTE_PLAY_DOMAIN='$DOMAIN' HTTP_PORT='${HTTP_PORT:-80}' HTTPS_PORT='${HTTPS_PORT:-443}' sh /root/install.sh"
 
 if [ -n "$DOMAIN" ] && [ "$DRY" != 1 ]; then
     step "Checking $DOMAIN"

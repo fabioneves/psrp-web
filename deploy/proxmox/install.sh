@@ -13,7 +13,7 @@ HTTP_PORT=${HTTP_PORT:-80}
 HTTPS_PORT=${HTTPS_PORT:-443}
 if [ -n "${REMOTE_PLAY_DOMAIN:-}" ]; then PORT=${PORT:-8080}; else PORT=${PORT:-$HTTP_PORT}; fi
 
-export DEBIAN_FRONTEND=noninteractive
+export DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 LC_ALL=C.UTF-8
 apt-get update -q
 apt-get install -y -q ca-certificates curl git iproute2
 install -m 0755 -d /etc/apt/keyrings
