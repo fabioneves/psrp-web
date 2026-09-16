@@ -67,10 +67,13 @@ container's own UDP buffers never overflowed, but the host's did, in the
 sockets of `slirp4netns`, the user-space network relay that rootless Docker
 routes every container packet through. The background console status scan
 adds enough work to that relay to drop the stream for the length of the scan.
-The scan now skips while a stream is running. The relay remains the ceiling
-for a 10 Mbps, 850-packet-per-second stream on rootless Docker; rootful
-Docker with `compose.host.yaml`, or the `pasta` network driver for rootless
-Docker, takes it out of the path.
+The scan now skips while a stream is running. This host now runs rootless Docker
+with the `pasta` network driver (`passt` package, and
+`Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=pasta` in
+`~/.config/systemd/user/docker.service.d/pasta.conf`), which maps UDP flows
+socket to socket instead of running a user-space TCP/IP stack. Restarting the
+daemon for that change stops every container; containers without a restart
+policy have to be started again by hand.
 
 ### Corrupt frames and keyframes
 
