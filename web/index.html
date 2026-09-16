@@ -121,6 +121,7 @@
     <section id="player" hidden>
       <div class="player-bar"><div class="session-title"><img src="/art/console.svg" width="36" height="40" alt=""><div><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div></div><div class="player-actions"><button id="fullscreen" aria-label="Full screen" title="Full screen"><img src="/art/fullscreen.svg" width="20" height="20" alt=""><span>Full screen</span></button><button id="stop" class="danger" aria-label="Disconnect" title="Disconnect"><span class="stop-icon" aria-hidden="true"></span><span>Disconnect</span></button></div></div>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing video…</div>
+      <p id="connection-message" class="stage-banner" role="status" aria-live="polite"></p>
       <button id="fullscreen-exit" hidden><img src="/art/fullscreen.svg" width="20" height="20" alt="">Exit fullscreen</button>
       <aside id="debug-overlay" aria-label="Stream debug overlay" hidden>
         <div class="hud-group hud-video" role="group" aria-label="Video metrics"><div class="hud-heading"><span>● LIVE TELEMETRY</span><span id="hud-codec">—</span></div>
@@ -134,7 +135,6 @@
         <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button></div>
       </aside></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
-      <div class="connection-feedback"><p id="connection-message" role="status" aria-live="polite"></p></div>
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
       <aside id="session-sidebar" aria-label="Session settings">
         <div class="deck-heading"><div><p class="eyebrow">PLAYER ONE / LIVE</p><h2>Control deck</h2></div><img src="/art/session-deck.svg" width="100" height="40" alt=""></div>
@@ -191,11 +191,11 @@
         </div></div>
       </div>
       <div id="session-help">
-      <p class="hint fullscreen-help">Fullscreen: swipe down or double-tap to exit · Tap for the exit button when touch controls are off · Esc also exits · 2-finger tap: debug · 3-finger tap: touch controls · Swipe left / right: HUD layout · Shift+D: debug.</p>
+      <details class="fullscreen-help"><summary>Fullscreen shortcuts</summary><dl><div><dt>Exit</dt><dd>Swipe down, double-tap, Esc, or tap once for the exit button when touch controls are off</dd></div><div><dt>Debug HUD</dt><dd>Two-finger tap or Shift+D · swipe left / right or Shift+H changes the layout</dd></div><div><dt>Touch controls</dt><dd>Three-finger tap</dd></div></dl></details>
       <details id="stream-diagnostics"><summary>Stream diagnostics</summary><p id="timing-status">Measuring stream timing…</p><p id="render-status"></p><p class="hint">Timing starts when media is ready on the server. Console capture and physical display delay are not measured.</p></details></div>
     </section>
-    <p id="message" role="status" aria-live="polite" hidden></p>
   </main>
+  <div id="toast" class="toast" hidden><p id="message" role="status" aria-live="polite"></p><button type="button" id="dismiss-message" class="quiet" aria-label="Dismiss message">×</button></div>
   <footer><a href="/native-psn-source.tar.gz">PSN pairing source</a><span>PLAYER ONE / Independent Remote Play for PS4 & PS5</span></footer>
 </body>
 </html>

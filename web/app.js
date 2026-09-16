@@ -80,11 +80,17 @@ async function updateWakeLock() {
 document.addEventListener('visibilitychange', updateWakeLock);
 window.addEventListener('focus', () => gamepads.reset());
 
-function notify(message) {
-  const element = $('setup-dialog').open ? $('psn-status') : $('player').hidden ? $('message') : $('connection-message');
-  element.textContent = message;
-  if (element.id !== 'connection-message') element.hidden = !message;
+let toastTimer;
+function notify(message, tone = 'info') {
+  if ($('setup-dialog').open) { $('psn-status').textContent = message; $('psn-status').hidden = !message; return; }
+  if (!$('player').hidden) { $('connection-message').textContent = message; return; }
+  clearTimeout(toastTimer);
+  $('message').textContent = message;
+  $('toast').dataset.tone = tone;
+  $('toast').hidden = !message;
+  if (message && tone === 'info') toastTimer = setTimeout(() => { $('toast').hidden = true; }, 8000);
 }
+$('dismiss-message').onclick = () => notify('');
 async function api(path, body, options = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeout || 15000);
@@ -103,9 +109,10 @@ async function api(path, body, options = {}) {
 }
 async function run(button, action, clearMessage = true) {
   button.disabled = true;
+  button.setAttribute('aria-busy', 'true');
   if (clearMessage) notify('');
-  try { await action(); } catch (error) { notify(error.message); }
-  finally { button.disabled = false; }
+  try { await action(); } catch (error) { notify(error.message, 'error'); }
+  finally { button.disabled = false; button.removeAttribute('aria-busy'); }
 }
 function showAccount() {
   $('account').hidden = !!token;
@@ -138,10 +145,10 @@ $('auth-form').onsubmit = event => {
     try {
       const saved = await api('auth/session');
       if (token === signedInToken && saved.token !== signedInToken)
-        notify('Signed in for this page only: the browser did not retain your saved login. Allow cookies for this site, then sign in again.');
+        notify('Signed in for this page only: the browser did not retain your saved login. Allow cookies for this site, then sign in again.', 'error');
     } catch {
       if (token === signedInToken)
-        notify('Signed in, but saved login could not be verified. Refreshing may require signing in again.');
+        notify('Signed in, but saved login could not be verified. Refreshing may require signing in again.', 'error');
     }
   });
 };
@@ -155,7 +162,7 @@ async function restoreSession() {
     const session = await api('auth/session');
     token = session.token;
     if (token) { await refresh(); void setup.restore(); }
-  } catch (error) { notify(`Could not restore your session: ${error.message}`); }
+  } catch (error) { notify(`Could not restore your session: ${error.message}`, 'error'); }
   finally { showAccount(); }
 }
 
@@ -207,11 +214,11 @@ async function refresh() {
     wake.disabled = !device.isRegistered;
     wake.onclick = () => run(wake, async () => {
       wake.textContent = 'Waking…';
-      notify('Waking console…');
+      notify('Waking console…', 'busy');
       try { await api('software/wake', { hostId: device.hostId }, { timeout: 30000 }); await refresh(); notify('Console is awake. Choose Play to connect.'); }
       finally { wake.textContent = 'Wake up'; }
     });
-    const disconnect = document.createElement('button'); disconnect.className = 'quiet'; disconnect.textContent = 'Disconnect all sessions';
+    const disconnect = document.createElement('button'); disconnect.className = 'quiet danger'; disconnect.textContent = 'Disconnect all sessions';
     disconnect.disabled = !device.isRegistered;
     disconnect.onclick = () => run(disconnect, () => disconnectConsole(device.hostId));
     const actions = document.createElement('div'); actions.className = 'device-actions'; const sleep = document.createElement('button'); sleep.className = 'quiet'; sleep.textContent = 'Put console to sleep';
@@ -226,7 +233,7 @@ async function refresh() {
 }
 async function sleepConsole(hostId) {
   retry.reset();
-  notify('Sending rest-mode request…');
+  notify('Sending rest-mode request…', 'busy');
   sleepingHost = hostId;
   try {
     const result = await api('software/sleep', { hostId }, { timeout: 30000 });
@@ -240,7 +247,7 @@ $('sleep-console').onclick = () => {
 };
 async function disconnectConsole(hostId) {
   if (target?.hostId === hostId) stop();
-  notify('Disconnecting all sessions for this console…');
+  notify('Disconnecting all sessions for this console…', 'busy');
   const result = await api('software/disconnect', { hostId }, { timeout: 20000 });
   await refreshActive();
   notify(result.message);
@@ -384,7 +391,7 @@ function failConnection(message) {
   retry.reset();
   $('stream-status').textContent = 'Connection failed';
   $('connecting').textContent = 'Connection failed';
-  notify(message);
+  notify(message, 'error');
 }
 function reconnect(message, workerFailed = false) {
   if (!target) return;
@@ -496,6 +503,7 @@ function onStreamMessage(message) {
     if (message.totalFrames) {
       $('connecting').hidden = true;
       $('stream-status').textContent = 'Playing';
+      $('connection-message').textContent = '';
     }
     if ($('auto-quality').checked && !target?.inputSession) {
       const change = quality?.sample(message, performance.now(), !document.hidden);

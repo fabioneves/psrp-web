@@ -16,7 +16,7 @@
 .codec-field img { image-rendering:pixelated; }
 .lobby-grid .settings-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .lobby-grid [data-choice-for=resolution-profile],.lobby-grid [data-choice-for=bitrate] { grid-column:1/-1; }
-#player { display:grid; grid-template-columns:minmax(0,1fr) 360px; grid-template-rows:auto auto auto auto auto auto 1fr; grid-template-areas:'heading sidebar' 'video sidebar' 'stats sidebar' 'feedback sidebar' 'input sidebar' 'controls sidebar' 'help sidebar'; gap:0 24px; align-items:start; }
+#player { display:grid; grid-template-columns:minmax(0,1fr) 360px; grid-template-rows:auto auto auto auto auto 1fr; grid-template-areas:'heading sidebar' 'video sidebar' 'stats sidebar' 'input sidebar' 'controls sidebar' 'help sidebar'; gap:0 24px; align-items:start; }
 #player>* { min-width:0; }
 .player-bar { grid-area:heading; flex-direction:row; align-items:center; flex-wrap:nowrap; min-height:60px; margin-bottom:14px; gap:12px; }
 .player-bar>.session-title { display:flex; align-items:center; min-width:0; gap:12px; }
@@ -29,7 +29,6 @@
 .stop-icon { display:block; width:12px; height:12px; background:var(--red); box-shadow:2px 2px #803849; }
 #stage { grid-area:video; width:100%; max-height:none; box-shadow:4px 4px #050a18; }
 .stats { grid-area:stats; gap:6px 16px; padding:12px 4px; }
-.connection-feedback { grid-area:feedback; }
 #input-only-hint { grid-area:input; }
 #controls { grid-area:controls; flex-wrap:wrap; justify-content:center; }
 #session-help { grid-area:help; }
@@ -70,7 +69,7 @@
   .player-actions button { width:48px; }
 }
 @media(max-width:900px) {
-  #player { grid-template-columns:minmax(0,1fr); grid-template-rows:none; grid-template-areas:'heading' 'video' 'stats' 'feedback' 'input' 'controls' 'sidebar' 'help'; }
+  #player { grid-template-columns:minmax(0,1fr); grid-template-rows:none; grid-template-areas:'heading' 'video' 'stats' 'input' 'controls' 'sidebar' 'help'; }
   #session-sidebar { margin:12px 0; }
   #session-sidebar [role=tabpanel] { min-height:0; }
   #playing-profile .settings-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -104,6 +103,7 @@
   #session-tabs button { flex-direction:column; gap:4px; min-height:64px; }
 }
 #player:fullscreen #stage,#player.theater #stage { touch-action:none; }
+#player:fullscreen .stage-banner,#player.theater .stage-banner { bottom:calc(16px + env(safe-area-inset-bottom, 0px)); left:50%; right:auto; transform:translateX(-50%); width:min(600px,calc(100% - 32px)); }
 #fullscreen-exit { position:absolute; top:calc(12px + env(safe-area-inset-top, 0px)); right:calc(12px + env(safe-area-inset-right, 0px)); z-index:3; min-height:48px; display:flex; align-items:center; gap:10px; background:#101a31e8; border-color:var(--accent); padding:10px 16px; }
 #player:not(:fullscreen):not(.theater) #fullscreen-exit { display:none; }
 
