@@ -5,13 +5,13 @@ export class Reconnect {
     this.count = 0;
     this.pending = null;
   }
-  schedule() {
+  schedule(minimumDelay = 0) {
     if (this.pending !== null) return true;
     if (this.count >= 5) return false;
     this.pending = this.timers.setTimeout(() => {
       this.pending = null;
       this.connect();
-    }, 500 * 2 ** this.count++);
+    }, Math.max(minimumDelay, 500 * 2 ** this.count++));
     return true;
   }
   reset() {

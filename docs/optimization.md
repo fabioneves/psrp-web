@@ -45,7 +45,15 @@ of playback of the synthetic test stream. These are local measurements, not
 Tesla or console-capture latency.
 
 A native decoder that stalls after producing frames now reconnects with the
-same codec instead of switching the session to Canvas software video.
+same codec instead of switching the session to Canvas software video. The
+stall check only counts while access units are still arriving: a gap in
+console delivery (a real PS5 session logged 170 frames missing over about
+2.8 seconds) must not tear the session down, because the console then reports
+"still occupied" for several seconds and the retries fail. Retries after a
+busy-console message wait at least three seconds. The smooth queue's stale
+threshold moved from 1.5 to 2.5 intervals after real-console playback showed
+paired frame arrivals; presenting both costs one interval of latency until the
+queue drains naturally, dropping one is visible during fast camera motion.
 
 ## Pixel conversion
 

@@ -119,7 +119,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
   const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
   if (!context) throw new Error('This browser does not support video drawing.');
   const pending = new Map();
-  let stopped = false, configuration, progressAt = null, waitingForKey = true, firstMedia = null, lastTimestamp = -1, everDecoded = false;
+  let stopped = false, configuration, progressAt = null, waitingForKey = true, firstMedia = null, lastTimestamp = -1, everDecoded = false, lastInputAt = null;
   let decoded = 0, drawn = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
   let start = performance.now();
   const frames = new FrameQueue(item => item.frame.close(), options.fps, options.pacing !== 'responsive');
@@ -187,7 +187,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     queue.push({ timestamp, mediaTimestamp, data, key: info.key });
   }
   const timer = setInterval(() => {
-    if (progressAt !== null && performance.now() - progressAt > 3000) {
+    if (progressAt !== null && performance.now() - progressAt > 3000 && lastInputAt !== null && performance.now() - lastInputAt < 1500) {
       options.onError?.('Video decoding stalled. Reconnecting…');
       return;
     }
@@ -204,6 +204,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
     write(data, timestamp) {
       if (stopped) return;
       bytesReceived += data.byteLength;
+      lastInputAt = performance.now();
       accessUnit(new Uint8Array(data), timestamp);
     },
     destroy() {

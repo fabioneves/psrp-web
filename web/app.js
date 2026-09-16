@@ -510,7 +510,8 @@ function reconnect(message, workerFailed = false) {
   if (sleepingHost && target.hostId === sleepingHost) { stop(); return; }
   if (workerFailed) forceMain = true;
   stop(true);
-  if (!retry.schedule()) { failConnection(`${message} Automatic reconnection stopped after five attempts. Disconnect and press Play when ready.`); return; }
+  const consoleBusy = /occupied|still active|in use|wait for it to close/i.test(message);
+  if (!retry.schedule(consoleBusy ? 3000 : 0)) { failConnection(`${message} Automatic reconnection stopped after five attempts. Disconnect and press Play when ready.`); return; }
   log.event('reconnect', { attempt: retry.count, message });
   $('stream-status').textContent = `Reconnecting · attempt ${retry.count}/5`;
   notify(message);

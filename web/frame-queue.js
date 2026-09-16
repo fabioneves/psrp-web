@@ -4,7 +4,7 @@ export class FrameQueue {
     this.interval = 1000 / fps;
     this.capacity = smooth ? 3 : 1;
     this.reserve = smooth ? this.interval : 0;
-    this.stale = smooth ? this.interval * 1.5 : 0;
+    this.stale = smooth ? this.interval * 2.5 : 0;
     this.frames = [];
     this.started = false;
     this.last = null;

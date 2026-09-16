@@ -14,6 +14,11 @@ test('retries back off, stop cancels pending retries, and failures have a limit'
   assert.equal(calls, 5);
   assert.equal(retry.schedule(), false);
   retry.reset();
+  retry.schedule(3000); assert.equal(delay, 3000, 'a busy console waits at least three seconds before the first retry'); queued();
+  retry.schedule(3000); assert.equal(delay, 3000); queued();
+  retry.schedule(3000); assert.equal(delay, 3000); queued();
+  retry.schedule(3000); assert.equal(delay, 4000, 'the exponential schedule takes over once it exceeds the minimum');
+  retry.reset();
   retry.schedule();
   retry.reset();
   assert.equal(queued, null);

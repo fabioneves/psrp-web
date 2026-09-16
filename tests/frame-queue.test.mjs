@@ -31,9 +31,12 @@ test('smooth pacing drains a burst back to one queued frame instead of carrying 
   const interval = 1000 / 60;
   for (let id = 0; id < 3; id++) queue.push({ id, savedAt: 0 });
   assert.equal(queue.take(interval).id, 0);
-  assert.equal(queue.take(2 * interval).id, 2, 'a frame that has waited 1.5 intervals behind a newer one is skipped');
+  assert.equal(queue.take(2 * interval).id, 1, 'a two-frame burst is presented in order rather than dropped');
+  assert.equal(queue.take(4 * interval).id, 2);
+  queue.push({ id: 3, savedAt: 0 }); queue.push({ id: 4, savedAt: 4 * interval });
+  assert.equal(queue.take(5 * interval).id, 4, 'a frame that has waited 2.5 intervals behind a newer one is skipped');
   assert.equal(queue.dropped, 1);
-  queue.push({ id: 3, savedAt: 2 * interval + 5 });
-  assert.equal(queue.take(5 * interval).id, 3, 'a lone late frame is never dropped');
+  queue.push({ id: 5, savedAt: 5 * interval + 5 });
+  assert.equal(queue.take(9 * interval).id, 5, 'a lone late frame is never dropped');
   assert.equal(queue.dropped, 1);
 });
