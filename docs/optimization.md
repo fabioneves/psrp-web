@@ -46,6 +46,21 @@ refreshes with no new frame, rebuilds and the display refresh interval. The
 simulated cost is about one extra refresh interval of latency in smooth mode;
 responsive mode is unchanged.
 
+### Cadence drift on 120 Hz displays (2026-09-16)
+
+A LAN capture from a MacBook with a 120 Hz display (refresh interval 8.3 ms
+in every sample) showed the console delivering 60 fps and the cushion never
+running dry, yet about one second in ten still had a 30 ms frame, each one
+coinciding with a cushion rebuild. Presenting every second refresh gives a
+16.6 ms cadence against the console's 16.67 ms, so the queue drained one
+frame every few seconds and the rebuild heuristic then held a whole frame.
+The queue now counts consecutive decision refreshes at which the cushion is
+low: a dip at one or two is jitter and the cushion frame is drawn; three in
+a row is drift and the queue waits a single refresh, 8 ms on a 120 Hz
+display and one frame on a 60 Hz one, so presentation re-aligns to
+arrivals. Simulations cover both refresh rates; the per-second depth
+window is gone.
+
 ### Worker presentation, audio priming and bitrate ceiling (2026-09-16)
 
 The worker renderer is only used when the worker reports animation frames

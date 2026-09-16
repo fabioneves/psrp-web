@@ -83,3 +83,34 @@ test('a burst drains in order, excess latency skips one frame, and a lone late f
   const metrics = queue.metrics();
   assert.deepEqual(Object.keys(metrics), ['pacingTarget', 'underruns', 'rebuilt']);
 });
+
+function simulateAt(refreshMs, arrivals, { seconds = 20, warmup = 2000 } = {}) {
+  const queue = new FrameQueue(() => {});
+  const presentedAt = [];
+  let index = 0;
+  for (let tick = 0; tick * refreshMs < seconds * 1000; tick++) {
+    const now = tick * refreshMs;
+    while (index < arrivals.length && arrivals[index].savedAt <= now) queue.push(arrivals[index++]);
+    if (queue.take(now)) presentedAt.push(now);
+  }
+  const intervals = presentedAt.filter(t => t >= warmup).map((t, i, all) => (i ? t - all[i - 1] : null)).filter(Boolean);
+  return { queue, intervals, presented: presentedAt.length };
+}
+
+test('a 120 Hz display absorbs the 60 fps cadence drift with 8 ms waits instead of full-frame repeats', () => {
+  const arrivals = Array.from({ length: 1300 }, (_, id) => ({ id, savedAt: id * (1000 / 60) + 3 }));
+  const { queue, intervals } = simulateAt(1000 / 120, arrivals);
+  assert.equal(queue.underruns, 0);
+  assert.equal(Math.max(...intervals) <= 25.1, true, `longest presented interval ${Math.max(...intervals).toFixed(1)} ms`);
+  assert.ok(intervals.filter(i => i > 20).length <= 6, `few 25 ms holds in 18 s, got ${intervals.filter(i => i > 20).length}`);
+  assert.equal(queue.dropped, 0);
+});
+
+test('a 60 Hz display whose refresh runs slightly fast holds one frame every few seconds instead of every second', () => {
+  const arrivals = Array.from({ length: 1300 }, (_, id) => ({ id, savedAt: id * (1000 / 60) + 3 }));
+  const { queue, intervals } = simulateAt(16.6, arrivals);
+  assert.equal(queue.underruns, 0);
+  const holds = intervals.filter(i => i > 30).length;
+  assert.ok(holds <= 6, `at most one hold per three seconds, got ${holds}`);
+  assert.equal(queue.dropped, 0);
+});

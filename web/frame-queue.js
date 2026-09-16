@@ -2,9 +2,9 @@
 //
 // Smooth mode keeps a cushion of `target` frames queued behind the one being drawn, so a frame
 // that arrives late by up to a refresh interval (or more, as the target grows) is still followed
-// by a new picture on every refresh. The cushion is rebuilt when it erodes (one deliberate held
-// refresh, at most every two seconds), grown after real underruns, and bounded so latency never
-// exceeds target + 2 frames. Sources that deliver fewer frames than the refresh rate are left
+// by a new picture on every refresh. When the cushion runs low the queue waits one refresh so the
+// cadence re-aligns to arrivals, grows the target after real underruns, and bounds latency so it
+// never exceeds target + 2 frames. Sources that deliver fewer frames than the refresh rate are left
 // alone: repeats are then inherent and adding cushion would only add latency.
 //
 // Responsive mode keeps nothing queued and presents the newest frame immediately.
@@ -21,8 +21,8 @@ export class FrameQueue {
     this.started = false;
     this.last = null;
     this.dropped = 0; this.underruns = 0; this.rebuilt = 0;
-    this.arrivals = []; this.depths = [];
-    this.underrunAt = -Infinity; this.rebuiltAt = -Infinity; this.calmSince = null;
+    this.arrivals = []; this.lowTicks = 0;
+    this.underrunAt = -Infinity; this.calmSince = null;
   }
   push(frame) {
     while (this.frames.length >= this.capacity) {
@@ -40,15 +40,18 @@ export class FrameQueue {
     }
     if (!this.started) {
       if (this.frames.length <= this.target && now - this.frames[0].savedAt < (this.target + 1) * this.interval) return null;
-      this.started = true;
+      this.started = true; this.calmSince = now;
     }
     if (this.last != null && now - this.last < this.interval - 2) return null;
+    if (this.calmSince != null && now - this.calmSince > 60000 && this.target > 1) { this.target--; this.calmSince = now; }
     this.trim(now);
-    const depth = this.frames.length;
-    this.depths.push({ at: now, depth });
-    while (this.depths.length && now - this.depths[0].at > 1500) this.depths.shift();
-    if (depth > this.target + 2) { this.release(this.frames.shift()); this.dropped++; }
-    if (this.needsRebuild(now)) { this.rebuiltAt = now; this.rebuilt++; return null; }
+    if (this.frames.length > this.target + 2) { this.release(this.frames.shift()); this.dropped++; }
+    // A momentary dip below the cushion is jitter, and drawing the cushion frame is what it is for. A
+    // cushion that stays low at three consecutive refreshes is cadence drift: wait one more refresh so
+    // presentation re-aligns to arrivals (8 ms at 120 Hz, one frame at 60 Hz) instead of draining and
+    // repeating a picture later.
+    this.lowTicks = this.frames.length <= this.target ? this.lowTicks + 1 : 0;
+    if (this.lowTicks >= 3 && this.last != null && now - this.last < this.interval * 1.5 && this.keepingUp(now)) { this.lowTicks = 0; this.rebuilt++; return null; }
     this.last = now;
     return this.frames.shift();
   }
@@ -61,15 +64,6 @@ export class FrameQueue {
       this.target++;
       this.underrunAt = now;
     }
-  }
-  needsRebuild(now) {
-    if (now - this.rebuiltAt < 2000 || !this.keepingUp(now)) return false;
-    if (this.calmSince == null) this.calmSince = now;
-    if (now - this.calmSince > 60000 && this.target > 1) { this.target--; this.calmSince = now; }
-    // Momentary dips are what the cushion is for; rebuild only when a whole second never reached it.
-    const recent = this.depths.filter(sample => now - sample.at <= 1000);
-    if (recent.length < this.fps * 0.8) return false;
-    return Math.max(...recent.map(sample => sample.depth)) < this.target + 1;
   }
   keepingUp(now) {
     while (this.arrivals.length && now - this.arrivals[0] > 1000) this.arrivals.shift();
