@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readGamepad, selectGamepad } from '../web/gamepad.js';
+import { readGamepad, selectGamepad, pollGamepads, describeSnapshot } from '../web/gamepad.js';
 import { InputState } from '../web/input.js';
 
 const pad = (id = 'DualSense', index = 0) => ({ id, index, connected: true, mapping: 'standard',
@@ -52,4 +52,26 @@ test('gamepad snapshots preserve keyboard ownership and release analog input on 
   assert.deepEqual(sent.at(-1), { type: 'triggers', l2: 0, r2: 0 });
   input.release('key');
   assert.deepEqual(sent.at(-1), { type: 'button', button: 'CROSS', pressed: false });
+});
+
+test('polling reports the controller and a live preview before playback, and only sends input while enabled', () => {
+  const device = pad('DualSense Wireless Controller (STANDARD GAMEPAD Vendor: 054c Product: 0ce6)');
+  let tick, enabled = false, focused = false;
+  const reports = [], snapshots = [];
+  const environment = { navigator: { getGamepads: () => [device] }, document: { hasFocus: () => focused },
+    setInterval(fn) { tick = fn; return 1; }, clearInterval() {} };
+  const state = { pad: null, gamepad(snapshot) { this.pad = snapshot; snapshots.push(snapshot); } };
+  pollGamepads(state, () => enabled, () => ({}), (status, preview) => reports.push([status, preview]), environment);
+  tick();
+  assert.match(reports.at(-1)[0], /Controller 0: DualSense.*click the page to send input/);
+  assert.equal(reports.at(-1)[1], 'Controller idle. Press a button or move a stick to test it.');
+  device.buttons[0].pressed = true; device.axes = [0.5, 0, 0, 0];
+  tick();
+  assert.equal(reports.at(-1)[1], 'Pressed: CROSS · L 0.43, 0.00');
+  assert.deepEqual(snapshots.filter(Boolean), [], 'nothing is sent to the console before playback');
+  focused = true; enabled = true;
+  tick();
+  assert.deepEqual(snapshots.at(-1).buttons, ['CROSS']);
+  assert.doesNotMatch(reports.at(-1)[0], /click the page/);
+  assert.equal(describeSnapshot(null), '');
 });

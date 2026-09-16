@@ -33,7 +33,11 @@ const settings = () => ({ mode: $('controller-mode').value, index: $('controller
   swap: $('controller-swap').value, deadZone: Number($('dead-zone').value),
   invertAB: $('invert-ab').checked, invertXY: $('invert-xy').checked });
 const gamepads = pollGamepads(resetInputs.state, () => playing && !document.hidden && document.hasFocus(),
-  settings, text => $('controller-status').textContent = text);
+  settings, (text, preview = '') => { $('controller-status').textContent = text; $('controller-preview').textContent = preview; });
+for (const type of ['gamepadconnected', 'gamepaddisconnected']) window.addEventListener(type, event => {
+  log.event(type, { id: event.gamepad?.id, index: event.gamepad?.index, mapping: event.gamepad?.mapping, buttons: event.gamepad?.buttons?.length, axes: event.gamepad?.axes?.length });
+  gamepads.reset();
+});
 try {
   if (localStorage.getItem('remote-play:video-mode') === null && localStorage.getItem('remote-play:hardware-acceleration') === 'false')
     $('video-mode').value = 'mpeg1';

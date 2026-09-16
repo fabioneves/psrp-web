@@ -31,24 +31,35 @@ export function selectGamepad(pads, options = {}) {
   return available.find(pad => !virtual(pad.id)) ?? available[0] ?? null;
 }
 
+export function describeSnapshot(snapshot) {
+  if (!snapshot) return '';
+  const sticks = [['L', snapshot.left], ['R', snapshot.right]].filter(([, stick]) => stick.x || stick.y).map(([name, stick]) => `${name} ${stick.x.toFixed(2)}, ${stick.y.toFixed(2)}`);
+  const triggers = [['L2', snapshot.l2], ['R2', snapshot.r2]].filter(([, value]) => value > 0).map(([name, value]) => `${name} ${value.toFixed(2)}`);
+  const parts = [...snapshot.buttons, ...sticks, ...triggers];
+  return parts.length ? `Pressed: ${parts.join(' · ')}` : 'Controller idle. Press a button or move a stick to test it.';
+}
+
 export function pollGamepads(state, enabled, settings, report, environment = globalThis) {
-  let signature = '', status = '', timer;
+  let signature = '', status = '', preview = '', timer;
   const tick = () => {
-    let next = '', snapshot = null;
+    let next = '', snapshot = null, seen = null;
+    const active = enabled();
     try {
-      if (enabled()) {
-        if (typeof environment.navigator.getGamepads !== 'function') next = 'Gamepad API unavailable. Try HTTPS or attach another device.';
-        else {
-          const pads = environment.navigator.getGamepads();
-          const pad = selectGamepad(pads, settings());
-          snapshot = pad ? readGamepad(pad, settings()) : null;
-          next = pad ? `Controller ${pad.index}: ${pad.id}${pad.mapping !== 'standard' ? ' · nonstandard mapping' : ''}` : 'Press a controller button to activate it.';
-        }
+      if (typeof environment.navigator.getGamepads !== 'function') next = 'Gamepad API unavailable. Try HTTPS or attach another device.';
+      else {
+        const pads = environment.navigator.getGamepads();
+        const pad = selectGamepad(pads, settings());
+        seen = pad ? readGamepad(pad, settings()) : null;
+        if (active) snapshot = seen;
+        next = pad ? `Controller ${pad.index}: ${pad.id}${pad.mapping !== 'standard' ? ' · nonstandard mapping' : ''}${active ? '' : environment.document?.hasFocus?.() === false ? ' · click the page to send input' : ' · input starts with playback'}`
+          : 'No controller detected. Press a controller button to activate it.';
       }
     } catch { next = 'Controller access blocked. Try HTTPS or attach another device.'; }
     const value = JSON.stringify(snapshot);
     if (signature !== value || JSON.stringify(state.pad) !== value) { signature = value; state.gamepad(snapshot); }
     if (status !== next) { status = next; report(next); }
+    const shown = describeSnapshot(seen);
+    if (preview !== shown) { preview = shown; report(next, shown); }
   };
   timer = environment.setInterval(tick, 1000 / 60);
   return {

@@ -147,7 +147,7 @@
         <div class="hud-group hud-video" role="group" aria-label="Video metrics"><div class="hud-heading"><span>● LIVE TELEMETRY</span><span id="hud-codec">—</span></div>
         <div class="hud-hero"><strong id="hud-fps">—</strong><span><span class="hud-fps-label">FPS</span><br class="hud-break"><small id="hud-size">—</small></span><svg id="fps-chart" viewBox="0 0 180 44" role="img" aria-label="Last 30 seconds of frame rate"><path d="M0 8H180M0 36H180" class="chart-grid"/><polyline id="fps-history" points=""/></svg></div></div>
         <div class="hud-grid">
-          <div class="hud-group hud-network" role="group" aria-label="Network metrics"><span class="hud-group-title">NET</span><dl><div><dt data-short="RTT">Network RTT</dt><dd id="hud-rtt"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Rate">Bitrate</dt><dd id="hud-bitrate">—</dd></div><div><dt data-short="Jitter">Arrival p95 / max</dt><dd id="hud-jitter"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Loss">Console loss / s</dt><dd id="hud-loss">—</dd></div></dl></div>
+          <div class="hud-group hud-network" role="group" aria-label="Network metrics"><span class="hud-group-title">NET</span><dl><div><dt data-short="RTT">Network RTT</dt><dd id="hud-rtt"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Rate">Bitrate</dt><dd id="hud-bitrate"><span class="value">—</span><span class="unit"> Mbps</span></dd></div><div><dt data-short="Jitter">Arrival p95 / max</dt><dd id="hud-jitter"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Loss">Console loss / s</dt><dd id="hud-loss"><span class="long">—</span><span class="short">—</span></dd></div></dl></div>
           <div class="hud-group hud-timing" role="group" aria-label="Timing metrics"><span class="hud-group-title">TIME</span><dl><div><dt data-short="Age*">Video age*</dt><dd id="hud-age" aria-describedby="hud-age-note"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="p95">Frame p95</dt><dd id="hud-pacing"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Max">Frame max</dt><dd id="hud-max"><span class="value">—</span><span class="unit"> ms</span></dd></div><div><dt data-short="Stall">Stalls / s</dt><dd id="hud-stall">—</dd></div><div><dt data-short="Dec/draw">Decode / draw</dt><dd id="hud-decode"><span class="value">—</span><span class="unit"> ms</span></dd></div></dl></div>
           <div class="hud-group hud-sound" role="group" aria-label="Audio metrics"><span class="hud-group-title">SND</span><dl><div><dt data-short="Queue">Audio queue</dt><dd id="hud-audio"><span class="value">—</span><span class="unit"> ms</span></dd></div></dl><p id="hud-health">Waiting for audio</p></div>
         </div>
@@ -177,6 +177,7 @@
         </div>
         <div id="input-panel" role="tabpanel" aria-labelledby="input-tab" hidden>
       <p id="controller-status" role="status"></p>
+      <p id="controller-preview" class="hint controller-preview" aria-live="polite"></p>
       <p id="attached-status" role="status"></p>
       <section class="controller-settings"><h3>Controller preferences</h3>
         <div class="settings-grid">
@@ -188,7 +189,7 @@
           <label class="check"><input id="invert-xy" type="checkbox">Swap Square / Triangle</label>
           <label class="check"><input id="keep-awake" type="checkbox" checked>Keep screen awake</label>
         </div>
-        <p class="hint">Press a controller button to expose it to the browser. Select an index if several controllers are connected. Controller access depends on browser permissions; use HTTPS if blocked.</p>
+        <p class="hint">Press a controller button to expose it to the browser; the line above then shows what the browser reads, even before you play. Input only reaches the console while this page has focus, so click the video once after switching windows. Select an index if several controllers are connected. Controller access depends on browser permissions; use HTTPS if blocked.</p>
         <p id="browser-diagnostics" class="hint"></p>
       </section>
       <details><summary>Keyboard controls</summary><p>Arrows: D-pad · WASD: move · IJKL: look · X: cross · C: circle · Z: square · V: triangle · Q/E: L1/R1 · 1/3: L2/R2 · Enter: options · Backspace: share · Space: PS · 2/4: L3/R3 · T: touchpad.</p><p>Inputs release automatically when focus is lost. Some games require touch gestures or motion sensors, which are not supported.</p></details>

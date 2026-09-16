@@ -611,6 +611,14 @@ main {
   padding:16px;
   border-bottom:2px solid var(--line);
 }
+.controller-preview {
+  font-family:ui-monospace,monospace;
+  color:var(--accent);
+  min-height:1.5em;
+}
+.controller-preview:empty {
+  display:none;
+}
 #audio-status,#controller-status,#attached-status {
   font-size:.78rem;
   overflow-wrap:anywhere;

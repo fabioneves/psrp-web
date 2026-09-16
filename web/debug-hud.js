@@ -4,7 +4,8 @@ const set = (id, text) => { const element = $(id); (element.querySelector('.valu
 let history = [], video = null, audio = null, console_ = null;
 export function resetHud() {
   history = []; video = audio = console_ = null;
-  for (const id of ['hud-fps', 'hud-codec', 'hud-size', 'hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-max', 'hud-decode', 'hud-audio', 'hud-loss', 'hud-jitter', 'hud-stall']) set(id, '—');
+  for (const id of ['hud-fps', 'hud-codec', 'hud-size', 'hud-rtt', 'hud-age', 'hud-bitrate', 'hud-pacing', 'hud-max', 'hud-decode', 'hud-audio', 'hud-jitter', 'hud-stall']) set(id, '—');
+  for (const span of $('hud-loss').querySelectorAll('span')) span.textContent = '—';
   $('fps-history').setAttribute('points', '');
   $('hud-health').textContent = 'Waiting for audio';
 }
@@ -23,7 +24,7 @@ export function updateHud(message, codec) {
     $('hud-size').textContent = `${video.width} × ${video.height}`;
     set('hud-rtt', ms(video.rttMs));
     set('hud-age', ms(video.videoAgeMs));
-    $('hud-bitrate').textContent = `${video.mbps.toFixed(1)} Mbps`;
+    set('hud-bitrate', video.mbps.toFixed(1));
     set('hud-pacing', ms(video.frameP95Ms));
     set('hud-max', ms(video.frameMaxMs));
     set('hud-jitter', `${ms(video.arrivalP95Ms)} / ${ms(video.arrivalMaxMs)}`);
@@ -32,7 +33,10 @@ export function updateHud(message, codec) {
     $('fps-history').setAttribute('points', history.map((fps, index) => `${index * 180 / 29},${42 - Math.max(0, Math.min(65, fps)) / 65 * 40}`).join(' '));
   }
   if (audio) set('hud-audio', String(Math.round(audio.bufferedMs)));
-  if (console_) $('hud-loss').textContent = `${console_.lost} pkt · ${console_.dropped + console_.frozen} frm · ${console_.idr} IDR`;
+  if (console_) {
+    $('hud-loss').querySelector('.long').textContent = `${console_.lost} pkt · ${console_.dropped + console_.frozen} frm · ${console_.idr} IDR`;
+    $('hud-loss').querySelector('.short').textContent = `${console_.lost} pkt · ${console_.idr} IDR`;
+  }
   $('hud-health').textContent = `${audio?.underruns ?? 0} underruns`;
 }
 export async function copyDiagnostics() {
