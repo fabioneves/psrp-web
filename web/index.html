@@ -122,6 +122,7 @@
     <section id="player" hidden>
       <div class="player-bar"><div class="session-title"><img src="/art/console.svg" width="36" height="40" alt=""><div><strong id="stream-title">Remote Play</strong><span id="stream-status" role="status">Connecting…</span></div></div><div class="player-actions"><button id="fullscreen" aria-label="Full screen" title="Full screen"><img src="/art/fullscreen.svg" width="20" height="20" alt=""><span>Full screen</span></button><button id="stop" class="danger" aria-label="Disconnect" title="Disconnect"><span class="stop-icon" aria-hidden="true"></span><span>Disconnect</span></button></div></div>
       <div id="stage"><canvas id="screen" width="1280" height="720" aria-label="PlayStation video stream"></canvas><div id="connecting">Preparing video…</div>
+      <button id="fullscreen-exit" hidden><img src="/art/fullscreen.svg" width="20" height="20" alt="">Exit fullscreen</button>
       <aside id="debug-overlay" aria-label="Stream debug overlay" hidden>
         <div class="hud-heading"><span>● LIVE TELEMETRY</span><span id="hud-codec">—</span></div>
         <div class="hud-hero"><strong id="hud-fps">—</strong><span><span class="hud-fps-label">FPS</span><br class="hud-break"><small id="hud-size">—</small></span><svg id="fps-chart" viewBox="0 0 180 44" role="img" aria-label="Last 30 seconds of frame rate"><path d="M0 8H180M0 36H180" class="chart-grid"/><polyline id="fps-history" points=""/></svg></div>
@@ -135,7 +136,7 @@
       <aside id="session-sidebar" aria-label="Session settings">
         <div class="deck-heading"><div><p class="eyebrow">PLAYER ONE / LIVE</p><h2>Control deck</h2></div><img src="/art/session-deck.svg" width="100" height="40" alt=""></div>
         <div class="quick-switches"><label class="check switch-card"><input type="checkbox" id="show-controls">Touch controls</label><label class="check switch-card"><input type="checkbox" id="debug-mode">Debug HUD</label></div>
-        <div id="hud-settings" class="hud-settings" hidden><label>HUD layout<select id="hud-style"><option value="detailed" selected>Detailed</option><option value="minimal">Minimal</option><option value="horizontal">Horizontal</option></select></label><p class="hint">Shift+H cycles layouts during fullscreen.</p></div>
+        <div id="hud-settings" class="hud-settings" hidden><label>HUD layout<select id="hud-style"><option value="detailed" selected>Detailed</option><option value="minimal">Minimal</option><option value="horizontal">Horizontal</option></select></label><p class="hint">Swipe left / right or press Shift+H to change layouts in fullscreen.</p></div>
         <div id="session-tabs" role="tablist" aria-label="Session settings">
           <button id="picture-tab" role="tab" aria-controls="picture-panel" aria-selected="true"><img src="/art/codec-canvas.svg" width="22" height="22" alt="">Picture</button>
           <button id="sound-tab" role="tab" aria-controls="sound-panel" aria-selected="false" tabindex="-1"><img src="/art/sound.svg" width="22" height="22" alt="">Sound</button>
@@ -187,7 +188,7 @@
         </div></div>
       </div>
       <div id="session-help">
-      <p class="hint fullscreen-help">Fullscreen: Esc or double-tap the picture to exit · Shift+D toggles debug · Touch controls are optional.</p>
+      <p class="hint fullscreen-help">Fullscreen: swipe down or double-tap to exit · Tap for the exit button when touch controls are off · Esc also exits · 2-finger tap: debug · 3-finger tap: touch controls · Swipe left / right: HUD layout · Shift+D: debug.</p>
       <details id="stream-diagnostics"><summary>Stream diagnostics</summary><p id="timing-status">Measuring stream timing…</p><p id="render-status"></p><p class="hint">Timing starts when media is ready on the server. Console capture and physical display delay are not measured.</p></details></div>
     </section>
     <p id="message" role="status" aria-live="polite" hidden></p>

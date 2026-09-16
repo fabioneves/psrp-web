@@ -86,8 +86,10 @@ test('theater fallback keeps fullscreen clean and touch gestures can exit it', a
   await expect(page.locator('#player')).toHaveClass(/theater/);
   await expect(page.locator('.player-bar')).toBeHidden();
   await expect(page.getByRole('button', { name: 'D-pad up', exact: true })).toBeVisible();
-  await page.locator('#screen').dispatchEvent('pointerup', { pointerType: 'touch' });
-  await page.locator('#screen').dispatchEvent('pointerup', { pointerType: 'touch' });
+  for (let tap = 0; tap < 2; tap++) {
+    await page.locator('#screen').dispatchEvent('pointerdown', { pointerType: 'touch', pointerId: 1, isPrimary: true });
+    await page.locator('#screen').dispatchEvent('pointerup', { pointerType: 'touch', pointerId: 1, isPrimary: true });
+  }
   await expect(page.locator('#player')).not.toHaveClass(/theater/);
   await expect(page.locator('#connection-message')).toHaveText('Test console busy.');
   await page.locator('#stop').click();

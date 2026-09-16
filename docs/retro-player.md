@@ -57,3 +57,13 @@ HUD layout buttons are revealed when debug is enabled and saved with the other b
 ### Refinement validation
 
 The 59-case browser suite passed after the control deck changes, including H.264/Canvas playback, audio, profile changes, connection recovery, saved login and input-only sessions. After adding HUD layouts and final mobile spacing, all 14 targeted UI/connection cases passed, bringing coverage to 60 unique browser cases. The HUD test checks live metrics, transparent backgrounds, compact bounds at 320 px, persistence, fullscreen switching and no extra stream tickets. All 37 JavaScript tests passed. Screenshots were inspected for all three HUDs and desktop/mobile layouts. All synthetic streams used the isolated Compose project.
+
+## Touch fullscreen exits
+
+A single-finger downward swipe of at least 80 CSS pixels exits fullscreen when vertical travel is more than twice horizontal travel and the gesture finishes within one second. Short, upward and multi-finger gestures do not exit. A horizontal swipe changes the HUD layout only while debug is enabled. Fullscreen video disables browser panning so pointer events remain available; gestures starting on controller buttons or HUD actions are excluded. Normal page scrolling is unchanged.
+
+When touch controls are off, tapping fullscreen video reveals a 48 px minimum-height Exit fullscreen button for five seconds. Double-tap and Escape still exit. Leaving fullscreen, disconnecting, losing focus or changing touch controls clears the temporary button. Native and theater modes share the gesture handler.
+
+Two-finger taps toggle the debug overlay; three-finger taps toggle touch controls. These gestures require all fingers to lift within 400 ms with no finger moving more than 18 CSS pixels. Four or more fingers, canceled touches and moving multi-finger gestures do nothing. Left/right single-finger swipes cycle HUD layouts while debug is on. All settings changes use the same saved preferences as the buttons and do not reconnect playback. The gesture handler suppresses synthetic mouse clicks from touch so a multi-finger tap cannot accidentally trigger double-click fullscreen exit.
+
+Final gesture validation: 20 UI/connection browser tests and 37 JavaScript tests passed. Six browser touch cases cover native fullscreen and theater mode, swipe direction/distance, multi-finger and canceled gestures, controller buttons, the timed exit button, two/three-finger toggles, HUD cycling, persistence and no extra connection tickets. Browser touch events were injected through Chrome DevTools; physical iPhone/Tesla validation remains a device check.

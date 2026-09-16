@@ -1,3 +1,4 @@
+import { bindFullscreenGestures } from './fullscreen-gestures.js';
 import { bindChoiceButtons } from './choice-buttons.js';
 import { bindSessionTabs } from './session-tabs.js';
 import { updateHud, resetHud, copyDiagnostics } from './debug-hud.js';
@@ -506,6 +507,7 @@ function stop(preserveTarget = false) {
   }
   stream?.close(); stream = null;
   if (preserveTarget) return;
+  resetFullscreenGestures();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
   $('player').classList.remove('theater');
   $('library-profile').append($('profile-settings'));
@@ -516,7 +518,7 @@ function stop(preserveTarget = false) {
 $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true));
 $('stop').onclick = () => stop();
 $('retry-stream').onclick = () => { retry.reset(); void connect(); };
-$('show-controls').onchange = () => { resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
+$('show-controls').onchange = () => { resetFullscreenGestures(); resetInputs(); gamepads.reset(); $('controls').hidden = !$('show-controls').checked; };
 $('controls').hidden = !$('show-controls').checked;
 async function enterFullscreen() {
   if ($('player').hidden || document.fullscreenElement === $('player')) return;
@@ -545,30 +547,36 @@ $('debug-mode').onchange = updateDebug;
 $('hud-style').onchange = updateDebug;
 updateDebug();
 $('copy-debug').onclick = () => run($('copy-debug'), copyDiagnostics, false);
-let lastTouch = 0;
-$('stage').addEventListener('pointerup', event => {
-  if (event.pointerType !== 'touch' || event.target.id !== 'screen') return;
-  const now = performance.now();
-  if (now - lastTouch < 350 && (document.fullscreenElement || $('player').classList.contains('theater'))) {
-    event.preventDefault(); lastTouch = 0; void toggleFullscreen();
-  } else lastTouch = now;
+function togglePreference(id) {
+  $(id).checked = !$(id).checked;
+  $(id).dispatchEvent(new Event('change', { bubbles: true }));
+}
+function cycleHud(direction = 1) {
+  const choices = $('hud-style');
+  choices.selectedIndex = (choices.selectedIndex + direction + choices.options.length) % choices.options.length;
+  choices.dispatchEvent(new Event('change', { bubbles: true }));
+}
+const resetFullscreenGestures = bindFullscreenGestures($('stage'), {
+  isFullscreen: () => !!document.fullscreenElement || $('player').classList.contains('theater'),
+  exitFullscreen: toggleFullscreen,
+  touchControlsEnabled: () => $('show-controls').checked,
+  debugEnabled: () => $('debug-mode').checked,
+  toggleTouchControls: () => togglePreference('show-controls'),
+  toggleDebugHud: () => togglePreference('debug-mode'),
+  cycleHud,
+  exitButton: $('fullscreen-exit')
 });
-$('stage').ondblclick = () => {
-  if (document.fullscreenElement || $('player').classList.contains('theater')) void toggleFullscreen();
-};
 document.addEventListener('keydown', event => {
   if (event.target.closest('input,select,textarea') || event.repeat) return;
-  if (event.code === 'Escape') $('player').classList.remove('theater');
+  if (event.code === 'Escape') { resetFullscreenGestures(); $('player').classList.remove('theater'); }
   if (event.shiftKey && event.code === 'KeyH' && !$('player').hidden && $('debug-mode').checked) {
     event.preventDefault(); event.stopPropagation();
-    $('hud-style').selectedIndex = ($('hud-style').selectedIndex + 1) % $('hud-style').options.length;
-    $('hud-style').dispatchEvent(new Event('change', { bubbles: true }));
+    cycleHud();
   }
   if (event.shiftKey && event.code === 'KeyD' && !$('player').hidden) {
     event.preventDefault();
     event.stopPropagation();
-    $('debug-mode').checked = !$('debug-mode').checked;
-    $('debug-mode').dispatchEvent(new Event('change', { bubbles: true }));
+    togglePreference('debug-mode');
   }
 });
 window.addEventListener('pagehide', () => stop());
