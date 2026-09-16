@@ -186,20 +186,25 @@ main {
   max-width:1440px;
   margin:auto;
   padding:32px 4vw 52px;
-  min-height:calc(100vh - 160px);
+  min-height:100vh;
+}
+main:has(#account:not([hidden])) {
+  display:grid;
+  align-content:center;
+  padding-top:24px;
+  padding-bottom:24px;
 }
 .account-layout {
   display:grid;
   grid-template-columns:1.3fr 1fr;
   gap:8%;
   align-items:center;
-  min-height:70vh;
+  min-height:min(70vh,760px);
   background:url('/art/console-room.webp') no-repeat left bottom / auto 100%;
   padding:40px;
 }
 .intro {
-  align-self:start;
-  padding-top:35px;
+  align-self:center;
 }
 .intro h1 {
   font-size:clamp(2.8rem,5vw,4.5rem);
@@ -721,16 +726,6 @@ button.primary[aria-busy=true]::after {
   font-size:1.1rem;
   line-height:1;
 }
-footer {
-  border-top:2px solid var(--line);
-  padding:20px 4vw;
-  color:var(--muted);
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  font:.65rem/1.6 monospace;
-  letter-spacing:.04em;
-}
 #setup-dialog,#console-dialog {
   width:min(640px,calc(100vw - 32px));
   max-height:calc(100dvh - 40px);
@@ -1107,6 +1102,22 @@ footer {
     max-width:65%;
   }
 }
+@media(max-height:720px) and (min-width:681px) {
+  main:has(#account:not([hidden])) {
+    padding-top:8px;
+    padding-bottom:8px;
+  }
+  .account-layout {
+    min-height:0;
+    padding:12px 40px;
+  }
+  #auth-form {
+    padding:18px 24px;
+  }
+  #auth-form label {
+    margin:8px 0;
+  }
+}
 @media(max-width:680px) {
   main {
     padding:22px 16px 36px;
@@ -1220,9 +1231,6 @@ footer {
   }
   .settings-grid {
     gap:10px;
-  }
-  footer {
-    flex-direction:column;
   }
   #setup-dialog {
     padding:20px;

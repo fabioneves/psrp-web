@@ -10,8 +10,8 @@ static class DiscoveryTests
     public static async Task RunAsync(Action<bool, string> check)
     {
         check(DeviceDiscoveryService.FormatRegistKey(Convert.ToHexString(Encoding.ASCII.GetBytes("89abcdef\0\0\0\0\0\0\0\0"))) == "2309737967", "wake credentials decode padded registration keys as unsigned hexadecimal");
-        var hosts = DiscoverySubnets.Parse("192.0.2.20/24,192.168.1.0/24");
-        check(hosts.Count == 254 && hosts.Contains(IPAddress.Parse("192.0.2.20")) &&
+        var hosts = DiscoverySubnets.Parse("192.168.1.20/24,192.168.1.0/24");
+        check(hosts.Count == 254 && hosts.Contains(IPAddress.Parse("192.168.1.20")) &&
             !hosts.Contains(IPAddress.Parse("192.168.1.0")) && !hosts.Contains(IPAddress.Parse("192.168.1.255")),
             "subnet discovery normalizes and deduplicates ranges without probing network or broadcast addresses");
         check(DiscoverySubnets.Parse(null).Count == 0, "unconfigured discovery retains the broadcast path");
