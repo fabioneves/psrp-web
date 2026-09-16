@@ -18,28 +18,24 @@ static class HevcTests
         receiver.OnVideoPacket([2, 0, 0, 1, 2, 1, 9]);
         check(!receiver.Packets.TryRead(out _), "HEVC delta pictures wait for random access");
         receiver.OnVideoPacket([2, 0, 0, 0, 1, 0x26, 1, 9]);
-        check(receiver.Packets.TryRead(out var header) && header[4] == 0x40 && receiver.Packets.TryRead(out var frame) && frame[4] == 0x26, "HEVC IDR is delivered after VPS/SPS/PPS headers");
+        check(receiver.Packets.TryRead(out var header) && header.Data[4] == 0x40 && receiver.Packets.TryRead(out var frame) && frame.Data[4] == 0x26, "HEVC IDR is delivered after VPS/SPS/PPS headers");
         check(SoftwareReceiver.ContainsIdr([0, 0, 1, 0x2a, 1], "hevc") && !SoftwareReceiver.ContainsIdr([0, 0, 1, 0x26], "hevc"), "HEVC CRA is accepted and truncated NAL headers are rejected");
         using var source = SoftwareTranscoder.Start(["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=60",
             "-frames:v", "6", "-c:v", "libx265", "-preset", "ultrafast", "-tune", "zerolatency",
-            "-x265-params", "pools=1:frame-threads=1:log-level=error", "-f", "hevc", "pipe:1"]);
+            "-x265-params", "pools=1:frame-threads=1:log-level=error:aud=1", "-f", "hevc", "pipe:1"]);
         var sourceErrors = source.StandardError.ReadToEndAsync();
         using var raw = new MemoryStream();
         await source.StandardOutput.BaseStream.CopyToAsync(raw);
         await source.WaitForExitAsync();
         check(source.ExitCode == 0, "real HEVC test encoder succeeds: " + await sourceErrors);
-        using var remux = SoftwareTranscoder.Start(SoftwareTranscoder.BuildArguments(10000, "720p", 60, "h265"));
-        using var transport = new MemoryStream();
-        var drain = remux.StandardOutput.BaseStream.CopyToAsync(transport);
-        var errors = remux.StandardError.ReadToEndAsync();
         using var encodedReceiver = new SoftwareReceiver(32, "hevc");
-        encodedReceiver.OnVideoPacket([2, .. raw.ToArray()]);
-        while (encodedReceiver.Packets.TryRead(out var packet)) await remux.StandardInput.BaseStream.WriteAsync(packet);
-        remux.StandardInput.Close();
-        await drain;
-        await remux.WaitForExitAsync();
-        check(remux.ExitCode == 0 && transport.Length > 188, "HEVC passes the console receiver and MPEG-TS remuxer: " + await errors);
-        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".ts");
+        raw.Position = 0;
+        await AccessUnitSplitter.PumpAsync(raw, encodedReceiver, "h265", CancellationToken.None);
+        using var transport = new MemoryStream();
+        var units = 0;
+        while (encodedReceiver.Packets.TryRead(out var unit)) { transport.Write(unit.Data); units++; }
+        check(units == 6 && transport.Length == raw.Length, "HEVC generator output is split into six intact access units through the console receiver");
+        var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".hevc");
         await File.WriteAllBytesAsync(path, transport.ToArray());
         try
         {
@@ -49,7 +45,7 @@ static class HevcTests
             using var metadata = JsonDocument.Parse(await probe.StandardOutput.ReadToEndAsync());
             await probe.WaitForExitAsync();
             var video = metadata.RootElement.GetProperty("streams")[0];
-            check(probe.ExitCode == 0 && video.GetProperty("codec_name").GetString() == "hevc" && video.GetProperty("width").GetInt32() == 1280 && video.GetProperty("height").GetInt32() == 720 && video.GetProperty("nb_read_frames").GetString() == "6", "remuxed HEVC decodes all six real 720p frames without transcoding");
+            check(probe.ExitCode == 0 && video.GetProperty("codec_name").GetString() == "hevc" && video.GetProperty("width").GetInt32() == 1280 && video.GetProperty("height").GetInt32() == 720 && video.GetProperty("nb_read_frames").GetString() == "6", "forwarded HEVC access units decode as six real 720p frames");
         }
         finally { File.Delete(path); }
     }

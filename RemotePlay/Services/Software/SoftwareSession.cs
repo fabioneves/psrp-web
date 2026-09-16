@@ -38,18 +38,20 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         {
             await SendStatus(socket, "Connecting", ct, sendGate: sendGate);
             var profile = VideoProfile.Create(grant.Resolution, grant.Fps);
-            transcoder = new SoftwareTranscoder(grant.BitrateKbps, grant.Resolution, grant.Fps, grant.VideoCodec);
-            Task feed;
+            var native = grant.VideoCodec != "mpeg1";
+            transcoder = native ? null : new SoftwareTranscoder(grant.BitrateKbps, grant.Resolution, grant.Fps);
+            Task? feed = null;
             if (grant.Demo)
             {
                 var encoderOptions = grant.VideoCodec == "h265"
-                    ? new[] { "-c:v", "libx265", "-x265-params", "pools=1:frame-threads=1:log-level=error:repeat-headers=1" }
-                    : new[] { "-c:v", "libx264" };
+                    ? new[] { "-c:v", "libx265", "-x265-params", "pools=1:frame-threads=1:log-level=error:repeat-headers=1:aud=1" }
+                    : new[] { "-c:v", "libx264", "-x264-params", "aud=1" };
                 generator = SoftwareTranscoder.Start(["-hide_banner", "-loglevel", "error", "-re",
                     "-f", "lavfi", "-i", $"testsrc2=size={profile.Width}x{profile.Height}:rate={profile.Fps}", "-an", .. encoderOptions,
                     "-preset", "ultrafast", "-tune", "zerolatency", "-threads", "2", "-g", "60",
                     "-b:v", "8000k", "-pix_fmt", "yuv420p", "-f", grant.VideoCodec == "h265" ? "hevc" : "h264", "pipe:1"]);
-                feed = transcoder.FeedAsync(generator.StandardOutput.BaseStream, ct);
+                feed = native ? AccessUnitSplitter.PumpAsync(generator.StandardOutput.BaseStream, receiver, grant.VideoCodec, ct)
+                    : transcoder!.FeedAsync(generator.StandardOutput.BaseStream, ct);
             }
             else
             {
@@ -77,13 +79,14 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 if (stream != null) await stream.RequestKeyframeAsync();
                 if (!await controller.ConnectAsync(session.Id, ct) || !await controller.StartAsync(session.Id, ct))
                     throw new IOException("Could not start console input.");
-                feed = transcoder.FeedAsync(receiver, ct);
+                if (!native) feed = transcoder!.FeedAsync(receiver, ct);
             }
             await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct, sendGate: sendGate);
             await input.BindSessionAsync(sessionId, ct);
             published.Input = input;
-            workers = [feed, transcoder.SendAsync(socket, ct, sendGate), inputTask,
-                SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)];
+            var send = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
+            workers = feed is null ? [send, inputTask, SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)]
+                : [feed, send, inputTask, SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)];
             var completed = await Task.WhenAny(workers);
             await completed;
         }
@@ -146,6 +149,23 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 WebSocketMessageType.Text, true, ct);
         }
         finally { sendGate?.Release(); }
+    }
+
+    private static async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, CancellationToken ct)
+    {
+        await foreach (var unit in receiver.Packets.ReadAllAsync(ct))
+        {
+            var packet = MediaPacket.Wrap(unit.Data, MediaPacket.VideoUnit, unit.Ready, unit.Ready);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeout.CancelAfter(TimeSpan.FromSeconds(1));
+            await sendGate.WaitAsync(timeout.Token);
+            try
+            {
+                MediaPacket.MarkSent(packet);
+                await socket.SendAsync(packet, WebSocketMessageType.Binary, true, timeout.Token);
+            }
+            finally { sendGate.Release(); }
+        }
     }
 
     private static async Task SendAudioAsync(WebSocket socket, SoftwareReceiver receiver, bool demo,

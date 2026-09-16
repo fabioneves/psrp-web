@@ -21,6 +21,11 @@ test('versioned media envelope separates timing from payload and rejects malform
   view.setUint8(32, 0x47);
   assert.equal(unpackMedia(bytes).bytes.byteLength, 1);
   assert.equal(unpackMedia(bytes).timestamp, 1234);
+  view.setUint32(4, 3, true);
+  assert.equal(unpackMedia(bytes).kind, 3);
+  view.setUint32(4, 4, true);
+  assert.throws(() => unpackMedia(bytes));
+  view.setUint32(4, 1, true);
   assert.throws(() => unpackMedia(bytes.slice(0, 20)));
   view.setFloat64(24, NaN, true);
   assert.throws(() => unpackMedia(bytes));

@@ -15,9 +15,12 @@
    and enables controller input. Secrets are never returned in a session response.
 5. `SoftwareReceiver` removes the upstream `0x02` video packet prefix, caches
    codec headers, waits for an IDR and feeds Annex B bytes to FFmpeg. Opus audio packets lose their `0x01` prefix and are CPU-decoded to PCM.
-6. FFmpeg decodes on the CPU and encodes MPEG-1 without B frames at the selected profile. Its
+6. In Canvas mode FFmpeg decodes on the CPU and encodes MPEG-1 without B frames at the selected profile. Its
    MPEG-TS output is sent as binary WebSocket messages. The browser demuxes,
    software-decodes reference frames, retains one pending image and renders the newest image on each presentation tick.
+   In H.264 and H.265 mode no FFmpeg process runs: each console access unit is sent as
+   its own binary message (envelope kind 3) and handed straight to WebCodecs. The test
+   stream splits the generator's raw Annex B output on access unit delimiters.
 7. Socket closure, an input error, encoder failure, idle timeout or cancellation
    stops workers and child processes, stops the stream/session and releases the slot.
 
@@ -39,8 +42,9 @@ both the button event and analog trigger state. Directions are clamped to [-1,1]
 
 Server → browser text messages contain `type` (`status` or `error`) and `message`,
 or a timestamped `pong`. Every binary message starts with the RPM1 timing envelope
-described below. Video payloads contain consecutive MPEG-TS bytes, not necessarily a whole
-frame or transport packet. JSMpeg handles arbitrary chunk boundaries. Audio
+described below. Canvas video payloads contain consecutive MPEG-TS bytes, not necessarily a whole
+frame or transport packet; JSMpeg handles arbitrary chunk boundaries. H.264/H.265 video
+payloads are one complete Annex B access unit per message. Audio
 payloads begin with ASCII `PCM1`, followed by little-endian uint32 sample
 rate and channel count, then interleaved signed 16-bit little-endian PCM. Video, audio and pong sends share a semaphore: the WebSocket never has concurrent sends.
 The worker dispatches PCM directly through a MessagePort to AudioWorklet; main-thread
@@ -108,9 +112,10 @@ ports, sources and workers. No hardware audio/video codec is required.
 ## Media-ready timing and audio alignment
 
 Every binary message has a 32-byte `RPM1` envelope: little-endian uint32 kind
-(1 MPEG-TS, 2 PCM), then float64 readiness, send and media timestamps in Unix
+(1 MPEG-TS, 2 PCM, 3 H.264/H.265 access unit), then float64 readiness, send and media timestamps in Unix
 milliseconds at offsets 8, 16 and 24. The payload begins at offset 32; audio retains
-its existing PCM1 payload. Video uses the time FFmpeg output became available;
+its existing PCM1 payload. MPEG-TS video uses the time FFmpeg output became available and
+access units use the time the console frame reached the receiver;
 audio uses packet readiness minus its sample duration as the first-sample estimate.
 Sending stamps the time after acquiring the shared video/audio/pong send semaphore.
 

@@ -5,6 +5,7 @@ namespace RemotePlay.Services.Software;
 public static class MediaPacket
 {
     public const int HeaderSize = 32;
+    public const int TransportStream = 1, Audio = 2, VideoUnit = 3;
     public static double Now => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     public static byte[] Wrap(ReadOnlySpan<byte> payload, int kind, double ready, double mediaTime)

@@ -79,8 +79,8 @@ receiver.OnStreamInfo([0, 0, 1, 0x67, 5], []);
 receiver.OnVideoPacket([2, 0, 0, 1, 0x41, 9]);
 Check(!receiver.Packets.TryRead(out _), "delta frames are withheld until an IDR");
 receiver.OnVideoPacket([2, 0, 0, 0, 1, 0x65, 7]);
-Check(receiver.Packets.TryRead(out var header) && header[3] == 0x67, "codec header precedes first IDR");
-Check(receiver.Packets.TryRead(out var frame) && frame.SequenceEqual(new byte[] { 0, 0, 0, 1, 0x65, 7 }), "upstream packet type is stripped before feeding Annex B to FFmpeg");
+Check(receiver.Packets.TryRead(out var header) && header.Data[3] == 0x67, "codec header precedes first IDR");
+Check(receiver.Packets.TryRead(out var frame) && frame.Data.SequenceEqual(new byte[] { 0, 0, 0, 1, 0x65, 7 }) && frame.Ready > 0, "upstream packet type is stripped and each Annex B unit carries its arrival time");
 receiver.EnterWaitForIdr();
 receiver.OnVideoPacket([2, 0, 0, 1, 0x41, 9]);
 Check(!receiver.Packets.TryRead(out _), "reference loss waits for a fresh IDR");
@@ -124,7 +124,7 @@ using (var burstReceiver = new SoftwareReceiver(32))
 {
     for (byte i = 0; i < 20; i++) burstReceiver.OnVideoPacket([2, 0, 0, 0, 1, 0x65, i]);
     var received = new List<byte>();
-    while (burstReceiver.Packets.TryRead(out var packet)) received.Add(packet[^1]);
+    while (burstReceiver.Packets.TryRead(out var packet)) received.Add(packet.Data[^1]);
     Check(received.SequenceEqual(Enumerable.Range(0, 20).Select(value => (byte)value)), "native forwarding absorbs a burst of console frames without losing references");
     for (byte i = 0; i < 33; i++) burstReceiver.OnVideoPacket([2, 0, 0, 0, 1, 0x65, i]);
     var bounded = false;
@@ -133,8 +133,6 @@ using (var burstReceiver = new SoftwareReceiver(32))
     Check(bounded, "native forwarding still fails on a sustained full queue instead of growing indefinitely");
 }
 
-var nativeArgs = SoftwareTranscoder.BuildArguments(10000, "720p", 60, "h264");
-Check(nativeArgs.Contains("copy") && !nativeArgs.Contains("-vf") && !nativeArgs.Contains("mpeg1video"), "native H.264 streams bypass server video decoding and encoding");
 var nativeTicket = tickets.Consume(tickets.Issue("alice", null, true, 10000, videoCodec: "h264"));
 Check(nativeTicket?.VideoCodec == "h264", "ticket preserves the selected video codec");
 var argsList = SoftwareTranscoder.BuildArguments(10000);
@@ -162,11 +160,23 @@ for (var i = 0; i + 4 < raw.Length; i++)
         boundaries.Add(i);
 Check(boundaries.Count == 120, "test source contains 120 H.264 access units");
 boundaries.Add(raw.Length);
+var splitter = new AccessUnitSplitter("h264");
+var split = new List<byte[]>();
+var chunkSizes = new[] { 1, 2, 3, 700, 1024, 65536 };
+for (int offset = 0, step = 0; offset < raw.Length; step++)
+{
+    var size = Math.Min(chunkSizes[step % chunkSizes.Length], raw.Length - offset);
+    split.AddRange(splitter.Push(raw.AsSpan(offset, size)));
+    offset += size;
+}
+if (splitter.Flush() is { } trailing) split.Add(trailing);
+Check(split.Count == 120 && Enumerable.Range(0, 120).All(i => split[i].AsSpan().SequenceEqual(raw.AsSpan(boundaries[i], boundaries[i + 1] - boundaries[i]))),
+    "access unit splitter reproduces every H.264 access unit across arbitrary pipe chunk boundaries");
 for (var i = 0; i + 1 < boundaries.Count; i++)
 {
     consoleReceiver.OnVideoPacket([2, .. raw.AsSpan(boundaries[i], boundaries[i + 1] - boundaries[i])]);
     while (consoleReceiver.Packets.TryRead(out var packet))
-        await conversion.StandardInput.BaseStream.WriteAsync(packet);
+        await conversion.StandardInput.BaseStream.WriteAsync(packet.Data);
 }
 consoleReceiver.Dispose();
 await consoleReceiver.Packets.Completion;

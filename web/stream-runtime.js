@@ -45,7 +45,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
         if (message.type === 'error') close();
       } else {
         const media = unpackMedia(event.data);
-        if (media.kind === 1) transportMs = clock.age(media.sent);
+        if (media.kind !== 2) transportMs = clock.age(media.sent);
         serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
         if (media.kind === 2)
           report({ type: 'audio', bytes: media.bytes, timestamp: media.timestamp });

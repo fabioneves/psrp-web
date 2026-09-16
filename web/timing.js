@@ -5,7 +5,7 @@ export function unpackMedia(bytes) {
   if (bytes.byteLength < 33 || view.getUint32(0) !== 0x52504d31) throw new Error('Invalid media envelope');
   const kind = view.getUint32(4, true), ready = view.getFloat64(8, true);
   const sent = view.getFloat64(16, true), timestamp = view.getFloat64(24, true);
-  if (![1, 2].includes(kind) || ![ready, sent, timestamp].every(Number.isFinite)) throw new Error('Invalid media timestamps');
+  if (![1, 2, 3].includes(kind) || ![ready, sent, timestamp].every(Number.isFinite)) throw new Error('Invalid media timestamps');
   return { kind, ready, sent, timestamp, bytes: bytes.slice(32) };
 }
 

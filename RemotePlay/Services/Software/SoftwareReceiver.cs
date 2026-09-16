@@ -6,9 +6,11 @@ using RemotePlay.Services.Streaming.Protocol;
 
 namespace RemotePlay.Services.Software;
 
+public sealed record VideoUnit(byte[] Data, double Ready);
+
 public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCodec = "h264") : IAVReceiver, IDisposable
 {
-    private readonly Channel<byte[]> packets = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(videoQueueCapacity)
+    private readonly Channel<VideoUnit> packets = Channel.CreateBounded<VideoUnit>(new BoundedChannelOptions(videoQueueCapacity)
     {
         FullMode = BoundedChannelFullMode.Wait,
         SingleReader = true
@@ -26,7 +28,7 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
     public ChannelReader<byte[]> AudioPackets => audioPackets.Reader;
     private byte[] header = [];
     private bool waitingForIdr = true;
-    public ChannelReader<byte[]> Packets => packets.Reader;
+    public ChannelReader<VideoUnit> Packets => packets.Reader;
 
     public void OnStreamInfo(byte[] videoHeader, byte[] audioHeader)
     {
@@ -73,7 +75,7 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
 
     private void Write(byte[] packet)
     {
-        if (!packets.Writer.TryWrite(packet))
+        if (!packets.Writer.TryWrite(new VideoUnit(packet, MediaPacket.Now)))
             packets.Writer.TryComplete(new IOException("Software encoder cannot keep up. Reconnect or lower the bitrate."));
     }
 
@@ -110,7 +112,7 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
     public static byte[] TimedPcmPacket(ReadOnlySpan<float> samples, int rate, int channels)
     {
         var ready = MediaPacket.Now;
-        return MediaPacket.Wrap(PcmPacket(samples, rate, channels), 2, ready,
+        return MediaPacket.Wrap(PcmPacket(samples, rate, channels), MediaPacket.Audio, ready,
             ready - samples.Length * 1000.0 / (rate * channels));
     }
 

@@ -105,7 +105,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
   const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
   if (!context) throw new Error('This browser does not support video drawing.');
   const pending = new Map();
-  let stopped = false, configuration, mediaTimestamp, progressAt = null, waitingForKey = true;
+  let stopped = false, configuration, progressAt = null, waitingForKey = true, firstMedia = null, lastTimestamp = -1;
   let decoded = 0, drawn = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
   let start = performance.now();
   const frames = new FrameQueue(item => item.frame.close(), options.fps, options.pacing !== 'responsive');
@@ -146,14 +146,8 @@ export function createNativeDecoder(canvas, report, options = {}) {
     pending.set(timestamp, { started: performance.now(), mediaTimestamp });
     decoder.decode(new EncodedVideoChunk({ type: key ? 'key' : 'delta', timestamp, data }));
   }, message => options.onError?.(message));
-  const demuxer = new JSMpeg.Demuxer.TS({});
-  demuxer.guessVideoFrameEnd = false;
-  demuxer.connect(JSMpeg.Demuxer.TS.STREAM.VIDEO_1, { write(pts, buffers) {
-    const size = buffers.reduce((sum, buffer) => sum + buffer.length, 0);
-    if (size > 2 * 1024 * 1024) throw new Error(`${label} frame exceeds its size limit.`);
-    let data = new Uint8Array(size);
-    let offset = 0;
-    for (const buffer of buffers) { data.set(buffer, offset); offset += buffer.length; }
+  function accessUnit(data, mediaTimestamp) {
+    if (data.length > 2 * 1024 * 1024) throw new Error(`${label} frame exceeds its size limit.`);
     const info = hevc ? h265Info(data) : h264Info(data);
     for (const parameter of info.parameters || []) parameters.set(parameter.type, parameter.data);
     if (info.codec && info.codec !== configuration) {
@@ -171,8 +165,11 @@ export function createNativeDecoder(canvas, report, options = {}) {
       prefixed.set(data, position); data = prefixed;
     }
     waitingForKey = false;
-    queue.push({ timestamp: Math.round(pts * 1000000), mediaTimestamp, data, key: info.key });
-  } });
+    firstMedia ??= mediaTimestamp;
+    const timestamp = Math.max(lastTimestamp + 1, Math.round((mediaTimestamp - firstMedia) * 1000));
+    lastTimestamp = timestamp;
+    queue.push({ timestamp, mediaTimestamp, data, key: info.key });
+  }
   const timer = setInterval(() => {
     if (progressAt !== null && performance.now() - progressAt > 3000) {
       options.onError?.('Native video decoder stopped producing frames.');
@@ -189,9 +186,8 @@ export function createNativeDecoder(canvas, report, options = {}) {
   return {
     write(data, timestamp) {
       if (stopped) return;
-      mediaTimestamp = timestamp;
       bytesReceived += data.byteLength;
-      demuxer.write(data);
+      accessUnit(new Uint8Array(data), timestamp);
     },
     destroy() {
       stopped = true; clearInterval(timer); presentation.destroy(); queue.destroy();
