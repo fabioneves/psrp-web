@@ -36,7 +36,7 @@ export async function createDecoder(canvas, report, options = {}) {
     resize(width, height) {
       dimensions.width = width; dimensions.height = height; pixels = makePixels(width, height);
       frames.destroy(); pool.length = 0;
-      for (let i = 0; i < 4; i++) { const frame = new LatestFrame(); frame.resize(width, height); pool.push(frame); }
+      for (let i = 0; i < frames.capacity + 2; i++) { const frame = new LatestFrame(); frame.resize(width, height); pool.push(frame); }
       canvas.width = width; canvas.height = height;
       image = new ImageData(pixels.rgba, width, height);
     },
@@ -67,7 +67,7 @@ export async function createDecoder(canvas, report, options = {}) {
   const presentation = new FramePresenter(present, globalThis, 1000 / (options.fps || 60));
   const timer = setInterval(() => {
     const elapsed = performance.now() - start;
-    report({ type: 'stats', ...presentation.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
+    report({ type: 'stats', ...presentation.metrics(), ...frames.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
       decodeMs: drawn ? (decodeMs + colorMs + drawMs) / drawn : 0,
       codecMs: decoded ? decodeMs / decoded : 0, colorMs: drawn ? colorMs / drawn : 0,
       drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: frames.dropped,

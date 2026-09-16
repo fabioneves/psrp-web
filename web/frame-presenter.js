@@ -8,6 +8,8 @@ export class FramePresenter {
     this.pending = false;
     this.stopped = false;
     this.intervals = [];
+    this.ticks = [];
+    this.lastTick = null;
     this.lastDraw = null;
     this.recovering = false;
     this.generation = 0;
@@ -31,7 +33,14 @@ export class FramePresenter {
       if (result === true || result === 'waiting') this.request();
     };
     if (this.animation) {
-      this.frame = this.timers.requestAnimationFrame(() => { if (!this.pending || this.stopped || this.generation !== generation) return; this.recovering = false; draw(); });
+      this.frame = this.timers.requestAnimationFrame(() => {
+        if (!this.pending || this.stopped || this.generation !== generation) return;
+        this.recovering = false;
+        const at = this.timers.performance?.now() ?? performance.now();
+        if (this.lastTick != null && at - this.lastTick < 100) { this.ticks.push(at - this.lastTick); if (this.ticks.length > 120) this.ticks.shift(); }
+        this.lastTick = at;
+        draw();
+      });
       this.timeout = this.timers.setTimeout(() => {
         this.recovering = true;
         draw();
@@ -40,8 +49,10 @@ export class FramePresenter {
   }
   metrics() {
     const sorted = [...this.intervals].sort((a, b) => a - b);
+    const ticks = [...this.ticks].sort((a, b) => a - b);
     const result = { frameP95Ms: sorted.length ? sorted[Math.ceil(sorted.length * 0.95) - 1] : null,
-      frameMaxMs: sorted.length ? sorted.at(-1) : null, stalls: this.stalls, stallMs: Math.round(this.stallMs) };
+      frameMaxMs: sorted.length ? sorted.at(-1) : null, stalls: this.stalls, stallMs: Math.round(this.stallMs),
+      refreshMs: ticks.length ? ticks[Math.floor(ticks.length / 2)] : null };
     this.stalls = 0; this.stallMs = 0;
     return result;
   }

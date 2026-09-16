@@ -39,10 +39,11 @@ export class StreamLog {
     if (stats.fps < 50 && stats.totalFrames > 120) this.event('low-fps', { fps: Math.round(stats.fps * 10) / 10 });
     if (stats.arrivalMaxMs > 100) this.event('delivery-gap', { maxMs: Math.round(stats.arrivalMaxMs), p95Ms: Math.round(stats.arrivalP95Ms ?? 0) });
     if (stats.stalls > 0) this.event('stall', { count: stats.stalls, ms: stats.stallMs });
+    if (stats.underruns > 0) this.event('underrun', { count: stats.underruns, target: stats.pacingTarget });
     this.samples.push({ t: this.at(), fps: round(stats.fps), decodedFps: round(stats.decodedFps), p95: round(stats.frameP95Ms), max: round(stats.frameMaxMs), age: round(stats.videoAgeMs),
       queue: round(stats.queueMs), decode: round(stats.nativeDecodeMs ?? stats.codecMs), rtt: round(stats.rttMs), mbps: round(stats.mbps), dropped,
       decodeQueue: stats.decodeQueue ?? null, arrivalP95: round(stats.arrivalP95Ms), arrivalMax: round(stats.arrivalMaxMs), transportP95: round(stats.transportP95Ms),
-      stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
+      stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, refresh: round(stats.refreshMs), target: stats.pacingTarget ?? null, videoUnderruns: stats.underruns ?? null, rebuilt: stats.rebuilt ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
       audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
       lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null });
     if (this.samples.length > SAMPLE_LIMIT) this.samples.shift();
@@ -63,6 +64,7 @@ export function describeEvent(event) {
     'low-fps': e => `presentation fell to ${e.fps} fps`,
     'delivery-gap': e => `video packets paused ${e.maxMs} ms (arrival p95 ${e.p95Ms} ms)`,
     stall: e => `${e.count} presentation stall${e.count === 1 ? '' : 's'}, ${e.ms} ms late`,
+    underrun: e => `${e.count} refresh${e.count === 1 ? '' : 'es'} with no new frame (cushion ${e.target})`,
     'decoder-reset': e => `decoder reset after a corrupt frame (${e.resets} in 30 s) · ${e.message}`
   };
   const seconds = (event.t / 1000).toFixed(1);

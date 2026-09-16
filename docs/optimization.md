@@ -28,6 +28,24 @@ and the browser's TS demuxer completed a frame only at the next PES start
 (median 32.6 ms, p95 33.6 ms). Access units now travel as one message each
 and go straight to WebCodecs; no FFmpeg process runs in H.264/H.265 mode.
 
+### Presentation cushion (2026-09-16)
+
+With the keyframe requests gone, a 1080p60 H.265 capture still showed a
+longest frame interval of about 33 ms in 139 of 249 seconds while 60 frames
+were drawn per second: roughly one repeated picture every second, felt as a
+regular jump during camera pans. The queue only primed a one-interval reserve
+at startup and its stale rule skipped any frame that had waited 2.5 intervals,
+which held the cushion at about one frame; any arrival more than a few
+milliseconds late then left a refresh with nothing new. Smooth mode now keeps
+a target of one to three frames queued behind the one being drawn, rebuilds
+the cushion with a single held refresh when a whole second never reached it,
+raises the target after a refresh with no new frame while the source is
+keeping up, bounds latency at target + 2 frames, and does nothing extra for
+sources below the refresh rate. Diagnostics samples record the target, the
+refreshes with no new frame, rebuilds and the display refresh interval. The
+simulated cost is about one extra refresh interval of latency in smooth mode;
+responsive mode is unchanged.
+
 ### Periodic keyframe requests (2026-09-16)
 
 A six-minute 1080p60 H.265 diagnostics capture from a Mac on the console
