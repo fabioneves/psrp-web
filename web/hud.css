@@ -40,7 +40,7 @@
 #debug-overlay[data-layout=horizontal] .hud-grid dt { font-size:0; }
 #debug-overlay[data-layout=horizontal] .hud-grid dt::after { content:attr(data-short); font-size:9px; }
 #debug-overlay[data-layout=horizontal] .hud-grid dd { margin:0; font-size:9px; color:var(--hud-color); }
-#debug-overlay[data-layout=horizontal] .hud-grid dd .unit { display:none; }
+#debug-overlay[data-layout=horizontal] .hud-grid dd:not(#hud-rtt):not(#hud-bitrate) .unit { display:none; }
 #debug-overlay[data-layout=horizontal] .hud-grid dl>div:has(#hud-decode),#debug-overlay[data-layout=horizontal] #hud-size,#debug-overlay[data-layout=horizontal] #hud-loss .long { display:none; }
 #debug-overlay:not([data-layout=horizontal]) #hud-loss .short { display:none; }
 #debug-overlay[data-layout=horizontal] #hud-health { display:block; font-size:9px; margin:0; white-space:nowrap; color:var(--hud-color); }
