@@ -95,10 +95,11 @@ if [ "${RESUME:-0}" = 1 ]; then
     run pct start "$CTID" 2>/dev/null || true
 else
 step "Downloading the newest Debian template"
-if [ "$DRY" = 1 ]; then template=debian-13-standard_13.0-1_amd64.tar.zst; else
+arch=$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+if [ "$DRY" = 1 ]; then template=debian-13-standard_13.0-1_$arch.tar.zst; else
     pveam update >/dev/null
-    template=$(pveam available --section system | awk '/debian-[0-9]+-standard/ {print $2}' | sort -V | tail -n 1)
-    [ -n "$template" ] || fail "No Debian standard template offered by pveam."
+    template=$(pveam available --section system | awk -v arch="$arch" '$2 ~ /^debian-[0-9]+-standard_/ && $2 ~ ("_" arch "\\.tar") {print $2}' | sort -V | tail -n 1)
+    [ -n "$template" ] || fail "No Debian standard template for $arch offered by pveam."
     template_storage=${TEMPLATE_STORAGE:-local}
     pveam list "$template_storage" | grep -q "$template" || pveam download "$template_storage" "$template"
 fi

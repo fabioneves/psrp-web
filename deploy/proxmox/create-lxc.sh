@@ -22,9 +22,10 @@ if pct status "$CTID" >/dev/null 2>&1; then
     exit 1
 fi
 
+arch=$(dpkg --print-architecture 2>/dev/null || uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
 pveam update >/dev/null
-template=$(pveam available --section system | awk '/debian-[0-9]+-standard/ {print $2}' | sort -V | tail -n 1)
-[ -n "$template" ] || { echo "No Debian standard template offered by pveam." >&2; exit 1; }
+template=$(pveam available --section system | awk -v arch="$arch" '$2 ~ /^debian-[0-9]+-standard_/ && $2 ~ ("_" arch "\\.tar") {print $2}' | sort -V | tail -n 1)
+[ -n "$template" ] || { echo "No Debian standard template for $arch offered by pveam." >&2; exit 1; }
 if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$template"; then
     pveam download "$TEMPLATE_STORAGE" "$template"
 fi
