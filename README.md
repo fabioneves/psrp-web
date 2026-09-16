@@ -289,8 +289,8 @@ Smooth frame pacing retains up to three decoded images and primes a small buffer
 | Mode | Server work | Browser work |
 | --- | --- | --- |
 | Canvas · software | Decode H.264, encode MPEG-1 | Software WASM decoding and Canvas 2D |
-| H.264 · browser decoding (default) | Copy H.264 into MPEG-TS | WebCodecs decoding and Canvas 2D |
-| H.265 · PS5, browser decoding | Request PS5 HEVC SDR, copy into MPEG-TS | WebCodecs HEVC decoding and Canvas 2D |
+| H.264 · browser decoding (default) | Forward each H.264 access unit as-is | WebCodecs decoding and Canvas 2D |
+| H.265 · PS5, browser decoding | Request PS5 HEVC SDR, forward each access unit as-is | WebCodecs HEVC decoding and Canvas 2D |
 
 H.264 and H.265 first request `prefer-hardware`. If that is unsupported, the app
 tries browser decoding with `no-preference` before changing codecs or using Canvas.

@@ -16,6 +16,37 @@ but uses server-ready timestamps and reported output delay, not physical outputs
 [Final browser metrics](benchmarks/browser-1080p60.json) and
 [complete validation scope](validation.md#performance-and-adaptive-quality-update-2026-09-15).
 
+## Native video transport and presentation queue (2026-09-16)
+
+Measured on the same machine as above with the isolated `psrp-ui-test`
+instance, Chrome with GPU acceleration disabled and the test-only software
+WebCodecs adapter. The pipeline previously copied console H.264/H.265 into
+MPEG-TS through an FFmpeg process. Feeding real 60 fps H.264 access units into
+the production remux arguments showed why that hurt: FFmpeg's raw H.264 parser
+emitted a frame only after the next frame started (median 16.6 ms, p95 17.1 ms)
+and the browser's TS demuxer completed a frame only at the next PES start
+(median 32.6 ms, p95 33.6 ms). Access units now travel as one message each
+and go straight to WebCodecs; no FFmpeg process runs in H.264/H.265 mode.
+
+Smooth pacing also carried its startup depth as permanent latency, because the
+presenter draws at most one frame per animation tick. It now releases a frame
+that has waited 1.5 intervals when a newer one is queued.
+
+| Stream | Server-ready → canvas before | after | Queue wait before → after | FPS after (p95 interval) |
+|---|---:|---:|---:|---:|
+| H.264 720p60 | 42.8 ms + hidden remux | 24.3 ms | 38.2 → 20.9 ms | 60.0 (16.8 ms) |
+| H.264 1080p60 | 40.2 ms + hidden remux | 19.3 ms | 31.2 → 9.0 ms | 60.0 (16.9 ms) |
+| Canvas 720p60 | 44.7 ms | 23.9 ms | 42.4 → 21.1 ms | 60.0 (16.8 ms) |
+
+"Before" ages were stamped after FFmpeg output, so they exclude the remux
+delay above; "after" ages are stamped when the console frame reaches the
+receiver. Each figure is the mean of five one-second samples after 20 seconds
+of playback of the synthetic test stream. These are local measurements, not
+Tesla or console-capture latency.
+
+A native decoder that stalls after producing frames now reconnects with the
+same codec instead of switching the session to Canvas software video.
+
 ## Pixel conversion
 
 | Frame size | Original JavaScript median | WASM SIMD median | Reduction |

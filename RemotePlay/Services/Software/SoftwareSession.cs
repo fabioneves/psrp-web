@@ -84,9 +84,9 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct, sendGate: sendGate);
             await input.BindSessionAsync(sessionId, ct);
             published.Input = input;
-            var send = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
-            workers = feed is null ? [send, inputTask, SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)]
-                : [feed, send, inputTask, SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct)];
+            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
+            var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
+            workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
             var completed = await Task.WhenAny(workers);
             await completed;
         }
