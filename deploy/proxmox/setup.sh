@@ -50,7 +50,9 @@ fi
 step "Container"
 next_id=$( { command -v pvesh >/dev/null 2>&1 && pvesh get /cluster/nextid 2>/dev/null; } || echo 120)
 ask CTID "Container id" "$next_id"
-[ "$DRY" = 1 ] || ! pct status "$CTID" >/dev/null 2>&1 || fail "Container $CTID already exists."
+if [ "$DRY" != 1 ] && pct status "$CTID" >/dev/null 2>&1 && [ "${RESUME:-0}" != 1 ]; then
+    fail "Container $CTID already exists. Rerun with RESUME=1 CTID=$CTID to continue installing into it, or pick another id."
+fi
 ask CT_HOSTNAME "Hostname" "psrp"
 default_bridge=$( { ls /sys/class/net 2>/dev/null | grep -m1 '^vmbr'; } || echo vmbr0)
 ask BRIDGE "Network bridge" "$default_bridge"
@@ -87,6 +89,11 @@ say "  Domain      ${DOMAIN:-none (HTTP only)}"
 say "  Source      $REPO ($REF)"
 confirm "Create the container and install now?" y || exit 1
 
+if [ "${RESUME:-0}" = 1 ]; then
+    step "Resuming with existing container $CTID"
+    password='(unchanged)'
+    run pct start "$CTID" 2>/dev/null || true
+else
 step "Downloading the newest Debian template"
 if [ "$DRY" = 1 ]; then template=debian-13-standard_13.0-1_amd64.tar.zst; else
     pveam update >/dev/null
@@ -102,7 +109,19 @@ net="name=eth0,bridge=$BRIDGE,ip=$IP"
 [ "$IP" = dhcp ] || net="$net,gw=$GATEWAY"
 password=$(head -c 12 /dev/urandom | base64 | tr -d '/+=' | head -c 16)
 run pct create "$CTID" "$template_storage:vztmpl/$template" --hostname "$CT_HOSTNAME" --cores "$CORES" --memory "$MEMORY" --swap 0 \
-    --rootfs "$STORAGE:$DISK" --net0 "$net" --unprivileged 1 --features nesting=1,keyctl=1 --onboot 1 --password "$password" --start 1
+    --rootfs "$STORAGE:$DISK" --net0 "$net" --unprivileged 1 --features nesting=1,keyctl=1 --onboot 1 --password "$password"
+say "Architecture: $(printf '%s' "$template" | sed -E 's/.*_([a-z0-9]+)\.tar\.zst$/\1/')"
+
+step "Starting container $CTID"
+if ! run pct start "$CTID"; then
+    warn "The container did not start. Collect the LXC debug log and share it:"
+    say "  lxc-start -n $CTID -F -l DEBUG -o /tmp/lxc-$CTID.log; tail -40 /tmp/lxc-$CTID.log"
+    say "Common causes: AppArmor profiles missing on this kernel (try: echo 'lxc.apparmor.profile: unconfined' >> /etc/pve/lxc/$CTID.conf),"
+    say "or the keyctl feature unsupported (try: pct set $CTID --features nesting=1)."
+    say "After 'pct start $CTID' succeeds, rerun this script with RESUME=1 CTID=$CTID to continue the install."
+    exit 1
+fi
+fi
 
 step "Waiting for the container network"
 address=''
