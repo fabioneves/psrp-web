@@ -28,7 +28,10 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
     public ChannelReader<byte[]> AudioPackets => audioPackets.Reader;
     private byte[] header = [];
     private bool waitingForIdr = true;
+    private long framesReceived;
     public ChannelReader<VideoUnit> Packets => packets.Reader;
+    /// <summary>Complete video frames the console delivered, before any keyframe gating; tells console output rate apart from browser presentation.</summary>
+    public long FramesReceived => Interlocked.Read(ref framesReceived);
 
     public void OnStreamInfo(byte[] videoHeader, byte[] audioHeader)
     {
@@ -58,6 +61,7 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
         lock (sync)
         {
             if (packet.Length <= 1 || packet[0] != 2) return;
+            Interlocked.Increment(ref framesReceived);
             if (packet.Length > 2 * 1024 * 1024)
             {
                 packets.Writer.TryComplete(new IOException("Console frame exceeds the 2 MiB limit."));

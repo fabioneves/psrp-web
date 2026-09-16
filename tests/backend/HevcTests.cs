@@ -16,7 +16,7 @@ static class HevcTests
         receiver.SetVideoCodec("hevc");
         receiver.OnStreamInfo([0, 0, 0, 1, 0x40, 1], []);
         receiver.OnVideoPacket([2, 0, 0, 1, 2, 1, 9]);
-        check(!receiver.Packets.TryRead(out _), "HEVC delta pictures wait for random access");
+        check(!receiver.Packets.TryRead(out _) && receiver.FramesReceived == 1, "HEVC delta pictures wait for random access but still count as console frames");
         receiver.OnVideoPacket([2, 0, 0, 0, 1, 0x26, 1, 9]);
         check(receiver.Packets.TryRead(out var header) && header.Data[4] == 0x40 && receiver.Packets.TryRead(out var frame) && frame.Data[4] == 0x26, "HEVC IDR is delivered after VPS/SPS/PPS headers");
         check(SoftwareReceiver.ContainsIdr([0, 0, 1, 0x2a, 1], "hevc") && !SoftwareReceiver.ContainsIdr([0, 0, 1, 0x26], "hevc"), "HEVC CRA is accepted and truncated NAL headers are rejected");
