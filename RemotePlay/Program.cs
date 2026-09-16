@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using RemotePlay.Models.Context;
@@ -237,6 +238,7 @@ builder.Services.AddHttpClient<PsnAccountClient>(client =>
 }).RemoveAllLoggers().ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<PsnLoginAttempts>();
+builder.Services.AddSingleton<LoginAttempts>();
 builder.Services.AddScoped<PsnAccountStore>();
 builder.Services.AddScoped<UserSettingsStore>();
 builder.Services.AddScoped<RemotePlay.Services.Device.ConsolePairingStore>();
@@ -280,6 +282,13 @@ builder.Host.ConfigureHostOptions(options =>
 #endregion
 
 var app = builder.Build();
+// The HTTPS proxy (Caddy, on the compose network or the container's loopback) sets X-Forwarded-For/Proto;
+// trust only loopback and private-range proxies so per-address sign-in limits see the real client.
+var forwarded = new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto, ForwardLimit = 1 };
+forwarded.KnownIPNetworks.Clear(); forwarded.KnownProxies.Clear();
+foreach (var network in new[] { "127.0.0.0/8", "::1/128", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "fc00::/7" })
+    forwarded.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+app.UseForwardedHeaders(forwarded);
 
 // 配置静态文件选项
 var staticFileOptions = new StaticFileOptions

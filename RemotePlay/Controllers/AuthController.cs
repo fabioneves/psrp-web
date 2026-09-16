@@ -23,12 +23,16 @@ namespace RemotePlay.Controllers
         public AuthController(
             IAuthService authService,
             ILogger<AuthController> logger,
-            RPContext db)
+            RPContext db,
+            LoginAttempts attempts)
         {
             _authService = authService;
             _logger = logger;
             _db = db;
+            _attempts = attempts;
         }
+        private readonly LoginAttempts _attempts;
+        private string ClientAddress => HttpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
 
         private static bool RegistrationAllowedByConfiguration =>
             string.Equals(Environment.GetEnvironmentVariable("ALLOW_REGISTRATION"), "true", StringComparison.OrdinalIgnoreCase);
@@ -124,10 +128,24 @@ namespace RemotePlay.Controllers
                     });
                 }
 
+                var account = request.UsernameOrEmail.Trim();
+                if (_attempts.Blocked(account, ClientAddress) is { } wait)
+                {
+                    var seconds = (int)Math.Ceiling(wait.TotalSeconds);
+                    Response.Headers.RetryAfter = seconds.ToString();
+                    return StatusCode(429, new ApiErrorResponse
+                    {
+                        Success = false,
+                        ErrorMessage = $"Too many sign-in attempts. Try again in {(seconds >= 120 ? $"{seconds / 60} minutes" : $"{seconds} seconds")}.",
+                        ErrorCode = ErrorCode.LoginFailed
+                    });
+                }
+
                 var response = await _authService.LoginAsync(request);
 
                 if (response == null)
                 {
+                    _attempts.Failed(account, ClientAddress);
                     return Unauthorized(new ApiErrorResponse
                     {
                         Success = false,
@@ -135,6 +153,7 @@ namespace RemotePlay.Controllers
                         ErrorCode = ErrorCode.InvalidCredentials
                     });
                 }
+                _attempts.Succeeded(account);
 
                 Response.Headers.CacheControl = "no-store";
                 if (BrowserSession.CanPersistLogin(Request))
