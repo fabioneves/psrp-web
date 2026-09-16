@@ -93,6 +93,7 @@ static class SessionProtocolTests
             try { await service.StartSessionAsync("127.0.0.1", new DeviceCredentials { RegistrationKey = new byte[16], ServerKey = new byte[16] }, "PS5", ct); }
             catch (Exception ex) { failure = ex; }
             check(failure is ConsoleHandshakeException or TimeoutException && failure.Message.Contains(expected), $"handshake reports {expected} distinctly");
+            check(((failure as ConsoleHandshakeException)?.ConsoleBusy ?? false) == (expected == "occupied"), $"handshake {expected} flags the console as busy only for the occupied reason");
             await console;
         }
 

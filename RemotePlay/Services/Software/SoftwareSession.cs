@@ -15,6 +15,8 @@ namespace RemotePlay.Services.Software;
 public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStreamingService streams,
     IControllerService controller, ActiveSoftwareStreams active, ConsolePower power, ILogger<SoftwareSession> logger)
 {
+    private const int BusyStartAttempts = 12;
+    private static readonly TimeSpan BusyStartDelay = TimeSpan.FromSeconds(1);
     public async Task RunAsync(WebSocket socket, StreamTicket grant, CancellationToken aborted)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(aborted);
@@ -62,16 +64,29 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                     d.Device != null && d.Device.HostId == grant.HostId && d.Device.IsRegistered == true)
                     .Select(d => d.Device!).SingleAsync(ct);
                 await power.EnsureReadyAsync(device, message => SendStatus(socket, message, ct, sendGate: sendGate), ct);
-                var session = await sessions.StartSessionAsync(device.IpAddress!, new DeviceCredentials
+                // Right after a profile change or a quick re-Play the console may still be closing the previous
+                // session (reason 80108b10) for a few seconds; retry here so the browser connects on its first attempt.
+                var credentials = new DeviceCredentials
                 {
                     HostId = device.HostId!, HostName = device.HostName!, HostIp = device.IpAddress!,
                     RegistrationKey = Convert.FromHexString(device.RegistKey!),
                     ServerKey = Convert.FromHexString(device.RPKey!)
-                }, device.HostType!, new SessionStartOptions
+                };
+                var options = new SessionStartOptions
                 {
                     Resolution = grant.Resolution, Fps = grant.Fps.ToString(), Bitrate = Math.Min(grant.BitrateKbps, 15000).ToString(), StreamType = grant.VideoCodec == "h265" ? "2" : "1",
                     AutoStartStream = false, AutoConnectController = false
-                }, ct);
+                };
+                RemoteSession session;
+                for (var attempt = 1; ; attempt++)
+                {
+                    try { session = await sessions.StartSessionAsync(device.IpAddress!, credentials, device.HostType!, options, ct); break; }
+                    catch (ConsoleHandshakeException ex) when (ex.ConsoleBusy && attempt < BusyStartAttempts)
+                    {
+                        if (attempt == 1) await SendStatus(socket, "Waiting for the console to release the previous session…", ct, sendGate: sendGate);
+                        await Task.Delay(BusyStartDelay, ct);
+                    }
+                }
                 sessionId = session.Id;
                 if (!await sessions.WaitReadyAsync(session.Id, TimeSpan.FromSeconds(15), ct))
                     throw new IOException("PlayStation session did not become ready. Check Remote Play settings.");

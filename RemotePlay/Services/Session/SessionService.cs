@@ -404,7 +404,7 @@ namespace RemotePlay.Services.Session
                 "80108b11" => "The console rejected this Remote Play protocol version.",
                 _ => "The console rejected the Remote Play handshake. Wait a few seconds and reconnect."
             };
-            throw new ConsoleHandshakeException(message);
+            throw new ConsoleHandshakeException(message, consoleBusy: reason == "80108b10");
         }
 
         private async Task<RawHttpResponse> ReadResponseAsync(NetworkStream stream, byte[] requestBytes, CancellationToken ct)
