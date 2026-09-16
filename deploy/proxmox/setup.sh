@@ -128,7 +128,7 @@ step "Waiting for the container network"
 address=''
 if [ "$DRY" = 1 ]; then address=192.0.2.10; else
     for _ in $(seq 1 40); do
-        address=$(pct exec "$CTID" -- hostname -I 2>/dev/null | awk '{print $1}') && [ -n "$address" ] && break
+        address=$(pct exec "$CTID" -- sh -c 'hostname -I 2>/dev/null || ip -4 -o addr show scope global 2>/dev/null | awk "{print \$4}" | cut -d/ -f1' 2>/dev/null | awk '{print $1}') && [ -n "$address" ] && break
         sleep 3
     done
     [ -n "$address" ] || fail "The container did not get an address. Check the bridge and DHCP, then rerun."

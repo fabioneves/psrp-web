@@ -15,7 +15,7 @@ if [ -n "${REMOTE_PLAY_DOMAIN:-}" ]; then PORT=${PORT:-8080}; else PORT=${PORT:-
 
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -q
-apt-get install -y -q ca-certificates curl git gnupg
+apt-get install -y -q ca-certificates curl git iproute2
 install -m 0755 -d /etc/apt/keyrings
 if [ ! -f /etc/apt/keyrings/docker.asc ]; then
     curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
@@ -61,7 +61,8 @@ fi
 install -m 0755 deploy/proxmox/psrp /usr/local/bin/psrp
 docker compose up --build -d
 until curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; do sleep 3; done
-ip=$(hostname -I | awk '{print $1}')
+ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+[ -n "$ip" ] || ip=$(ip -4 -o addr show scope global 2>/dev/null | awk '{print $4}' | cut -d/ -f1 | head -n 1)
 if [ "$PORT" = 80 ]; then echo "Remote Play is running at http://$ip/"; else echo "Remote Play is running at http://$ip:$PORT/"; fi
 echo "Later: 'psrp update' pulls and rebuilds, 'psrp status' and 'psrp logs' inspect it."
 [ -z "${REMOTE_PLAY_DOMAIN:-}" ] || echo "HTTPS: https://$REMOTE_PLAY_DOMAIN (DNS must point at $ip; Caddy listens on $HTTP_PORT and $HTTPS_PORT)"
