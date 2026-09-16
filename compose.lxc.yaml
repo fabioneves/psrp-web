@@ -1,0 +1,11 @@
+services:
+  remote-play:
+    network_mode: host
+    ports: !reset []
+  proxy:
+    network_mode: host
+    ports: !reset []
+    environment:
+      REMOTE_PLAY_UPSTREAM: 127.0.0.1:${PORT:-8080}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1:2019/config/"]

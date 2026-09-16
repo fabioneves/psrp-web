@@ -10,6 +10,16 @@ The synthetic video pipeline has been tested at 60 fps in desktop Chromium with 
 
 ## Run
 
+Two ways to run it:
+
+- **Docker Compose** on any Linux, macOS or Windows host with Docker, described
+  below. Rootless Docker and Docker Desktop need `DISCOVERY_SUBNETS` for console
+  discovery and route the video stream through a user-space network relay.
+- **Proxmox LXC** with rootful Docker and host networking, which gives the
+  console stream a kernel-only path and native broadcast discovery. See
+  [docs/proxmox-lxc.md](docs/proxmox-lxc.md); the scripts in `deploy/proxmox/`
+  create the container and install everything.
+
 Install Docker with Compose, then run from this directory:
 
 ```sh

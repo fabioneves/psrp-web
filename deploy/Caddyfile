@@ -1,3 +1,3 @@
 {$REMOTE_PLAY_DOMAIN} {
-    reverse_proxy remote-play:8080
+    reverse_proxy {$REMOTE_PLAY_UPSTREAM:remote-play:8080}
 }
