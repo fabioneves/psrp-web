@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readGamepad, selectGamepad, pollGamepads, describeSnapshot } from '../web/gamepad.js';
+import { readGamepad, selectGamepad, pollGamepads, describeSnapshot, describeRaw } from '../web/gamepad.js';
 import { InputState } from '../web/input.js';
 
 const pad = (id = 'DualSense', index = 0) => ({ id, index, connected: true, mapping: 'standard',
@@ -74,4 +74,22 @@ test('polling reports the controller and a live preview before playback, and onl
   assert.deepEqual(snapshots.at(-1).buttons, ['CROSS']);
   assert.doesNotMatch(reports.at(-1)[0], /click the page/);
   assert.equal(describeSnapshot(null), '');
+});
+
+test('a nonstandard Nintendo pad maps its raw layout, hat switch and digital triggers, and reports raw indices', () => {
+  const pro = pad('Pro Controller (Vendor: 057e Product: 2009)');
+  pro.mapping = '';
+  pro.buttons = Array.from({ length: 14 }, () => ({ pressed: false, value: 0 }));
+  pro.axes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 3.29];
+  assert.deepEqual(readGamepad(pro).buttons, []);
+  pro.buttons[1].pressed = true; pro.buttons[6].pressed = true; pro.buttons[9].pressed = true; pro.buttons[12].pressed = true;
+  pro.axes[9] = -0.714; pro.axes[0] = 0.9;
+  const state = readGamepad(pro);
+  assert.deepEqual(state.buttons, ['CIRCLE', 'L2', 'OPTIONS', 'PS', 'UP', 'RIGHT']);
+  assert.equal(state.l2, 1);
+  assert.ok(state.left.x > 0.8);
+  assert.deepEqual(readGamepad(pro, { invertAB: true }).buttons.slice(0, 1), ['CROSS']);
+  pro.axes[9] = 0.143;
+  assert.deepEqual(readGamepad(pro).buttons.at(-1), 'DOWN');
+  assert.match(describeRaw(pro), /raw · buttons 14, axes 10 · pressed 1, 6, 9, 12 · axes \[0\] 0\.90 \[9\] 0\.14/);
 });
