@@ -128,7 +128,7 @@
       <div class="settings-grid">
       <label class="bitrate-label">Video bitrate<select id="bitrate"><option value="3000">3 Mbps · low bandwidth</option><option value="6000">6 Mbps · lighter decoding</option><option value="10000" selected>10 Mbps · balanced</option><option value="15000">15 Mbps · higher quality</option><option value="20000">20 Mbps · high quality</option><option value="30000">30 Mbps · 1080p quality</option></select></label>
       <label>Frame pacing<select id="frame-pacing"><option value="smooth" selected>Smooth · small video buffer</option><option value="responsive">Responsive · lowest delay</option></select></label>
-      <label>Video output<select id="video-output"><option value="canvas" selected>Canvas · default</option><option value="video">Video element · browser video pipeline</option></select></label>
+      <label>Video output<select id="video-output"><option value="auto" selected>Automatic · video element where supported</option><option value="video">Video element · browser video pipeline</option><option value="canvas">Canvas · worker rendering</option></select></label>
       </div>
       <p class="hint">Bitrate follows the resolution unless you change it. Responsive pacing trades a little smoothness for the lowest delay. Video element output hands frames to the browser's own video pipeline (Chrome) and records real screen timing in diagnostics.</p>
       </details>

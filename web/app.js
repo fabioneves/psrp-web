@@ -707,9 +707,10 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   const canvas = previous.cloneNode(); previous.replaceWith(canvas);
   const report = message => { if (attempt === current) onStreamMessage(message); };
   // Video-element output runs on the main thread: the element is DOM, and its frame callbacks report real screen timing.
-  const wantsVideoSink = $('video-output').value === 'video' && !inputSession && activeCodec !== 'mpeg1';
+  const output = $('video-output').value;
+  const wantsVideoSink = output !== 'canvas' && !inputSession && activeCodec !== 'mpeg1';
   const useVideoSink = wantsVideoSink && supportsVideoSink();
-  if (wantsVideoSink && !useVideoSink) $('video-mode-status').textContent += ' Video element output is unavailable in this browser; drawing on canvas.';
+  if (output === 'video' && !useVideoSink) $('video-mode-status').textContent += ' Video element output is unavailable in this browser; drawing on canvas.';
   try {
     const useWorker = !inputSession && !forceMain && !useVideoSink && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
       typeof OffscreenCanvas === 'function' && !!new OffscreenCanvas(1, 1).getContext('2d') &&

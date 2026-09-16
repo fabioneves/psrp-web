@@ -54,9 +54,14 @@ routes browser-decoded frames into a MediaStreamTrackGenerator feeding a
 video element (Chromium). Its requestVideoFrameCallback metadata gives the
 interval between actual screen presentations and frames the pipeline
 skipped; diagnostics samples record them as display, displayMax and
-displaySkipped. It also takes the 2D canvas out of the path, which is the
-remaining suspect for judder that the hand-off numbers do not show. It runs
-on the main thread because the element is DOM.
+displaySkipped. It runs on the main thread because the element is DOM.
+A 1080p60 H.265 capture on a 120 Hz MacBook showed screen intervals of
+17.4-17.8 ms (p95) and 18 ms longest in clean seconds, matching the hand-off
+cadence, so the compositor was not distorting either path; the player
+nevertheless reported the element as clearly smoother, so it is the default
+where supported. The remaining 25 ms frames in that capture line up with
+seconds where the console delivered 57-59 frames: frames the PS5 never sent,
+which a 120 Hz display covers with one extra 8 ms refresh.
 
 ### Cadence drift on 120 Hz displays (2026-09-16)
 

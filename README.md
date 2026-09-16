@@ -382,8 +382,9 @@ Smooth frame pacing primes one frame interval, keeps up to three decoded images 
 | --- | --- | --- |
 | Canvas · software | Decode H.264, encode MPEG-1 | Software WASM decoding and Canvas 2D |
 
-Under Advanced, **Video output** switches the browser-decoded modes from drawing on a canvas to a
-video element fed through a MediaStream (Chrome and other Chromium browsers). The element reports when
+Under Advanced, **Video output** defaults to a video element fed through a MediaStream where the
+browser supports it (Chrome and other Chromium browsers) and falls back to drawing on a canvas; on a
+120 Hz MacBook the element felt smoother in play even though both paths measured the same cadence. The element reports when
 each frame reached the screen, and diagnostics record that as display timing, which the canvas path
 cannot measure.
 | Automatic (default) | H.265 on a PS5, H.264 otherwise, whichever the browser decodes in hardware | WebCodecs decoding and Canvas 2D |
