@@ -8,25 +8,135 @@ The synthetic video pipeline has been tested at 60 fps in desktop Chromium with 
 
 ![Software-decoded 1080p60 stream with audio](docs/images/1080p60-audio.png)
 
-## Run
+## Deploy
 
-Two ways to run it:
+Two supported ways to run the server, plus a domain for HTTPS. HTTPS matters
+beyond security: browsers only expose WebCodecs on `https://` or `localhost`,
+so H.264 and H.265 modes need a trusted certificate. Plain HTTP on a LAN
+address falls back to Canvas software video.
 
-- **Docker Compose** on any Linux, macOS or Windows host with Docker, described
-  below. Rootless Docker and Docker Desktop need `DISCOVERY_SUBNETS` for console
-  discovery and route the video stream through a user-space network relay.
-- **Proxmox LXC** with rootful Docker and host networking, which gives the
-  console stream a kernel-only path and native broadcast discovery. See
-  [docs/proxmox-lxc.md](docs/proxmox-lxc.md); the scripts in `deploy/proxmox/`
-  create the container and install everything.
+### Option A: Proxmox LXC (recommended)
 
-Install Docker with Compose, then run from this directory:
+An unprivileged Debian container with rootful Docker inside and host
+networking. The console's UDP stream reaches the app through the kernel alone
+and discovery and wake use LAN broadcasts, so no subnet configuration is needed.
+The full guide with data migration is in [docs/proxmox-lxc.md](docs/proxmox-lxc.md).
+
+On the Proxmox node:
 
 ```sh
+git clone https://github.com/fabioneves/psrp-web.git && cd psrp-web
+CTID=120 HOSTNAME=psrp BRIDGE=vmbr0 STORAGE=local-lvm \
+  SSH_KEY=~/.ssh/id_ed25519.pub ./deploy/proxmox/create-lxc.sh
+```
+
+This downloads the newest Debian standard template, creates the container with
+`nesting=1,keyctl=1` (required by Docker), 4 cores, 2 GB RAM, 16 GB disk and a
+bridged interface on DHCP, then starts it. Set `IP=192.168.1.60/24
+GATEWAY=192.168.1.1` for a static address; `CORES`, `MEMORY`, `DISK`,
+`TEMPLATE_STORAGE` and `PASSWORD` are also accepted. Give the container a DHCP
+reservation or a static address so bookmarks keep working.
+
+Then install inside it:
+
+```sh
+pct push 120 deploy/proxmox/install.sh /root/install.sh
+pct exec 120 -- sh /root/install.sh
+```
+
+The installer adds Docker CE, clones this repository to `/opt/psrp`, writes a
+`.env` with a generated database password and host networking, builds the
+image and starts the stack. It prints `http://<container address>:8080` when
+the health check answers. To add HTTPS in the same step, run it as
+`REMOTE_PLAY_DOMAIN=play.example.com sh /root/install.sh` after finishing the
+domain setup below.
+
+Updates: `cd /opt/psrp && git pull && docker compose up --build -d`.
+
+### Option B: Docker Compose
+
+Any Linux, macOS or Windows host with Docker and Compose 2.24 or newer:
+
+```sh
+git clone https://github.com/fabioneves/psrp-web.git && cd psrp-web
+cp .env.example .env        # optional: PORT, DB_PASSWORD, DISCOVERY_SUBNETS
 docker compose up --build -d
 ```
 
-Open **http://localhost:8080** (or your server's IP and port).
+Open **http://localhost:8080**, or the server's IP and port. To use another
+port set `PORT=18080` in `.env` and rerun `docker compose up -d`.
+
+Two things depend on how Docker runs:
+
+- **Console discovery.** Rootful Docker on Linux can use host networking, which
+  makes LAN broadcast discovery and wake work natively:
+  `docker compose -f compose.yaml -f compose.host.yaml up --build -d`.
+  Rootless Docker and Docker Desktop cannot broadcast from a container; set
+  `DISCOVERY_SUBNETS=192.168.1.0/24` (your LAN) in `.env` so discovery probes
+  the subnet directly, or use **Check IP address** for a known console.
+- **Stream quality.** Rootless Docker and Docker Desktop relay every packet
+  through a user-space network stack, which can drop parts of a 10 Mbps
+  stream under load. See [Rootless Docker and periodic loss](#rootless-docker-and-periodic-loss).
+  Rootful Docker with host networking, or Option A, avoids the relay.
+
+The first build downloads the .NET SDK, FFmpeg and a pinned Chiaki-ng library
+for PSN pairing. PostgreSQL migrations run automatically. There are no GPU
+device mounts or privileged containers.
+
+Updates: `git pull && docker compose up --build -d`, then refresh the page. The
+build versions asset URLs so browsers and CDNs fetch the updated client;
+restarting an existing container alone does not rebuild anything.
+
+### Domain and HTTPS
+
+1. Choose a hostname, for example `play.example.com`, and create a DNS **A**
+   record (and **AAAA** if you have IPv6) pointing at your public IP. For a
+   dynamic IP use a dynamic DNS provider and a CNAME.
+2. On your router, forward public TCP **80** and **443** to the server: the
+   LXC's address for Option A, the Docker host for Option B. Port 80 is needed
+   for certificate issuance and the HTTP-to-HTTPS redirect. If only a
+   nonstandard public port is possible, certificate validation needs a DNS
+   provider integration instead; see
+   [Caddy's certificate validation requirements](https://caddyserver.com/docs/automatic-https#acme-challenges).
+3. In `.env` set:
+
+   ```dotenv
+   REMOTE_PLAY_DOMAIN=play.example.com
+   # Option A (LXC, host networking):
+   COMPOSE_FILE=compose.yaml:compose.host.yaml:compose.https.yaml:compose.lxc.yaml
+   # Option B (bridge networking):
+   COMPOSE_FILE=compose.yaml:compose.https.yaml
+   ```
+
+   With rootless Docker the proxy cannot bind 80 and 443 directly; add
+   `HTTP_PORT=18090` and `HTTPS_PORT=18443` and forward public 80 → 18090 and
+   443 → 18443 instead.
+4. Run `docker compose up --build -d`. Caddy obtains and renews the Let's
+   Encrypt certificate and proxies the app, including its WebSockets. No
+   browser-facing UDP, STUN or TURN ports are needed.
+5. Verify from outside your network: `curl -f https://play.example.com/healthz`
+   returns `{"status":"ready","streams":0}`. `docker compose ps` shows the
+   `proxy` service healthy once the certificate is issued.
+
+The overlay binds the plain HTTP port to loopback; set `HTTP_BIND=0.0.0.0` if
+you also want direct HTTP access on the LAN. Certificates persist in the
+`caddy-data` volume. To turn HTTPS off, remove `COMPOSE_FILE` from `.env` and
+run `docker compose up -d`; accounts and pairings are kept.
+
+If a reverse proxy already terminates TLS on the host, skip the overlay and
+point it at the app port with WebSocket support, for example in Caddy:
+
+```caddyfile
+play.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Keep the server on a trusted network or behind controlled access: account
+creation is open to anyone who can reach the sign-in page, and the database
+and `app-data` volumes hold pairing credentials and the login signing secret.
+
+### First use
 
 1. Create a local account or sign in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it.
 2. Select a nearby console, or choose **Add console** to enter its IP address.
@@ -35,27 +145,12 @@ Open **http://localhost:8080** (or your server's IP and port).
 
 Manual account-ID entry and public online-name lookup are also available under PIN pairing. The public lookup provider may be unavailable; Sony sign-in does not depend on it. See [setup details and verification limits](docs/psn-setup.md).
 
-The first build downloads the .NET SDK, FFmpeg and a pinned Chiaki-ng library for PSN pairing. PostgreSQL migrations run automatically. Accounts and console registrations persist in `postgres-data`; the signing secret and PSN token-encryption keys persist in `app-data`. Keep both volumes when upgrading. There are no GPU device mounts or privileged containers.
-
-After updating the code, run `docker compose up --build -d` and refresh the page.
-Docker builds content-versioned asset URLs so browser/CDN caches fetch the updated
-client, including its workers and decoders. Restarting an existing container alone
-does not rebuild the application.
-
-### Change the port
-
-```sh
-cp .env.example .env
-```
-
-Set `PORT=18080` in `.env`, then run `docker compose up -d`. Browse to http://localhost:18080.
-
-### Operations
+### Operations, logs and backups
 
 ```sh
 docker compose ps
 docker compose logs --tail 100 remote-play
-docker compose down
+docker compose down          # keeps the data volumes
 ```
 
 `/healthz` returns `{"status":"ready","streams":0}` when the application can reach
@@ -67,7 +162,11 @@ container also discards its log, so save it before an update:
 mkdir -p ~/psrp-logs && docker compose logs --timestamps remote-play > ~/psrp-logs/$(date -u +%Y%m%dT%H%M%SZ).log
 ```
 
-`docker compose down` preserves the named data volumes.
+Accounts and console registrations persist in the `postgres-data` volume; the
+login signing secret and PSN token-encryption keys persist in `app-data`. Keep
+both volumes when upgrading and back up both together; on Proxmox a container
+snapshot or `vzdump` covers them. [docs/proxmox-lxc.md](docs/proxmox-lxc.md)
+shows how to move both to a new instance.
 
 ### Rootless Docker and periodic loss
 
@@ -121,9 +220,10 @@ The Docker server must be able to reach the console on your home network. The br
 - Alternatively, use public online-name lookup or paste a **numeric PSN account ID**; it is encoded automatically. Existing Base64 IDs from Chiaki also work.
 - Automatic pairing requires the PSN account on the console and working PSN connectivity. PIN pairing requires a fresh console PIN. Each local user must pair their own console; stream access is checked against their device bindings.
 
-Default Compose uses bridge networking. To enable **automatic network discovery**
-when Docker cannot forward LAN broadcasts, set your LAN subnet in `.env` and
-recreate the service:
+The Proxmox LXC path and rootful Docker with `compose.host.yaml` discover
+consoles by LAN broadcast without further settings. Default Compose uses bridge
+networking; to enable **automatic network discovery** when Docker cannot forward
+LAN broadcasts, set your LAN subnet in `.env` and recreate the service:
 
 ```dotenv
 DISCOVERY_SUBNETS=192.168.1.0/24
@@ -156,53 +256,12 @@ server and console.
 
 ### Access from a Tesla browser
 
-Use a domain and HTTPS reverse proxy reachable by the vehicle. The Moonlight reference reports restrictions on raw IP/local-network access in Tesla browsers. That behavior varies by vehicle/browser version; this implementation still needs testing on the target Tesla.
-
-A Docker HTTPS overlay is included (Compose 2.24.4+). Set
-`REMOTE_PLAY_DOMAIN=play.example.com` in `.env`, point that DNS name at your server,
-and make TCP ports 80/443 reachable. Start it with:
-
-```sh
-docker compose -f compose.yaml -f compose.https.yaml up --build -d
-```
-
-Caddy obtains/renews the certificate and proxies WebSockets. This overlay binds
-the direct HTTP app port to loopback for local checks or an existing proxy. Set
-`HTTP_BIND` to a LAN address if you also need direct HTTP access from your LAN.
-Use it with the default
-bridge configuration; the separate host-network override is for LAN discovery.
-No browser-facing UDP media ports, STUN or TURN are required. DNS, routing and
-certificate issuance need your real domain; local validation does not prove the
-vehicle can reach it.
-
-To keep HTTPS enabled with ordinary `docker compose up -d` commands, add
-`COMPOSE_FILE=compose.yaml:compose.https.yaml` to `.env`.
-
-For rootless Docker, use unprivileged host ports, for example `HTTP_PORT=18090`
-and `HTTPS_PORT=18443`. Forward public TCP port **80 to server port 18090** and
-public TCP port **443 to server port 18443**, then open `https://play.example.com/`
-without a port suffix. The DNS record must point directly to the router's public
-IP. Forwarding plain HTTP port 18080 alone does not provide HTTPS or enable
-WebCodecs. If only a nonstandard public port is available, certificate issuance
-and renewal require a separate validation route, such as DNS-provider integration.
-See [Caddy's certificate validation requirements](https://caddyserver.com/docs/automatic-https#acme-challenges).
-
-Check `docker compose ps` and `curl -f https://play.example.com/healthz` after
-forwarding the ports. A healthy proxy container confirms Caddy is running; the
-HTTPS health request also verifies certificate issuance and public routing.
-Certificates persist in the `caddy-data` volume. To disable the HTTPS overlay,
-stop the proxy and remove `COMPOSE_FILE` from `.env`, then run
-`docker compose -f compose.yaml up -d`; app accounts and pairing data are preserved.
-
-If you already run Caddy on the host, a minimal configuration is:
-
-```caddyfile
-play.example.com {
-    reverse_proxy 127.0.0.1:8080
-}
-```
-
-Use your actual port if changed. Keep the server on a trusted network or behind controlled access, and use HTTPS whenever credentials cross an untrusted network. The app uses the existing local-account model; account creation is open to anyone who can reach it. Database and signing-secret volumes contain sensitive registration material.
+Use a domain with HTTPS reachable by the vehicle, set up as in
+[Domain and HTTPS](#domain-and-https). The Moonlight reference reports
+restrictions on raw IP and local-network access in Tesla browsers; that
+behaviour varies by vehicle and browser version, and only a trusted certificate
+enables the H.264 and H.265 modes there. Local validation does not prove the
+vehicle can reach the address.
 
 ## How software playback works
 
