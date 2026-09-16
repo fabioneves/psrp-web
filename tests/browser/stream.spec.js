@@ -204,7 +204,7 @@ test('software-only 720p60 test stream renders, reports performance and reconnec
   expect(fps).toBeGreaterThan(50);
   await page.screenshot({ path: testInfo.outputPath('stream.png') });
   await testInfo.attach('performance', { body: JSON.stringify({ fps, framesSinceWarmup: Number(await page.locator('#fps').getAttribute('data-frames')) - start, measuredSeconds: (Date.now() - started) / 1000, stats: await page.locator('.stats').innerText(), gpuDisabled: true }), contentType: 'application/json' });
-  expect(await page.locator('video,audio').count()).toBe(0);
+  expect(await page.locator('video:not([hidden]),audio').count()).toBe(0, 'canvas output leaves the video-element output hidden');
   await page.locator('#show-controls').check();
   await page.getByRole('button', { name: 'Cross', exact: true }).click();
   await page.keyboard.press('KeyW');

@@ -4,6 +4,7 @@ import { bindSessionTabs } from './session-tabs.js';
 import { updateHud, resetHud, copyDiagnostics } from './debug-hud.js';
 import { selectVideoCodec, nativeVideoConfig } from './native-decoder.js';
 import { StreamHealth } from './stream-health.js';
+import { createVideoSink, supportsVideoSink } from './video-sink.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
@@ -38,7 +39,7 @@ const workerAnimationFrames = new Promise(resolve => {
     setTimeout(() => done(false), 5000);
   } catch { done(false); }
 });
-let audio = null, quality = null, activeCodec = 'mpeg1';
+let audio = null, quality = null, activeCodec = 'mpeg1', videoSink = null;
 const failedCodecs = new Set();
 let decoderFailure = '', sleepingHost = null;
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
@@ -70,7 +71,7 @@ try {
 } catch {}
 let startInFullscreen = false;
 try { startInFullscreen = localStorage.getItem('remote-play:auto-fullscreen') === 'true'; } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style', 'auto-quality'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style', 'auto-quality', 'video-output'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -705,8 +706,12 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   const previous = $('screen');
   const canvas = previous.cloneNode(); previous.replaceWith(canvas);
   const report = message => { if (attempt === current) onStreamMessage(message); };
+  // Video-element output runs on the main thread: the element is DOM, and its frame callbacks report real screen timing.
+  const wantsVideoSink = $('video-output').value === 'video' && !inputSession && activeCodec !== 'mpeg1';
+  const useVideoSink = wantsVideoSink && supportsVideoSink();
+  if (wantsVideoSink && !useVideoSink) $('video-mode-status').textContent += ' Video element output is unavailable in this browser; drawing on canvas.';
   try {
-    const useWorker = !inputSession && !forceMain && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
+    const useWorker = !inputSession && !forceMain && !useVideoSink && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
       typeof OffscreenCanvas === 'function' && !!new OffscreenCanvas(1, 1).getContext('2d') &&
       !new URLSearchParams(location.search).has('mainThread') && await workerAnimationFrames;
     if (useWorker) {
@@ -720,7 +725,8 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {
-      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration, { fps: profile.fps, pacing });
+      if (useVideoSink) { videoSink = createVideoSink($('screen-video')); $('screen-video').hidden = false; canvas.hidden = true; }
+      const connection = await startStream(inputSession ? null : canvas, url.href, report, activeCodec, hardwareAcceleration, { fps: profile.fps, pacing, sink: videoSink });
       if (attempt !== current) { connection.close(); return; }
       stream = connection;
     }
@@ -825,6 +831,7 @@ function stop(preserveTarget = false) {
     worker = null;
   }
   stream?.close(); stream = null;
+  videoSink?.close(); videoSink = null; $('screen-video').hidden = true; $('screen').hidden = false;
   if (preserveTarget) return;
   resetFullscreenGestures();
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});

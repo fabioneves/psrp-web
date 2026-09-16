@@ -46,6 +46,18 @@ refreshes with no new frame, rebuilds and the display refresh interval. The
 simulated cost is about one extra refresh interval of latency in smooth mode;
 responsive mode is unchanged.
 
+### Video-element output and screen timing (2026-09-16)
+
+Every capture so far measured when a frame was handed to the compositor,
+not when the screen showed it. The Advanced "Video output" setting now
+routes browser-decoded frames into a MediaStreamTrackGenerator feeding a
+video element (Chromium). Its requestVideoFrameCallback metadata gives the
+interval between actual screen presentations and frames the pipeline
+skipped; diagnostics samples record them as display, displayMax and
+displaySkipped. It also takes the 2D canvas out of the path, which is the
+remaining suspect for judder that the hand-off numbers do not show. It runs
+on the main thread because the element is DOM.
+
 ### Cadence drift on 120 Hz displays (2026-09-16)
 
 A LAN capture from a MacBook with a 120 Hz display (refresh interval 8.3 ms

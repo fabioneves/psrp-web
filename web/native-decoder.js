@@ -118,8 +118,10 @@ export function createNativeDecoder(canvas, report, options = {}) {
   const hardwareAcceleration = options.hardwareAcceleration || 'prefer-hardware';
   const engine = `${label} · ${hardwareAcceleration === 'prefer-hardware' ? 'hardware preferred' : 'browser decoding'}`;
   const parameters = new Map();
-  const context = canvas.getContext('2d', { alpha: false, desynchronized: true });
-  if (!context) throw new Error('This browser does not support video drawing.');
+  const sink = options.sink || null;
+  const context = sink ? null : canvas.getContext('2d', { alpha: false, desynchronized: true });
+  if (!sink && !context) throw new Error('This browser does not support video drawing.');
+  const size = { width: canvas?.width || 0, height: canvas?.height || 0 };
   const pending = new Map();
   let stopped = false, configuration, progressAt = null, waitingForKey = true, firstMedia = null, lastTimestamp = -1, everDecoded = false, lastInputAt = null;
   let decoded = 0, drawn = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
@@ -129,18 +131,20 @@ export function createNativeDecoder(canvas, report, options = {}) {
     const item = frames.take(performance.now());
     if (!item) return frames.pending ? 'waiting' : false;
     const { frame, timestamp, savedAt } = item;
+    let handedOver = false;
     try {
-      if (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
+      size.width = frame.displayWidth; size.height = frame.displayHeight;
+      if (!sink && (canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight)) {
         canvas.width = frame.displayWidth; canvas.height = frame.displayHeight;
       }
       queueMs = performance.now() - savedAt;
       const before = performance.now();
-      context.drawImage(frame, 0, 0);
+      if (sink) { handedOver = true; sink.draw(frame); } else context.drawImage(frame, 0, 0);
       drawMs += performance.now() - before;
       drawn++; totalFrames++;
       options.onPresent?.(timestamp);
     } catch (error) { options.onError?.(error.message); }
-    finally { frame.close(); }
+    finally { if (!handedOver) frame.close(); }
     return frames.pending;
   }, globalThis, 1000 / (options.fps || 60));
   let decoder, resets = [], keyframeAskedAt = null;
@@ -214,11 +218,11 @@ export function createNativeDecoder(canvas, report, options = {}) {
       return;
     }
     const elapsed = performance.now() - start;
-    report({ type: 'stats', ...presentation.metrics(), ...frames.metrics(), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
+    report({ type: 'stats', ...presentation.metrics(), ...frames.metrics(), ...(sink ? sink.metrics() : {}), fps: drawn * 1000 / elapsed, decodedFps: decoded * 1000 / elapsed,
       decodeMs: drawn ? (decodeMs + drawMs) / drawn : 0, codecMs: 0, nativeDecodeMs: decoded ? decodeMs / decoded : 0,
       colorMs: 0, drawMs: drawn ? drawMs / drawn : 0, queueMs, droppedFrames: frames.dropped, decodeQueue: queue.items.length + decoder.decodeQueueSize,
       pixelEngine: 'Browser', mbps: bytesReceived * 8 / elapsed / 1000, totalFrames,
-      width: canvas.width, height: canvas.height, engine });
+      width: size.width, height: size.height, engine: sink ? `${engine} · video element` : engine });
     decoded = drawn = bytesReceived = decodeMs = drawMs = 0; start = performance.now();
   }, 1000);
   return {

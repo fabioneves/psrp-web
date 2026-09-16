@@ -580,11 +580,15 @@ main:has(#account:not([hidden])) {
   display:flex;
   justify-content:center;
 }
-#screen {
+#screen,#screen-video {
   display:block;
   width:100%;
   height:100%;
   object-fit:contain;
+  background:#000;
+}
+#screen[hidden],#screen-video[hidden] {
+  display:none;
 }
 #connecting {
   position:absolute;

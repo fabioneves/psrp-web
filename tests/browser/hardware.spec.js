@@ -251,3 +251,20 @@ test('H.264 stays native when Chrome can decode it without a hardware preference
   await expect(page.locator('#video-mode')).toHaveValue('auto');
   await page.locator('#stop').click();
 });
+
+test('video element output shows frames, hides the canvas and reports screen timing', async ({ page }) => {
+  await useNativeSoftwareDecoder(page);
+  await register(page);
+  await page.locator('#advanced-settings summary').click();
+  await chooseSetting(page, 'video-output', 'video');
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#engine')).toContainText('video element', { timeout: 30000 });
+  await expect(page.locator('#screen-video')).toBeVisible();
+  await expect(page.locator('#screen')).toBeHidden();
+  const metrics = async () => JSON.parse(await page.locator('#timing-status').getAttribute('data-metrics') || '{}');
+  await expect.poll(async () => (await metrics()).displayedFrames ?? 0, { timeout: 30000 }).toBeGreaterThan(30);
+  expect((await metrics()).displayP95Ms).toBeGreaterThan(0);
+  await page.locator('#stop').click();
+  await expect(page.locator('#screen-video')).toBeHidden();
+  expect(await page.locator('#screen').getAttribute('hidden')).toBeNull();
+});
