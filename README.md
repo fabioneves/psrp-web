@@ -48,7 +48,7 @@ does not rebuild the application.
 cp .env.example .env
 ```
 
-Set `PORT=18080` in `.env`, then run `docker compose up -d`. Browse to http://localhost:18080. This workspace uses port **18080** because 8080 was occupied.
+Set `PORT=18080` in `.env`, then run `docker compose up -d`. Browse to http://localhost:18080.
 
 ### Operations
 
@@ -77,13 +77,14 @@ container's own UDP buffers never overflowed, but the host's did, in the
 sockets of `slirp4netns`, the user-space network relay that rootless Docker
 routes every container packet through. The background console status scan
 adds enough work to that relay to drop the stream for the length of the scan.
-The scan now skips while a stream is running. This host now runs rootless Docker
-with the `pasta` network driver (`passt` package, and
-`Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=pasta` in
-`~/.config/systemd/user/docker.service.d/pasta.conf`), which maps UDP flows
-socket to socket instead of running a user-space TCP/IP stack. Restarting the
-daemon for that change stops every container; containers without a restart
-policy have to be started again by hand.
+The scan now skips while a stream is running. If you must stay on rootless
+Docker, switch its network driver to `pasta` (install the `passt` package and
+set `Environment=DOCKERD_ROOTLESS_ROOTLESSKIT_NET=pasta` in a drop-in under
+`~/.config/systemd/user/docker.service.d/`), which maps UDP flows socket to
+socket instead of running a user-space TCP/IP stack. Restarting the daemon for
+that change stops every container; containers without a restart policy have
+to be started again by hand. Rootful Docker with `compose.host.yaml`, or the
+Proxmox LXC path, avoids the relay entirely.
 
 ### Corrupt frames and keyframes
 
@@ -203,68 +204,6 @@ play.example.com {
 
 Use your actual port if changed. Keep the server on a trusted network or behind controlled access, and use HTTPS whenever credentials cross an untrusted network. The app uses the existing local-account model; account creation is open to anyone who can reach it. Database and signing-secret volumes contain sensitive registration material.
 
-### Sharing HTTPS with DDEV
-
-For the deployment at `play.example.com`, `deploy/ddev-ps5rp.yaml` adds a
-hostname-specific route to the existing DDEV Traefik router. DDEV passes this
-hostname's TLS connection to Caddy at `192.0.2.10:18443`; Caddy manages its
-public certificate and proxies the app. Other DDEV sites retain their routes and
-certificates. Keep `COMPOSE_FILE=compose.yaml:compose.https.yaml`,
-`REMOTE_PLAY_DOMAIN=play.example.com`, `HTTP_PORT=18090`, `HTTPS_PORT=18443`,
-`PORT=18080`, and `HTTP_BIND=0.0.0.0` in this deployment's `.env`.
-
-Install the DDEV configuration:
-
-```sh
-cp deploy/ddev-ps5rp.yaml ~/.ddev/traefik/custom-global-config/ps5rp.yaml
-cp deploy/ddev-static-ps5rp.yaml ~/.ddev/traefik/static_config.ps5rp.yaml
-```
-
-The dynamic route passes HTTPS to Caddy and HTTP to its redirect/challenge
-listener at port 18090. The static setting allows TLS certificate validation to
-reach Caddy through DDEV. Apply static changes during a DDEV router restart;
-DDEV merges these files during startup. For an existing router, the dynamic file
-can also be copied to `/mnt/ddev-global-cache/traefik/config/ps5rp.yaml` inside
-`ddev-router` without restarting other projects.
-See [DDEV's routing configuration](https://docs.ddev.com/en/stable/users/extend/traefik-router/)
-and [Traefik's ACME passthrough setting](https://doc.traefik.io/traefik/routing/entrypoints/#allowacmebypass).
-
-Public TCP **443 must reach `192.0.2.10:8443`**, the existing DDEV HTTPS
-listener. All hostnames share this forwarding rule. Optional public TCP 80 can
-reach DDEV's port 8080. Open `https://play.example.com/` without `:18080`.
-Forwarding public port 443 directly to Caddy would bypass DDEV's other sites.
-
-This server also has standard-port listeners installed from `deploy/systemd/`:
-server TCP 80 forwards to DDEV on 8080, and server TCP 443 forwards to DDEV on
-8443. Router rules may therefore use **80 → `192.0.2.10:80`** and
-**443 → `192.0.2.10:443`**. These must be port-forwarding rules, not just
-firewall allow rules. The systemd listeners start at boot and run their forwarding
-processes as unprivileged dynamic users; DDEV continues running in rootless Docker.
-To install these listeners on a systemd host where ports 80/443 are free:
-
-```sh
-sudo install -m 644 deploy/systemd/* /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now ddev-public-http.socket ddev-public-https.socket
-```
-
-Check them with `systemctl status ddev-public-http.socket ddev-public-https.socket`.
-To remove the listeners, disable both socket units with `systemctl disable --now`,
-then stop `ddev-port@8080.service` and `ddev-port@8443.service`. DDEV still accepts
-direct connections on its original ports 8080/8443.
-
-DDEV's existing wildcard development certificates suppress its own ACME issuance
-for covered hostnames, so this integration uses Caddy for certificate management.
-Verify the public certificate with `curl -f https://play.example.com/healthz` from
-a device that does not trust DDEV's development CA. Until public 443 reaches
-DDEV, certificate issuance remains pending. If public 443 is unavailable, use
-DNS-based certificate validation instead.
-
-To remove just this integration, delete `ps5rp.yaml` from the user-managed
-configuration directory and the router's config volume. Remove
-`static_config.ps5rp.yaml` and restart the DDEV router to remove the passthrough
-setting. Other DDEV routes and the app's LAN HTTP address remain available.
-
 ## How software playback works
 
 ```mermaid
@@ -300,7 +239,7 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 
 When your browser and server are on the same LAN, use the server's local address
 and configured port to avoid routing the stream through a public proxy. For this
-workspace that is `http://192.0.2.10:18080`. Use your own server address elsewhere.
+server address in your own deployment.
 The same database accounts and paired consoles are available, but a different
 origin needs its own sign-in. Compare **Stream diagnostics → Round trip**.
 A powerful encoder cannot remove internet routing delay. Keep 720p60 as a starting

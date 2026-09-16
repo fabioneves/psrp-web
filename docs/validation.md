@@ -166,8 +166,8 @@ specific URL/browser path was not tested in that round.
 
 ### Public-domain cache fix
 
-The refresh failure was reproduced in Chrome through `https://play.example.com/`.
-Cloudflare returned an older `/app.js` with `CF-Cache-Status: HIT` and a four-hour
+The refresh failure was reproduced in Chrome through the public HTTPS deployment.
+The CDN in front of that deployment returned an older `/app.js` from its cache with a four-hour
 cache lifetime. Login saved its cookie, but that cached client never called the
 session restore endpoint on reload. The origin's JavaScript `no-cache` header and
 container restarts did not invalidate the public cached response.
@@ -212,8 +212,8 @@ rebuilt and reports healthy.
 ### Automatic discovery through rootless Docker
 
 Directed LAN broadcasts also failed from the container. Automatic discovery now
-uses bounded unicast probes when `DISCOVERY_SUBNETS` is configured. This deployment
-uses its host LAN, `192.168.1.0/24`, without hardcoding a console IP. Normal broadcast
+uses bounded unicast probes when `DISCOVERY_SUBNETS` is configured. The test deployment
+listed its host LAN subnet without hardcoding a console IP. Normal broadcast
 discovery remains the default for deployments without that setting.
 
 Backend regression coverage includes range normalization, duplicate/invalid scope,
@@ -261,7 +261,7 @@ Validation on 2026-09-15:
   disabled. Existing software video, stereo audio, gamepads, phone input and
   1080p60 rendering checks passed. Setup tests cover the Sony callback UI,
   automatic-pairing success/error responses, public lookup and PIN fallback.
-- The public HTTPS site automatically discovered the real PS5Pro at 192.0.2.20.
+- The public HTTPS site automatically discovered the real PS5 Pro on the LAN.
   Desktop and mobile setup screens were inspected in Chromium.
 - The native helper compiled in Docker and rejected invalid input in the running
   application container without outputting credentials. Its source download
@@ -303,7 +303,7 @@ refreshes card status from live discovery instead of retaining the pairing snaps
 UDP tests verify the destination, PS4/PS5 versions and credentials. Database/fake
 console tests verify standby → ready, already-awake behavior, device identity and
 user isolation. Browser tests exercise wake progress, timeout messages and ownership
-rejection. The real PS5 at 192.0.2.20 responded HTTP 200 Ok during diagnosis.
+rejection. The real PS5 responded HTTP 200 Ok during diagnosis.
 
 A real console connection then reproduced `Connection refused` at the control TCP
 connection immediately after the initial request. Session TCP connections now
@@ -312,7 +312,7 @@ failed handshake sockets are disposed. A local TCP test starts its listener late
 to verify retry and cancellation behavior.
 
 With the updated handshake, two consecutive real PS5 connections through
-`https://play.example.com/` reached playback. Short snapshots decoded about 60 fps
+the public HTTPS deployment reached playback. Short snapshots decoded about 60 fps
 but presented 43–55 fps over that route, with 119–123 ms round trip and roughly
 64–69 ms from server-ready media to canvas. A local connection presented about
 59 fps with 0.4 ms round trip and 17 ms ready-to-canvas. These observations show
@@ -504,7 +504,7 @@ did not reserve the production console viewer slot. The deployment health check
 passed. No active viewer or console-control TCP connection remained afterward.
 The separately reported PS5 busy state is not claimed resolved by the queue fix.
 
-The user's current address is http://192.0.2.10:18080/ on Chrome/macOS. This is
+The test client used the server's plain HTTP LAN address on Chrome/macOS. This is
 an insecure context: native WebCodecs is unavailable there regardless of codec
 selection, so Canvas is expected. Native modes need trusted HTTPS or localhost;
 using the public HTTPS proxy from the LAN can add route latency. The isolated
@@ -512,11 +512,8 @@ Chrome tests do not establish Tesla throughput or end-to-end controller latency.
 
 ### Direct HTTPS and connection retry feedback
 
-`https://play.example.com/healthz` now responds over trusted TLS 1.3 with a
-Let's Encrypt certificate. Public traffic reaches DDEV, whose hostname-specific
-TLS route forwards this project to Caddy. Standard-port systemd listeners forward
-80/443 to DDEV's rootless 8080/8443 listeners. The 55 pre-existing DDEV HTTP routes
-were compared before and after and remain unchanged.
+The public `/healthz` endpoint now responds over trusted TLS 1.3 with a
+Let's Encrypt certificate obtained by the Caddy overlay.
 
 Public HTTPS sign-in persistence and a 720p60 Canvas playback/reconnect test
 passed. A native H.264 startup test missed its five-second frame deadline on the

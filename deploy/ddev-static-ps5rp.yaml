@@ -1,3 +1,0 @@
-entryPoints:
-  http-8443:
-    allowACMEByPass: true
