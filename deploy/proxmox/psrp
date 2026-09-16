@@ -37,11 +37,13 @@ case "${1:-}" in
         docker compose up --build -d
         until [ -n "$(health)" ]; do sleep 3; done
         docker image prune -f >/dev/null
+        docker builder prune -f --keep-storage 3GB >/dev/null 2>&1 || true
         echo "Updated $before -> $after. $(health)"
         ;;
     status)
         echo "Version   $(git rev-parse --short HEAD) ($(git log -1 --format=%cd --date=short))"
         echo "Health    $(health)"
+        echo "Disk      $(df -h / | awk 'NR==2 {print $3" used of "$2" ("$5")"}')  ·  docker: $(docker system df --format '{{.Type}} {{.Size}}' | tr '\n' ' ')"
         docker compose ps
         ;;
     logs) docker compose logs --tail "${2:-100}" remote-play ;;

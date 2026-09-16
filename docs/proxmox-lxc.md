@@ -37,6 +37,14 @@ container, publishes the .NET app and compiles the pairing helper with four
 jobs and peaks well above 1 GB with no swap configured. Both limits are
 ceilings, not reservations, so the unused share stays with the node.
 
+Disk: the first build leaves about 5 GB in Docker (the 1.1 GB runtime image,
+PostgreSQL and Caddy images, and the .NET SDK, Ubuntu and Node build stages
+kept as cache for fast rebuilds) on top of roughly 1.5 GB for Debian and
+Docker. Growth is bounded: container logs rotate at five files of 20 MB per
+service, `psrp update` prunes replaced images and trims the build cache to
+3 GB, and the database is tens of megabytes. 16 GB is ample; `psrp status`
+shows the usage.
+
 Give the container a DHCP reservation, or a static address, so the console and
 any bookmarks keep finding it.
 

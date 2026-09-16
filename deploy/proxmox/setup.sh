@@ -64,7 +64,7 @@ if [ "$IP" != dhcp ]; then
 fi
 ask CORES "CPU cores (4 keeps builds quick; streaming itself needs 2)" "4"
 ask MEMORY "Memory in MB (the image build peaks well above 1 GB)" "4096"
-ask DISK "Disk in GB" "16"
+ask DISK "Disk in GB (the build leaves about 5 GB; growth is bounded)" "16"
 
 step "Domain (HTTPS)"
 say "Browsers only allow H.264/H.265 decoding on HTTPS, and a Tesla needs a public hostname,"
