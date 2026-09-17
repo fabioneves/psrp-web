@@ -184,3 +184,22 @@ test('paired cards replace saved standby status with live console state', async 
   await page.locator('#refresh').click();
   await expect(page.locator('.device p')).toContainText('Rest mode');
 });
+
+test('a page from an older build reloads itself once when the server has moved on', async ({ page }) => {
+  let versionCalls = 0;
+  await page.route('**/api/version', route => { versionCalls++; route.fulfill({ json: { version: 'zzz9999', latest: 'zzz9999', updateAvailable: false, checkedAt: null } }); });
+  await page.addInitScript(() => { document.addEventListener('DOMContentLoaded', () => { document.querySelector('meta[name=app-version]').content = 'abc1234'; }); });
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Create a local account' }).click();
+  const name = `stale_${Date.now()}`;
+  await page.getByLabel('Username (letters, numbers, underscore)').fill(name);
+  await page.getByLabel('Email', { exact: true }).fill(`${name}@example.test`);
+  await page.getByLabel('Password', { exact: true }).fill('LocalTestPassword_123');
+  const reloaded = page.waitForEvent('load');
+  await page.getByRole('button', { name: 'Create account', exact: true }).click();
+  await reloaded;
+  await expect(page.locator('#library')).toBeVisible();
+  await expect(page.locator('#update-notice')).toContainText('Server updated to zzz9999', { timeout: 10000 });
+  expect(await page.evaluate(() => sessionStorage.getItem('remote-play:reloaded-for'))).toBe('zzz9999');
+  expect(versionCalls).toBeGreaterThanOrEqual(2);
+});

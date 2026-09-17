@@ -14,14 +14,17 @@ for (const entry of entries.filter(entry => entry.isFile())) {
 const hash = createHash('sha256').update(await readFile(new URL(import.meta.url)));
 for (const path of [...files.keys()].sort()) hash.update(path).update('\0').update(files.get(path)).update('\0');
 const prefix = `/assets/${hash.digest('hex').slice(0, 20)}`;
+// The page carries the build version so an open tab can tell when the server has moved on.
+const version = process.env.APP_VERSION || 'dev';
 
 await cp(source, output, { recursive: true });
 for (const [path, bytes] of files) {
   const destination = path.endsWith('.html') ? join(output, path) : join(output, prefix, path);
-  const content = /\.(html|js|css)$/.test(path)
+  let content = /\.(html|js|css)$/.test(path)
     ? bytes.toString().replace(/(["'])(\/[^"'\s]+)\1/g, (match, quote, url) =>
       files.has(url.slice(1)) ? `${quote}${prefix}${url}${quote}` : match)
     : bytes;
+  if (path.endsWith('.html')) content = content.replace('<meta name="app-version" content="dev">', `<meta name="app-version" content="${version}">`);
   await mkdir(dirname(destination), { recursive: true });
   await writeFile(destination, content);
 }

@@ -5,6 +5,7 @@ import { updateHud, resetHud, copyDiagnostics } from './debug-hud.js';
 import { selectVideoCodec, nativeVideoConfig } from './native-decoder.js';
 import { StreamHealth } from './stream-health.js';
 import { createVideoSink, supportsVideoSink } from './video-sink.js';
+import { reloadDecision } from './version-check.js';
 import { bindInputs } from './input.js';
 import { pollGamepads } from './gamepad.js';
 import { Reconnect } from './reconnect.js';
@@ -359,13 +360,28 @@ function fullscreenToggle() {
   label.append(checkbox, icon, text);
   return label;
 }
+const pageVersion = document.querySelector('meta[name=app-version]')?.content || 'dev';
+let reloadAfterStream = false;
+function reloadForNewBuild(serverVersion) {
+  // Reload at most once per server build, so a broken deploy cannot loop the page.
+  let done = null;
+  try { done = sessionStorage.getItem('remote-play:reloaded-for'); } catch {}
+  if (done === serverVersion) { $('update-notice').hidden = false; $('update-notice').textContent = `Server updated to ${serverVersion} · reload to use it`; return; }
+  try { sessionStorage.setItem('remote-play:reloaded-for', serverVersion); } catch {}
+  location.reload();
+}
 async function checkForUpdate() {
   try {
     const status = await api('version');
+    const decision = reloadDecision(pageVersion, status.version, !!target);
+    if (decision === 'now') { reloadForNewBuild(status.version); return; }
+    if (decision === 'after-stream') { reloadAfterStream = true; return; }
     $('update-notice').hidden = !status.updateAvailable;
     if (status.updateAvailable) $('update-notice').textContent = `Update available · ${status.version} → ${status.latest} · run psrp update on the server`;
   } catch { $('update-notice').hidden = true; }
 }
+setInterval(() => { if (token && !document.hidden) void checkForUpdate(); }, 5 * 60 * 1000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && token) void checkForUpdate(); });
 async function refresh() {
   void checkForUpdate();
   await refreshActive();
@@ -893,6 +909,7 @@ function stop(preserveTarget = false) {
   $('apply-profile').hidden = true;
   $('player').hidden = true;
   $('library').hidden = !token;
+  if (reloadAfterStream) { reloadAfterStream = false; void checkForUpdate(); }
   if (/^#\/(play\/|test)/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search);
 }
 $('demo').onclick = () => run($('demo'), () => play(null, `${$('resolution-profile').value}${$('fps-profile').value} · Browser test`, true));

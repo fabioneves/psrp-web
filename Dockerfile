@@ -9,6 +9,8 @@ RUN tar --exclude=.git -czf /native-psn-source.tar.gz /chiaki /src 2>/dev/null
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCHIAKI_SOURCE_DIR=/chiaki && cmake --build build --target remote-play-psn -j 4
 
 FROM node:24-bookworm-slim AS web
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
 WORKDIR /src
 COPY scripts/build-web.mjs scripts/build-web.mjs
 COPY web/ web/
