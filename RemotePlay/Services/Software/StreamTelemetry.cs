@@ -35,7 +35,7 @@ public sealed class StreamTelemetry
     public static string Summary(JsonElement sample)
     {
         static string Field(JsonElement sample, string name) => sample.TryGetProperty(name, out var value) && value.ValueKind != JsonValueKind.Null ? value.ToString() : "-";
-        return string.Join(' ', new[] { "t", "fps", "consoleFps", "display", "displayMax", "displayed", "displayReplaced", "max", "target", "videoUnderruns", "rebuilt", "dropped", "queue", "arrivalP95", "arrivalMax", "transportP95", "rtt", "mbps", "stalls", "lost", "idr", "underruns" }
+        return string.Join(' ', new[] { "t", "fps", "consoleFps", "display", "displayMax", "displayed", "displayReplaced", "max", "target", "videoUnderruns", "rebuilt", "dropped", "longTasks", "longTaskMs", "queue", "arrivalP95", "arrivalMax", "transportP95", "rtt", "mbps", "stalls", "lost", "idr", "underruns" }
             .Select(name => $"{name}={Field(sample, name)}"));
     }
 }

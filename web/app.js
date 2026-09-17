@@ -45,6 +45,8 @@ let decoderFailure = '', sleepingHost = null;
 const selectedProfile = () => ({ bitrateKbps: Number($('bitrate').value), resolution: $('resolution-profile').value, fps: Number($('fps-profile').value) });
 const retry = new Reconnect(() => connect());
 const log = new StreamLog();
+// Long tasks on the page's main thread, attributed per second in diagnostics samples.
+try { new PerformanceObserver(list => { for (const entry of list.getEntries()) log.mainThread(1, entry.duration); }).observe({ type: 'longtask', buffered: false }); } catch {}
 const health = new StreamHealth();
 const settings = () => ({ mode: $('controller-mode').value, index: $('controller-index').value,
   swap: $('controller-swap').value, deadZone: Number($('dead-zone').value),
