@@ -1036,8 +1036,9 @@ const presets = {
   tesla: { codec: 'mpeg1', resolution: '720p', fps: 60, bitrateKbps: 10000 },
   balanced: { codec: 'auto', resolution: '720p', fps: 60, bitrateKbps: 10000 },
   detail: { codec: 'auto', resolution: '1080p', fps: 60, bitrateKbps: 20000 },
-  // Cellular links pay per byte in transfer time and jitter: small frames, no cushion, short audio priming.
-  cellular: { codec: 'auto', resolution: '720p', fps: 60, bitrateKbps: 6000, pacing: 'responsive', audioDelayMs: 40 }
+  // Cellular links pay per byte in transfer time and jitter: small frames, a cushion that can grow, short audio priming.
+  // Measured over 5G: Responsive stalled several times a second at 37-51 fps; Smooth held 57-60 fps with no stalls.
+  cellular: { codec: 'auto', resolution: '720p', fps: 60, bitrateKbps: 6000, pacing: 'smooth', audioDelayMs: 40 }
 };
 function savePlaybackPreferences() {
   syncChoices();
