@@ -118,7 +118,10 @@ the log without updating; `psrp restart` restarts the app without a rebuild.
 `psrp backup` writes the database dump and the encryption keys for saved PSN
 tokens to `~/psrp-backups/<timestamp>`; copy that folder off the container.
 `psrp restore <dir>` replaces every account, pairing and setting with a backup
-after confirming, and refuses while a stream is running.
+after confirming, and refuses while a stream is running. `psrp diagnostics`
+copies the captures that browsers sent with "Send to server" (the Tesla cannot
+save files) to `~/psrp-diagnostics`, one folder per account, newest listed
+first.
 
 The equivalent by hand is `cd /opt/psrp && git pull && docker compose up --build -d`.
 

@@ -117,6 +117,7 @@
         <button type="button" data-preset="tesla"><span class="preset-icon">△</span><strong>Compatibility</strong><small>720p · 60 fps · Canvas fallback</small></button>
         <button type="button" data-preset="balanced"><span class="preset-icon">×</span><strong>Balanced</strong><small>720p · 60 fps · automatic codec · default</small></button>
         <button type="button" data-preset="detail"><span class="preset-icon">□</span><strong>Maximum detail</strong><small>1080p · 60 fps · automatic codec</small></button>
+        <button type="button" data-preset="cellular"><span class="preset-icon">○</span><strong>Cellular</strong><small>720p · 6 Mbps · responsive · 40 ms audio</small></button>
       </div>
       <label for="video-mode">Video mode</label><select id="video-mode" aria-describedby="video-mode-status"><option value="auto" selected>Automatic · best for this console</option><option value="h264">H.264 · browser decoding</option><option value="h265">H.265 · PS5, browser decoding</option><option value="mpeg1">Canvas · software fallback</option></select>
       <p id="video-mode-status" class="hint" role="status">Automatic uses H.265 on a PS5 and H.264 elsewhere when the browser decodes them in hardware; Canvas is the fallback.</p>
@@ -139,6 +140,7 @@
       </div></div>
       </section>
       </div>
+      <details id="diagnostics-archive"><summary>Saved diagnostics</summary><p class="hint">Captures sent to the server from any device signed in to this account, newest first. Use "Send to server" in the player where a browser cannot save files, such as a Tesla.</p><ul id="diagnostics-list" class="event-log"><li class="hint">Nothing saved yet.</li></ul></details>
     </section>
 
     <section id="player" hidden>
@@ -155,7 +157,7 @@
           <div class="hud-group hud-sound" role="group" aria-label="Audio metrics"><span class="hud-group-title">SND</span><dl><div><dt data-short="Queue">Audio queue</dt><dd id="hud-audio"><span class="value">—</span><span class="unit"> ms</span></dd></div></dl><p id="hud-health">Waiting for audio</p></div>
         </div>
         <p id="hud-age-note" class="hud-note">*Server media ready → canvas, not input latency. Jitter: gaps between video packets reaching the browser. Stalls: presented frames over 2.5 intervals late.</p>
-        <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button><button id="hud-download">Download log</button></div>
+        <div class="hud-actions"><button id="hud-exit">Exit fullscreen</button><button id="copy-debug">Copy diagnostics</button><button id="hud-download">Download log</button><button id="hud-send">Send to server</button></div>
       </aside></div>
       <div class="stats"><span id="fps">— fps</span><span id="decode">— ms / frame</span><span id="network">— Mbps</span><span id="engine">Video decoder</span><span id="resolution">1280 × 720 target</span></div>
       <p id="input-only-hint" hidden>Controller connected. Video stays on the other screen.</p>
@@ -221,7 +223,7 @@
       </div>
       <div id="session-help">
       <details class="fullscreen-help"><summary>Fullscreen shortcuts</summary><dl><div><dt>Exit</dt><dd>Swipe down, double-tap, Esc, or tap once for the exit button when touch controls are off</dd></div><div><dt>Debug HUD</dt><dd>Two-finger tap or Shift+D · swipe left / right or Shift+H changes the layout</dd></div><div><dt>Touch controls</dt><dd>Three-finger tap</dd></div></dl></details>
-      <details id="stream-diagnostics"><summary>Stream diagnostics</summary><p id="timing-status">Measuring stream timing…</p><p id="render-status"></p><p id="console-status"></p><p class="hint">Timing starts when media is ready on the server. Console capture and physical display delay are not measured.</p><h3>Recent events</h3><ul id="event-log" class="event-log"><li class="hint">No stalls, drops or reconnects recorded yet.</li></ul><button id="download-debug" class="quiet">Download diagnostics log</button><p class="hint">The log holds the last five minutes of per-second metrics and every stall, packet loss, audio underrun and reconnect event of this session.</p></details></div>
+      <details id="stream-diagnostics"><summary>Stream diagnostics</summary><p id="timing-status">Measuring stream timing…</p><p id="render-status"></p><p id="console-status"></p><p class="hint">Timing starts when media is ready on the server. Console capture and physical display delay are not measured.</p><h3>Recent events</h3><ul id="event-log" class="event-log"><li class="hint">No stalls, drops or reconnects recorded yet.</li></ul><button id="download-debug" class="quiet">Download diagnostics log</button> <button id="send-debug" class="quiet">Send to server</button><p id="diagnostics-status" class="hint" role="status"></p><p class="hint">The log holds the last five minutes of per-second metrics and every stall, packet loss, audio underrun and reconnect event of this session.</p></details></div>
     </section>
   </main>
   <div id="toast" class="toast" data-open="false"><p id="message" role="status" aria-live="polite"></p><button type="button" id="dismiss-message" class="quiet" aria-label="Dismiss message">×</button></div>

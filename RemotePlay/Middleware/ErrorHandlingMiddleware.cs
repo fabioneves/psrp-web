@@ -40,25 +40,26 @@ namespace RemotePlay.Utils
             var path = context.Request.Path.Value ?? "";
             var isApiRequest = path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase);
             
-            if (isApiRequest)
+            // Success responses (including 204 No Content, which cannot carry a body) are left alone.
+            if (isApiRequest && context.Response.StatusCode >= 400)
             {
                 var statusCode = context.Response.StatusCode;
                 var msg = "";
                 if (statusCode == 401)
                 {
-                    msg = "未授权,请重新登录";
+                    msg = "Sign in again to continue.";
                 }
                 else if (statusCode == 404)
                 {
-                    msg = "未找到服务";
+                    msg = "Not found.";
                 }
                 else if (statusCode == 502)
                 {
-                    msg = "请求错误";
+                    msg = "The request could not be completed.";
                 }
                 else if (statusCode != 200 && statusCode != 400)
                 {
-                    msg = "未知错误";
+                    msg = "The request failed.";
                 }
                 if (!string.IsNullOrWhiteSpace(msg))
                 {

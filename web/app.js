@@ -741,17 +741,54 @@ function renderEvents() {
   $('event-log').replaceChildren(...(recent.length ? recent.map(event => { const item = document.createElement('li'); item.textContent = describeEvent(event); return item; })
     : [Object.assign(document.createElement('li'), { className: 'hint', textContent: 'No stalls, drops or reconnects recorded yet.' })]));
 }
-function downloadDiagnostics() {
-  const data = log.export({ title: target?.title ?? $('stream-title').textContent, codec: activeCodec, engine: $('engine').textContent, profile: target?.profile,
+function diagnosticsCapture() {
+  return log.export({ title: target?.title ?? $('stream-title').textContent, codec: activeCodec, engine: $('engine').textContent, profile: target?.profile,
     pacing: $('frame-pacing').value, audioDelayMs: Number($('audio-delay').value), worker: !!worker, userAgent: navigator.userAgent, secureContext: isSecureContext,
     latest: { video: $('timing-status').dataset.metrics ? JSON.parse($('timing-status').dataset.metrics) : null, audio: $('audio-status').textContent, console: $('console-status').textContent } });
+}
+function saveJson(data, name) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  const link = document.createElement('a'); link.href = url; link.download = `remote-play-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+  const link = document.createElement('a'); link.href = url; link.download = name;
   document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+function downloadDiagnostics() { saveJson(diagnosticsCapture(), `remote-play-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`); }
+// For browsers that cannot save files (the Tesla): the capture is stored on the server under this account
+// and listed in the lobby, where any signed-in device can download it.
+async function sendDiagnostics(button) {
+  const status = $('diagnostics-status');
+  status.textContent = 'Sending…';
+  button.disabled = true;
+  try {
+    const saved = await api('diagnostics', diagnosticsCapture());
+    status.textContent = `Saved on the server as ${saved.name}. Download it from Saved diagnostics in the lobby.`;
+    if (button.id === 'hud-send') notify(`Diagnostics saved on the server as ${saved.name}.`, 'success');
+  } catch (error) { status.textContent = `Could not send diagnostics: ${error.message}`; }
+  finally { button.disabled = false; }
+}
+async function loadDiagnosticsArchive() {
+  const list = $('diagnostics-list');
+  try {
+    const entries = await api('diagnostics');
+    list.replaceChildren();
+    if (!entries.length) { const empty = document.createElement('li'); empty.className = 'hint'; empty.textContent = 'Nothing saved yet.'; list.append(empty); return; }
+    for (const entry of entries) {
+      const item = document.createElement('li');
+      const link = document.createElement('a'); link.href = '#'; link.textContent = entry.name;
+      link.onclick = async event => {
+        event.preventDefault();
+        try { saveJson(await api(`diagnostics/${entry.name}`), entry.name); } catch (error) { notify(`Could not download ${entry.name}: ${error.message}`, 'error'); }
+      };
+      item.append(link, ` · ${Math.round(entry.bytes / 1024)} KB · ${new Date(entry.savedAt).toLocaleString()}`);
+      list.append(item);
+    }
+  } catch (error) { list.replaceChildren(); const failed = document.createElement('li'); failed.className = 'hint'; failed.textContent = `Could not load saved diagnostics: ${error.message}`; list.append(failed); }
+}
+$('diagnostics-archive').addEventListener('toggle', () => { if ($('diagnostics-archive').open) void loadDiagnosticsArchive(); });
 $('download-debug').onclick = downloadDiagnostics;
 $('hud-download').onclick = downloadDiagnostics;
+$('send-debug').onclick = () => sendDiagnostics($('send-debug'));
+$('hud-send').onclick = () => sendDiagnostics($('hud-send'));
 function onStreamMessage(message) {
   if (message.type === 'console-stats') {
     const delta = log.serverStats(message);
@@ -991,7 +1028,9 @@ $('apply-profile').onclick = () => {
 const presets = {
   tesla: { codec: 'mpeg1', resolution: '720p', fps: 60, bitrateKbps: 10000 },
   balanced: { codec: 'auto', resolution: '720p', fps: 60, bitrateKbps: 10000 },
-  detail: { codec: 'auto', resolution: '1080p', fps: 60, bitrateKbps: 20000 }
+  detail: { codec: 'auto', resolution: '1080p', fps: 60, bitrateKbps: 20000 },
+  // Cellular links pay per byte in transfer time and jitter: small frames, no cushion, short audio priming.
+  cellular: { codec: 'auto', resolution: '720p', fps: 60, bitrateKbps: 6000, pacing: 'responsive', audioDelayMs: 40 }
 };
 function savePlaybackPreferences() {
   syncChoices();
@@ -1003,7 +1042,8 @@ function savePlaybackPreferences() {
   }
   for (const button of document.querySelectorAll('[data-preset]')) {
     const preset = presets[button.dataset.preset], selected = selectedProfile();
-    button.setAttribute('aria-pressed', String(preset.codec === $('video-mode').value && preset.resolution === selected.resolution && preset.fps === selected.fps && preset.bitrateKbps === selected.bitrateKbps));
+    button.setAttribute('aria-pressed', String(preset.codec === $('video-mode').value && preset.resolution === selected.resolution && preset.fps === selected.fps && preset.bitrateKbps === selected.bitrateKbps
+      && (preset.pacing ?? 'smooth') === $('frame-pacing').value));
   }
   scheduleSettingsUpload();
 }
@@ -1013,6 +1053,9 @@ for (const button of document.querySelectorAll('[data-preset]')) button.onclick 
   $('resolution-profile').value = preset.resolution;
   $('fps-profile').value = String(preset.fps);
   $('bitrate').value = String(preset.bitrateKbps);
+  $('frame-pacing').value = preset.pacing ?? 'smooth';
+  if (preset.audioDelayMs) { $('audio-delay').value = String(preset.audioDelayMs); audio?.setDelay(preset.audioDelayMs); }
+  $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
   savePlaybackPreferences();
   updateQuality();
 };

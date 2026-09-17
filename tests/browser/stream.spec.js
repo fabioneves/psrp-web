@@ -406,6 +406,7 @@ test('controller-only sessions show connection feedback in the toast instead of 
 });
 
 test('stream diagnostics lists events and downloads a JSON log with per-second samples', async ({ page }) => {
+  test.setTimeout(90000);
   await register(page);
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
@@ -418,8 +419,17 @@ test('stream diagnostics lists events and downloads a JSON log with per-second s
   expect(data.samples.length).toBeGreaterThan(1);
   expect(data.samples.at(-1).fps).toBeGreaterThan(30);
   expect(data.events.map(event => event.type)).toEqual(expect.arrayContaining(['play', 'connected']));
-  expect(data.codec).toBe('mpeg1');
+  await page.locator('#send-debug').click();
+  await expect(page.locator('#diagnostics-status')).toContainText('Saved on the server as', { timeout: 15000 });
   await page.locator('#stop').click();
+  await expect(page.locator('#library')).toBeVisible();
+  await page.locator('#diagnostics-archive summary').click();
+  const entry = page.locator('#diagnostics-list a').first();
+  await expect(entry).toHaveText(/^\d{8}T\d{6}Z(-\d+)?\.json$/);
+  const [saved] = await Promise.all([page.waitForEvent('download'), entry.click()]);
+  const stored = JSON.parse(await (await import('node:fs/promises')).readFile(await saved.path(), 'utf8'));
+  expect(stored.samples.length).toBeGreaterThan(1);
+  expect(data.codec).toBe('mpeg1');
 });
 
 test('gamepads poll without connection events and release when unplugged', async ({ page }) => {
