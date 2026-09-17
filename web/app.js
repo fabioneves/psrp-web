@@ -936,6 +936,15 @@ $('stop').onclick = () => stop();
 function updateTouchOverlay() { $('player').classList.toggle('touch', $('show-controls').checked); }
 $('show-controls').onchange = () => { resetFullscreenGestures(); resetInputs(); gamepads.reset(); updateTouchOverlay(); };
 updateTouchOverlay();
+// Hide the mouse cursor over the player after two seconds without movement while fullscreen or in theater mode.
+let cursorIdleTimer = null;
+function armCursorIdle() {
+  $('player').classList.remove('cursor-idle');
+  clearTimeout(cursorIdleTimer);
+  if (document.fullscreenElement || $('player').classList.contains('theater')) cursorIdleTimer = setTimeout(() => $('player').classList.add('cursor-idle'), 2000);
+}
+$('player').addEventListener('mousemove', armCursorIdle);
+document.addEventListener('fullscreenchange', armCursorIdle);
 async function enterFullscreen() {
   if ($('player').hidden || document.fullscreenElement === $('player')) return;
   try {

@@ -85,6 +85,7 @@ export function pollGamepads(state, enabled, settings, report, environment = glo
     } catch { next = 'Controller access blocked. Try HTTPS or attach another device.'; }
     const value = JSON.stringify(snapshot);
     if (signature !== value || JSON.stringify(state.pad) !== value) { signature = value; state.gamepad(snapshot); }
+    else state.poll?.(); // lets a held Share or Options commit after the chord hold-off
     if (status !== next) { status = next; report(next); }
     const pads = typeof environment.navigator.getGamepads === 'function' ? environment.navigator.getGamepads() : [];
     const pad = selectGamepad(pads, settings());

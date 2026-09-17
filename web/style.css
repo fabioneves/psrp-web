@@ -1470,9 +1470,15 @@ h1,h2 {
   }
 }
 #player:fullscreen:not(.debug) #screen,
-#player.theater:not(.debug) #screen {
+#player.theater:not(.debug) #screen,
+#player:fullscreen:not(.debug) #screen-video,
+#player.theater:not(.debug) #screen-video {
   cursor: none;
   touch-action: manipulation;
+}
+/* After two seconds without mouse movement in fullscreen, the cursor hides everywhere over the player. */
+#player:fullscreen.cursor-idle, #player:fullscreen.cursor-idle *, #player.theater.cursor-idle, #player.theater.cursor-idle * {
+  cursor: none !important;
 }
 
 .settings-grid>label {

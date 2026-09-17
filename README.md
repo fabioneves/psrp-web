@@ -323,6 +323,7 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 ## Controls and limits
 
 - Touch: D-pad, move/look direction buttons, face buttons, shoulders, triggers, stick clicks, PS, Share, Options and touchpad click.
+- Controller: Share + Options pressed together send the PS button, because macOS reserves a DualSense's PS button for itself; either button alone still works after a 150 ms hold-off.
 - Keyboard: arrows = D-pad; WASD = left stick; IJKL = right stick; X/C/Z/V = cross/circle/square/triangle; Q/E = L1/R1; 1/3 = L2/R2; 2/4 = L3/R3; Enter = Options; Backspace = Share; Space = PS; T = touchpad click.
 - Input resets on focus loss, hidden tabs and disconnect. Opposing directions cancel; simultaneous touch and keyboard holds work together.
 - One active viewer/session per server, including browser test streams. Run diagnostics in a separate Compose project while a console viewer is active. An abandoned connection expires after missed heartbeats.

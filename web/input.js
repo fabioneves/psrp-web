@@ -1,8 +1,13 @@
+// macOS keeps a DualSense's PS button for itself, so Share and Options pressed together stand in for it.
+// Either button alone waits this long before it is sent, so a chord never leaks a Share or Options press.
+export const CHORD_HOLD_MS = 150;
 export class InputState {
-  constructor(send) {
+  constructor(send, now = () => performance.now()) {
     this.send = send;
+    this.now = now;
     this.sources = new Map();
     this.buttons = new Set();
+    this.pendingMenu = null; this.chordActive = false;
     this.pad = null;
     this.triggers = { l2: 0, r2: 0 };
     this.sticks = { left: { x: 0, y: 0 }, right: { x: 0, y: 0 } };
@@ -10,6 +15,24 @@ export class InputState {
   hold(source, command) { this.sources.set(source, command); this.update(); }
   release(source) { this.sources.delete(source); this.update(); }
   gamepad(snapshot) { this.pad = snapshot; this.update(); }
+  resolveChord(buttons) {
+    const held = ['SHARE', 'OPTIONS'].filter(name => buttons.has(name));
+    buttons.delete('SHARE'); buttons.delete('OPTIONS');
+    const now = this.now();
+    if (held.length === 2 || (this.chordActive && held.length === 1)) { this.chordActive = true; this.pendingMenu = null; buttons.add('PS'); return; }
+    this.chordActive = false;
+    if (held.length === 1) {
+      if (this.pendingMenu?.button !== held[0]) this.pendingMenu = { button: held[0], since: now, tapped: false };
+      if (now - this.pendingMenu.since >= CHORD_HOLD_MS) buttons.add(held[0]);
+      return;
+    }
+    if (this.pendingMenu && !this.pendingMenu.tapped && now - this.pendingMenu.since < CHORD_HOLD_MS) {
+      // Released before the hold-off: send the press now; the next update releases it.
+      this.pendingMenu.tapped = true; buttons.add(this.pendingMenu.button); return;
+    }
+    this.pendingMenu = null;
+  }
+  poll() { this.update(); }
   reset() {
     this.sources.clear(); this.buttons.clear();
     this.pad = null;
@@ -25,6 +48,7 @@ export class InputState {
       if (kind === 'button') buttons.add(name);
       else sticks[kind][name] += Number(value);
     }
+    this.resolveChord(buttons);
     for (const button of buttons) if (!this.buttons.has(button)) this.send({ type: 'button', button, pressed: true });
     for (const button of this.buttons) if (!buttons.has(button)) this.send({ type: 'button', button, pressed: false });
     this.buttons = buttons;
