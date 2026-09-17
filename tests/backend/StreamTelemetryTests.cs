@@ -14,6 +14,6 @@ static class StreamTelemetryTests
             "telemetry keeps the newest five minutes of samples in order");
         check(events.Count == 163 && received == StreamTelemetry.SampleLimit + 25 && lastAt == now.AddSeconds(StreamTelemetry.SampleLimit + 24), "events accumulate up to their limit and counters track every message");
         var summary = StreamTelemetry.Summary(JsonDocument.Parse("{\"t\":5000,\"fps\":59.9,\"consoleFps\":60,\"rtt\":4.2}").RootElement);
-        check(summary.StartsWith("t=5000 fps=59.9 consoleFps=60 display=- ") && summary.Contains("rtt=4.2"), "the log summary names each field and marks missing ones");
+        check(summary.StartsWith("t=5000 fps=59.9 consoleFps=60 display=- displayMax=- ") && summary.Contains("rtt=4.2") && summary.Contains(" rebuilt=- "), "the log summary names each field and marks missing ones");
     }
 }
