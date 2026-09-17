@@ -63,6 +63,21 @@ where supported. The remaining 25 ms frames in that capture line up with
 seconds where the console delivered 57-59 frames: frames the PS5 never sent,
 which a 120 Hz display covers with one extra 8 ms refresh.
 
+### Video element on a 60 Hz Mac (2026-09-17)
+
+Three cellular captures from a Mac with a 60 Hz external display, 720p60
+H.265: through the video element on the main thread, the presenter missed
+two or three refreshes a second (57-58 fps); with the worker decoding and
+the page writing frames immediately, the queue was perfect (60 handed, no
+drops) but only 49 frames a second reached the screen, at 33 ms intervals;
+with the page writing inside its own refresh callback, 43 reached the
+screen and 17 a second were replaced before their write, because the page's
+callback itself ran at about 43 Hz. The element's write path costs
+main-thread time per frame that this machine cannot sustain at 60. The
+canvas worker path on the same link held 59-60 fps with 18 ms gaps and no
+drops, so Automatic now picks it wherever a worker exists and uses the
+element only without a worker (Safari) or when chosen explicitly.
+
 ### Worker decoding for the video element (2026-09-17)
 
 A saved capture from a Mac on 5G with a 60 Hz external display, 720p60

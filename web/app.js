@@ -724,8 +724,12 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   const canvas = previous.cloneNode(); previous.replaceWith(canvas);
   const report = message => { if (attempt === current) onStreamMessage(message); };
   // Video-element output runs on the main thread: the element is DOM, and its frame callbacks report real screen timing.
+  // Automatic: the canvas worker path where a worker exists (measured cleanest: 60 handed, no drops, 18 ms gaps), the
+  // video element only where the worker is unavailable (Safari) or when chosen explicitly; the element's write path
+  // costs main-thread time per frame that a 60 Hz Mac could not sustain (43 of 60 frames reached the screen).
   const output = $('video-output').value;
-  const wantsVideoSink = output !== 'canvas' && !inputSession && activeCodec !== 'mpeg1';
+  const workerAvailable = !forceMain && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' && await workerAnimationFrames;
+  const wantsVideoSink = (output === 'video' || (output === 'auto' && !workerAvailable)) && !inputSession && activeCodec !== 'mpeg1';
   const useVideoSink = wantsVideoSink && supportsVideoSink();
   if (output === 'video' && !useVideoSink) $('video-mode-status').textContent += ' Video element output is unavailable in this browser; drawing on canvas.';
   try {
