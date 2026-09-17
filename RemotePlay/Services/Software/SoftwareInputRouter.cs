@@ -12,6 +12,8 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
     private SoftwareInputState.State previous = new();
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     public Func<Task>? RequestKeyframe { get; set; }
+    /// <summary>Receives the browser's per-second diagnostics sample while its live-telemetry debug switch is on.</summary>
+    public Action<SoftwareInput>? Telemetry { get; set; }
 
     public async Task BindSessionAsync(Guid? id, CancellationToken ct)
     {
@@ -58,6 +60,11 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
                 if (input.Type == "keyframe")
                 {
                     if (acknowledge && RequestKeyframe is { } request) await request();
+                    continue;
+                }
+                if (input.Type == "telemetry")
+                {
+                    if (acknowledge && input.Sample is { ValueKind: System.Text.Json.JsonValueKind.Object }) Telemetry?.Invoke(input);
                     continue;
                 }
                 if (initializing) continue;

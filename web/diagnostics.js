@@ -47,6 +47,7 @@ export class StreamLog {
       audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
       lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null });
     if (this.samples.length > SAMPLE_LIMIT) this.samples.shift();
+    return this.samples.at(-1);
   }
   recent(count = 8) { return this.events.slice(-count); }
   export(extra = {}) {

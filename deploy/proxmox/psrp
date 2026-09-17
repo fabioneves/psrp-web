@@ -8,6 +8,7 @@
 #   psrp backup             save the database and encryption keys to ~/psrp-backups/<timestamp>
 #   psrp restore <dir>      replace every account, pairing and setting with a backup
 #   psrp diagnostics        copy captures sent from browsers to ~/psrp-diagnostics and list them
+#   psrp live               follow the running stream's telemetry (needs the player's live-telemetry switch)
 set -eu
 APP_DIR=${APP_DIR:-/opt/psrp}
 cd "$APP_DIR"
@@ -53,6 +54,7 @@ case "${1:-}" in
     logs) docker compose logs --tail "${2:-100}" remote-play ;;
     save-log) save_log ;;
     restart) docker compose restart remote-play && until [ -n "$(health)" ]; do sleep 3; done && health && echo ;;
+    live) docker compose logs -f --tail 200 remote-play 2>&1 | grep --line-buffered -E 'Stream telemetry|Console stream summary|warn|fail' ;;
     diagnostics)
         mkdir -p ~/psrp-diagnostics
         docker compose cp remote-play:/data/diagnostics/. ~/psrp-diagnostics/ 2>/dev/null || { echo "No captures have been sent to this server yet."; exit 0; }

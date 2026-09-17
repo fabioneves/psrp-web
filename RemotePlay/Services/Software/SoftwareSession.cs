@@ -32,6 +32,13 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         published.Track(socket, sendGate);
         active.Set(published);
         var input = new SoftwareInputRouter(controller, null, initializing: true);
+        var telemetryCount = 0;
+        input.Telemetry = message =>
+        {
+            published.Telemetry.Record(message.Sample!.Value, message.Events, DateTimeOffset.UtcNow);
+            // Every tenth sample also goes to the log so `psrp live` can follow a session over SSH.
+            if (++telemetryCount % 10 == 1) logger.LogInformation("Stream telemetry {Summary}", StreamTelemetry.Summary(message.Sample.Value));
+        };
         async Task ReadInput()
         {
             try { await input.ReceiveAsync(socket, ct, true, sendGate); }

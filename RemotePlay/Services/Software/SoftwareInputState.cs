@@ -3,7 +3,8 @@ using RemotePlay.Services.Streaming.Controller;
 namespace RemotePlay.Services.Software;
 
 public sealed record SoftwareInput(string Type, string? Button = null, bool Pressed = false,
-    string? Stick = null, float X = 0, float Y = 0, float L2 = 0, float R2 = 0, double ClientTime = 0);
+    string? Stick = null, float X = 0, float Y = 0, float L2 = 0, float R2 = 0, double ClientTime = 0,
+    System.Text.Json.JsonElement? Sample = null, System.Text.Json.JsonElement? Events = null);
 
 public sealed class SoftwareInputState
 {

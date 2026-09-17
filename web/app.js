@@ -19,10 +19,9 @@ const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
 const setup = bindSetup(api, refresh, notify);
 let pairedConsoleIds = new Set(), scanning = false, knownDevices = [];
-const resetInputs = bindInputs($('controls'), message => {
-  worker?.postMessage(message);
-  stream?.input(message);
-}, () => playing);
+const sendToServer = message => { worker?.postMessage(message); stream?.input(message); };
+const resetInputs = bindInputs($('controls'), sendToServer, () => playing);
+let telemetryEventsSent = 0;
 
 let target = null, forceMain = false, activeSession = null, wakeLock = null, wakeRequest = 0;
 // Presentation needs display-aligned animation frames. A worker without them (Safari) would pace by
@@ -71,7 +70,7 @@ try {
 } catch {}
 let startInFullscreen = false;
 try { startInFullscreen = localStorage.getItem('remote-play:auto-fullscreen') === 'true'; } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style', 'auto-quality', 'video-output'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style', 'auto-quality', 'video-output', 'debug-telemetry'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -593,7 +592,7 @@ async function play(hostId, title, demo = false, inputSession = null, hostType =
   stop();
   if (hostId && !inputSession && consoleProfiles[hostId]) enterConsoleScope(hostId);
   target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile(), codec: $('video-mode').value, pacing: $('frame-pacing').value, auto: $('auto-quality').checked };
-  resetHud(); log.reset(); health.reset(); showHealth({ level: 'good', reason: '' }); renderEvents();
+  resetHud(); log.reset(); telemetryEventsSent = 0; health.reset(); showHealth({ level: 'good', reason: '' }); renderEvents();
   log.event('play', { hostId, demo, inputSession: !!inputSession, profile: target.profile, codec: $('video-mode').value });
   quality = new AdaptiveQuality(target.profile);
   $('connection-message').textContent = '';
@@ -816,7 +815,12 @@ function onStreamMessage(message) {
     resetInputs(); gamepads.reset();
     if (message.inputOnly) $('stream-status').textContent = 'Controller connected';
   } else if (message.type === 'stats') {
-    log.videoStats(message);
+    const sample = log.videoStats(message);
+    if ($('debug-telemetry').checked && sample) {
+      // Live telemetry: the same per-second sample the diagnostics file holds, plus events since the last one.
+      const events = log.events.slice(telemetryEventsSent); telemetryEventsSent = log.events.length;
+      sendToServer({ type: 'telemetry', sample, events });
+    }
     renderEvents();
     updateHud(message, activeCodec);
     if (message.totalFrames > 600) retry.reset();
@@ -911,6 +915,7 @@ function updateDebug() {
   $('debug-overlay').hidden = !$('debug-mode').checked;
   $('debug-overlay').dataset.layout = $('hud-style').value;
   $('hud-settings').hidden = !$('debug-mode').checked;
+  $('telemetry-switch').hidden = !$('debug-mode').checked;
 }
 $('debug-mode').onchange = updateDebug;
 $('hud-style').onchange = updateDebug;

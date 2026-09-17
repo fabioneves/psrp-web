@@ -602,3 +602,21 @@ test('worker playback recovers when browser animation callbacks stop', async ({ 
   await page.locator('#stage').dblclick();
   await page.locator('#stop').click();
 });
+
+test('live telemetry reaches the server while the debug switch is on', async ({ page }) => {
+  const name = await register(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+  await page.locator('#debug-mode').check();
+  await page.locator('#debug-telemetry').check();
+  const login = await page.request.post('/api/auth/login', { data: { usernameOrEmail: name, password: 'LocalTestPassword_123' } });
+  const token = (await login.json()).data.token;
+  const live = async () => page.request.get('/api/diagnostics/live', { headers: { Authorization: `Bearer ${token}` } });
+  await expect.poll(async () => { const response = await live(); return response.ok() ? (await response.json()).samples.length : -1; }, { timeout: 20000 }).toBeGreaterThan(1);
+  const snapshot = await (await live()).json();
+  expect(snapshot.demo).toBe(true);
+  expect(snapshot.samples.at(-1).fps).toBeGreaterThan(30);
+  expect(snapshot.received).toBeGreaterThan(1);
+  await page.locator('#stop').click();
+  await expect.poll(async () => (await live()).status()).toBe(404);
+});

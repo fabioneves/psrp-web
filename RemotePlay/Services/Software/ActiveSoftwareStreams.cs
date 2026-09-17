@@ -41,6 +41,8 @@ public sealed class ActiveSoftwareStream(StreamTicket grant, CancellationTokenSo
     }
     public Guid Id { get; } = Guid.NewGuid();
     public StreamTicket Grant { get; } = grant;
+    public DateTimeOffset StartedAt { get; } = DateTimeOffset.UtcNow;
+    public StreamTelemetry Telemetry { get; } = new();
     private readonly SemaphoreSlim clients = new(4, 4);
     public int InputClients => 4 - clients.CurrentCount;
     public bool IsOpen => Input != null && !StopRequested && !lifetime.IsCancellationRequested;
@@ -69,6 +71,7 @@ public sealed class ActiveSoftwareStreams
 {
     private ActiveSoftwareStream? current;
     public void Set(ActiveSoftwareStream stream) => Interlocked.Exchange(ref current, stream);
+    public ActiveSoftwareStream? Current => Volatile.Read(ref current);
     public bool Any => Volatile.Read(ref current) is { IsOpen: true };
     public void Remove(ActiveSoftwareStream stream) => Interlocked.CompareExchange(ref current, null, stream);
     public async Task<bool> StopConsoleAsync(string hostId, CancellationToken ct)
