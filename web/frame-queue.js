@@ -21,7 +21,7 @@ export class FrameQueue {
     this.started = false;
     this.last = null;
     this.dropped = 0; this.underruns = 0; this.rebuilt = 0;
-    this.arrivals = []; this.lowTicks = 0; this.waitAt = []; this.timeline = []; this.deepSince = null; this.recovered = 0;
+    this.arrivals = []; this.lowTicks = 0; this.waitAt = []; this.timeline = [];
     this.underrunAt = -Infinity; this.calmSince = null;
   }
   push(frame) {
@@ -48,12 +48,6 @@ export class FrameQueue {
     // Cellular links deliver frames in pairs ~33 ms apart, which lifts the queue by one; the latency bound
     // sits one frame above that so a pair costs no skip. Bound: target + 3 frames.
     if (this.frames.length > this.target + 3) { this.release(this.frames.shift()); this.dropped++; }
-    // Latency recovery: bursts leave the queue two frames above target and nothing brings it back down. When
-    // that persists for five seconds, skip one frame (a 16 ms motion step, not a hold) to shed a frame of delay.
-    if (this.frames.length >= this.target + 2) {
-      this.deepSince ??= now;
-      if (now - this.deepSince > 5000) { this.release(this.frames.shift()); this.dropped++; this.recovered++; this.deepSince = now; }
-    } else this.deepSince = null;
     // A momentary dip below the cushion is jitter, and drawing the cushion frame is what it is for. A
     // cushion that stays low at three consecutive refreshes is cadence drift: wait one more refresh so
     // presentation re-aligns to arrivals (8 ms at 120 Hz, one frame at 60 Hz) instead of draining and
@@ -95,8 +89,8 @@ export class FrameQueue {
   }
   get pending() { return this.frames.length > 0; }
   metrics() {
-    const result = { pacingTarget: this.target, underruns: this.underruns, rebuilt: this.rebuilt, recovered: this.recovered };
-    this.underruns = 0; this.rebuilt = 0; this.recovered = 0;
+    const result = { pacingTarget: this.target, underruns: this.underruns, rebuilt: this.rebuilt };
+    this.underruns = 0; this.rebuilt = 0;
     return result;
   }
   destroy() { for (const frame of this.frames) this.release(frame); this.frames.length = 0; }

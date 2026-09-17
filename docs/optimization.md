@@ -63,6 +63,16 @@ where supported. The remaining 25 ms frames in that capture line up with
 seconds where the console delivered 57-59 frames: frames the PS5 never sent,
 which a 120 Hz display covers with one extra 8 ms refresh.
 
+### Queue depth on a bursty link (2026-09-17)
+
+On 5G the queue settles two frames above its target because arrivals come
+in bursts of two or three after a gap. A recovery rule that skipped one
+frame every five seconds while the queue stayed deep was tried and
+removed: over a 335-second 1080p session it skipped 22 frames and the
+queue wait stayed at 57 ms, because bursts refill the queue faster than
+that cadence drains it. The depth is the price of the link's burstiness,
+not something the client can trade away without visible skips.
+
 ### Video element on a 60 Hz Mac (2026-09-17)
 
 Three cellular captures from a Mac with a 60 Hz external display, 720p60
