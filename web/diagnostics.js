@@ -34,6 +34,8 @@ export class StreamLog {
   // Main-thread long tasks (>50 ms) since the last sample, from PerformanceObserver; a busy page can cost the
   // worker a refresh callback even though the worker itself is idle.
   mainThread(longTasks, longTaskMs) { this.longTasks = (this.longTasks || 0) + longTasks; this.longTaskMs = (this.longTaskMs || 0) + longTaskMs; }
+  // Longest gap between the page's own animation-frame callbacks since the last sample, to compare with the worker's.
+  pageRefresh(gapMs) { this.pageRefreshMax = Math.max(this.pageRefreshMax || 0, gapMs); }
   videoStats(stats) {
     const dropped = Math.max(0, (stats.droppedFrames ?? 0) - this.dropped);
     this.dropped = stats.droppedFrames ?? 0;
@@ -47,11 +49,11 @@ export class StreamLog {
       queue: round(stats.queueMs), decode: round(stats.nativeDecodeMs ?? stats.codecMs), rtt: round(stats.rttMs), mbps: round(stats.mbps), dropped,
       decodeQueue: stats.decodeQueue ?? null, arrivalP95: round(stats.arrivalP95Ms), arrivalMax: round(stats.arrivalMaxMs), transportP95: round(stats.transportP95Ms),
       stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, refresh: round(stats.refreshMs), refreshMax: round(stats.refreshMaxMs), target: stats.pacingTarget ?? null, videoUnderruns: stats.underruns ?? null, rebuilt: stats.rebuilt ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
-      longTasks: this.longTasks || 0, longTaskMs: Math.round(this.longTaskMs || 0),
+      longTasks: this.longTasks || 0, longTaskMs: Math.round(this.longTaskMs || 0), pageRefreshMax: this.pageRefreshMax ? Math.round(this.pageRefreshMax * 10) / 10 : null,
       audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
       lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null });
     if (this.samples.length > SAMPLE_LIMIT) this.samples.shift();
-    this.longTasks = 0; this.longTaskMs = 0;
+    this.longTasks = 0; this.longTaskMs = 0; this.pageRefreshMax = 0;
     return this.samples.at(-1);
   }
   recent(count = 8) { return this.events.slice(-count); }
