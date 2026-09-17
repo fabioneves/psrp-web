@@ -15,8 +15,12 @@ namespace RemotePlay.Services.Software;
 public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStreamingService streams,
     IControllerService controller, ActiveSoftwareStreams active, ConsolePower power, ILogger<SoftwareSession> logger)
 {
-    private const int BusyStartAttempts = 12;
-    private static readonly TimeSpan BusyStartDelay = TimeSpan.FromSeconds(1);
+    private const int BusyStartAttempts = 6;
+    private static readonly TimeSpan BusyStartDelay = TimeSpan.FromSeconds(2);
+    // A console that is still tearing down or starting its Remote Play service answers with "occupied", a
+    // timeout, or a connection reset; all three clear on their own within seconds.
+    private static bool ConsoleNotReady(Exception ex) => ex is ConsoleHandshakeException { ConsoleBusy: true } or TimeoutException
+        || (ex is IOException && ex.InnerException is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionReset });
     public async Task RunAsync(WebSocket socket, StreamTicket grant, CancellationToken aborted)
     {
         using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(aborted);
@@ -88,12 +92,15 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 for (var attempt = 1; ; attempt++)
                 {
                     try { session = await sessions.StartSessionAsync(device.IpAddress!, credentials, device.HostType!, options, ct); break; }
-                    catch (ConsoleHandshakeException ex) when (ex.ConsoleBusy && attempt < BusyStartAttempts)
+                    catch (Exception ex) when (ConsoleNotReady(ex) && attempt < BusyStartAttempts)
                     {
-                        if (attempt == 1) await SendStatus(socket, "Waiting for the console to release the previous session…", ct, sendGate: sendGate);
+                        logger.LogInformation("Console not ready for {HostId} ({Reason}); retrying in {Delay}s ({Attempt}/{Attempts})", device.HostId, ex.Message, BusyStartDelay.TotalSeconds, attempt, BusyStartAttempts);
+                        if (attempt == 1)
+                            await SendStatus(socket, ex is ConsoleHandshakeException ? "Waiting for the console to release the previous session…" : "Waiting for the console's Remote Play service…", ct, sendGate: sendGate);
                         await Task.Delay(BusyStartDelay, ct);
                     }
                 }
+                logger.LogInformation("Console session started for {HostId}: {Codec} {Resolution}{Fps} {Bitrate} kbps", device.HostId, grant.VideoCodec, grant.Resolution, grant.Fps, grant.BitrateKbps);
                 sessionId = session.Id;
                 if (!await sessions.WaitReadyAsync(session.Id, TimeSpan.FromSeconds(15), ct))
                     throw new IOException("PlayStation session did not become ready. Check Remote Play settings.");

@@ -67,6 +67,7 @@ static class SessionProtocolTests
         foreach (var (response, expected) in new[] {
             ("HTTP/1.1 503 Busy\r\nRP-Application-Reason: 80108b10\r\n\r\n", "occupied"),
             ("HTTP/1.1 503 Error\r\nRP-Application-Reason: 80108b15\r\n\r\n", "crash"),
+            ("HTTP/1.1 403 Forbidden\r\nRP-Application-Reason: 80108b77\r\n\r\n", "reason 80108b77"),
             ("HTTP/1.1 200 OK\r\n\r\n", "incomplete"),
             ("", "closed"),
             ("HTTP/1.1 200 OK\r\n", "stopped responding") })

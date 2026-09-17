@@ -402,7 +402,7 @@ namespace RemotePlay.Services.Session
                 "80108b15" => "The console's Remote Play service reported a crash. Wait for it to recover, or restart the console if it persists.",
                 "80108b09" or "80108b02" => "The console rejected the saved pairing. Pair this console again.",
                 "80108b11" => "The console rejected this Remote Play protocol version.",
-                _ => "The console rejected the Remote Play handshake. Wait a few seconds and reconnect."
+                _ => $"The console rejected the Remote Play handshake (reason {reason ?? "unknown"}). Wait a few seconds and reconnect."
             };
             throw new ConsoleHandshakeException(message, consoleBusy: reason == "80108b10");
         }

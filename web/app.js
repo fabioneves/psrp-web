@@ -653,7 +653,9 @@ function reconnect(message, workerFailed = false) {
   if (workerFailed) forceMain = true;
   stop(true);
   const consoleBusy = /occupied|still active|in use|wait for it to close/i.test(message);
-  if (!retry.schedule(consoleBusy ? 4000 : 0, consoleBusy)) { failConnection(`${message} Automatic reconnection stopped after ${consoleBusy ? 'a minute of waiting' : 'five attempts'}. Disconnect and press Play when ready.`); return; }
+  // Console-side failures (rejected handshake, no response, reset) need a pause, not an instant retry.
+  const consoleFailed = !consoleBusy && /console/i.test(message);
+  if (!retry.schedule(consoleBusy ? 4000 : consoleFailed ? 2000 : 0, consoleBusy)) { failConnection(`${message} Automatic reconnection stopped after ${consoleBusy ? 'a minute of waiting' : 'five attempts'}. Disconnect and press Play when ready.`); return; }
   log.event('reconnect', { attempt: retry.count, waiting: consoleBusy, message });
   $('stream-status').textContent = consoleBusy ? 'Waiting for the console to free the previous session…' : `Reconnecting · attempt ${retry.count}/5`;
   notify(message);
