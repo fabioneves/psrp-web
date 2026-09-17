@@ -81,7 +81,7 @@ test('a burst drains in order, excess latency skips one frame, and a lone late f
   assert.equal(queue.take(20 * INTERVAL).id, 9, 'a lone late frame is never dropped');
   assert.equal(queue.dropped, 1);
   const metrics = queue.metrics();
-  assert.deepEqual(Object.keys(metrics), ['pacingTarget', 'underruns', 'rebuilt']);
+  assert.deepEqual(Object.keys(metrics), ['pacingTarget', 'underruns', 'rebuilt', 'recovered']);
 });
 
 function simulateAt(refreshMs, arrivals, { seconds = 20, warmup = 2000 } = {}) {
@@ -131,4 +131,23 @@ test('recurring drift waits raise the cushion target once', () => {
   assert.equal(queue.target, 3, 'and then raises again, up to the maximum');
   for (let i = 0; i < 20; i++) wait(13000 + i * 100);
   assert.equal(queue.target, 3);
+});
+
+test('missed refreshes that leave the queue deep are worked off with one skipped frame every five seconds', () => {
+  const queue = new FrameQueue(() => {});
+  const arrivals = cadence(2400);
+  const presented = [], waits = [];
+  let index = 0;
+  for (let tick = 0; tick * INTERVAL < 30000; tick++) {
+    const now = tick * INTERVAL;
+    while (index < arrivals.length && arrivals[index].savedAt <= now) queue.push(arrivals[index++]);
+    if (tick === 130 || tick === 190) continue; // the presenter missed these refreshes
+    const frame = queue.take(now);
+    if (frame) { presented.push(now); waits.push(now - frame.savedAt); }
+  }
+  assert.ok(queue.recovered >= 1 && queue.recovered <= 3, `one or two recovery skips, got ${queue.recovered}`);
+  const median = list => [...list].sort((a, b) => a - b)[Math.floor(list.length / 2)];
+  const deep = median(waits.slice(200, 400)), later = median(waits.slice(-300));
+  assert.ok(later < deep - INTERVAL * 0.9, `queue wait came back down: ${deep.toFixed(1)} -> ${later.toFixed(1)} ms`);
+  assert.equal(queue.underruns, 0);
 });
