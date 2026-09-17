@@ -63,6 +63,20 @@ where supported. The remaining 25 ms frames in that capture line up with
 seconds where the console delivered 57-59 frames: frames the PS5 never sent,
 which a 120 Hz display covers with one extra 8 ms refresh.
 
+### Worker decoding for the video element (2026-09-17)
+
+A saved capture from a Mac on 5G with a 60 Hz external display, 720p60
+H.265 through the video element, showed the console at 60 and the cushion
+never empty, yet 57-58 presented frames per second with two or three
+"superseded" drops and a 32 ms presenter interval almost every second.
+Paired arrivals cannot reproduce that in simulation; missed animation-frame
+callbacks can, and that path decoded on the main thread. Chrome exposes
+the track generator only on the page, so the worker now decodes and paces
+as it does for the canvas, transfers each frame to the page at
+presentation time, and the page writes it to the element; screen timing is
+merged into the worker's stats on the page. The presenter also reports its
+longest callback gap (refreshMax in samples) so a missed refresh is visible.
+
 ### Cadence drift on 120 Hz displays (2026-09-16)
 
 A LAN capture from a MacBook with a 120 Hz display (refresh interval 8.3 ms

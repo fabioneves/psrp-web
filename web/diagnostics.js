@@ -43,7 +43,7 @@ export class StreamLog {
     this.samples.push({ t: this.at(), fps: round(stats.fps), decodedFps: round(stats.decodedFps), display: round(stats.displayP95Ms), displayMax: round(stats.displayMaxMs), displaySkipped: stats.displaySkipped ?? null, p95: round(stats.frameP95Ms), max: round(stats.frameMaxMs), age: round(stats.videoAgeMs),
       queue: round(stats.queueMs), decode: round(stats.nativeDecodeMs ?? stats.codecMs), rtt: round(stats.rttMs), mbps: round(stats.mbps), dropped,
       decodeQueue: stats.decodeQueue ?? null, arrivalP95: round(stats.arrivalP95Ms), arrivalMax: round(stats.arrivalMaxMs), transportP95: round(stats.transportP95Ms),
-      stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, refresh: round(stats.refreshMs), target: stats.pacingTarget ?? null, videoUnderruns: stats.underruns ?? null, rebuilt: stats.rebuilt ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
+      stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, refresh: round(stats.refreshMs), refreshMax: round(stats.refreshMaxMs), target: stats.pacingTarget ?? null, videoUnderruns: stats.underruns ?? null, rebuilt: stats.rebuilt ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
       audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
       lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null });
     if (this.samples.length > SAMPLE_LIMIT) this.samples.shift();

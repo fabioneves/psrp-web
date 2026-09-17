@@ -52,7 +52,8 @@ export class FramePresenter {
     const ticks = [...this.ticks].sort((a, b) => a - b);
     const result = { frameP95Ms: sorted.length ? sorted[Math.ceil(sorted.length * 0.95) - 1] : null,
       frameMaxMs: sorted.length ? sorted.at(-1) : null, stalls: this.stalls, stallMs: Math.round(this.stallMs),
-      refreshMs: ticks.length ? ticks[Math.floor(ticks.length / 2)] : null };
+      refreshMs: ticks.length ? ticks[Math.floor(ticks.length / 2)] : null, refreshMaxMs: ticks.length ? ticks.at(-1) : null };
+    this.ticks = [];
     this.stalls = 0; this.stallMs = 0;
     return result;
   }

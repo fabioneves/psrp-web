@@ -713,17 +713,21 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
   const useVideoSink = wantsVideoSink && supportsVideoSink();
   if (output === 'video' && !useVideoSink) $('video-mode-status').textContent += ' Video element output is unavailable in this browser; drawing on canvas.';
   try {
-    const useWorker = !inputSession && !forceMain && !useVideoSink && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
+    const useWorker = !inputSession && !forceMain && typeof Worker === 'function' && typeof canvas.transferControlToOffscreen === 'function' &&
       typeof OffscreenCanvas === 'function' && !!new OffscreenCanvas(1, 1).getContext('2d') &&
       !new URLSearchParams(location.search).has('mainThread') && await workerAnimationFrames;
     if (useWorker) {
       worker = new Worker('/stream-worker.js');
-      worker.onmessage = event => report(event.data);
+      if (useVideoSink) { videoSink = createVideoSink($('screen-video')); $('screen-video').hidden = false; canvas.hidden = true; }
+      worker.onmessage = event => {
+        if (event.data?.type === 'frame') { if (attempt === current && videoSink) videoSink.draw(event.data.frame); else event.data.frame.close(); return; }
+        report(event.data);
+      };
       worker.onerror = () => { if (attempt === current) reconnect('Switching to the compatibility renderer…', true); };
       const offscreen = canvas.transferControlToOffscreen();
       const audioPort = audio?.workerPort();
       worker.postMessage({ type: 'start', canvas: offscreen, url: url.href, audioPort, videoCodec: activeCodec, hardwareAcceleration,
-        presentation: { fps: profile.fps, pacing },
+        presentation: { fps: profile.fps, pacing, output: useVideoSink ? 'track' : 'canvas' },
         audioEnabled: audio?.context.state === 'running' },
         audioPort ? [offscreen, audioPort] : [offscreen]);
     } else {
@@ -817,6 +821,7 @@ function onStreamMessage(message) {
     resetInputs(); gamepads.reset();
     if (message.inputOnly) $('stream-status').textContent = 'Controller connected';
   } else if (message.type === 'stats') {
+    if (worker && videoSink) Object.assign(message, videoSink.metrics()); // screen timing lives with the element on the page
     const sample = log.videoStats(message);
     if ($('debug-telemetry').checked && sample) {
       // Live telemetry: the same per-second sample the diagnostics file holds, plus events since the last one.
