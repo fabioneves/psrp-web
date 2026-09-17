@@ -734,7 +734,7 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
       !new URLSearchParams(location.search).has('mainThread') && await workerAnimationFrames;
     if (useWorker) {
       worker = new Worker('/stream-worker.js');
-      if (useVideoSink) { videoSink = createVideoSink($('screen-video')); $('screen-video').hidden = false; canvas.hidden = true; }
+      if (useVideoSink) { videoSink = createVideoSink($('screen-video'), { deferToRefresh: true }); $('screen-video').hidden = false; canvas.hidden = true; }
       worker.onmessage = event => {
         if (event.data?.type === 'frame') { if (attempt === current && videoSink) videoSink.draw(event.data.frame); else event.data.frame.close(); return; }
         report(event.data);

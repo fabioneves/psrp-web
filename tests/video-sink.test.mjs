@@ -11,7 +11,7 @@ test('display timing reports screen intervals, skipped frames and resets per rep
   assert.equal(metrics.displaySkipped, 1, 'a jump in presentedFrames counts a skipped frame');
   assert.ok(Math.abs(metrics.displayMaxMs - 33.3) < 0.01, 'the 50 -> 83.3 gap is the longest interval');
   assert.ok(metrics.displayP95Ms >= 16.7);
-  assert.deepEqual(timing.metrics(), { displayP95Ms: null, displayMaxMs: null, displaySkipped: 0, displayedFrames: 0 }, 'counters reset each report');
+  assert.deepEqual(timing.metrics(), { displayP95Ms: null, displayMaxMs: null, displaySkipped: 0, displayedFrames: 0, displayReplaced: 0 }, 'counters reset each report');
   timing.note({ presentationTime: 2000, presentedFrames: 20 });
   assert.equal(timing.metrics().displayMaxMs, null, 'a pause over half a second is not an interval');
 });
