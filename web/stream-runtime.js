@@ -77,6 +77,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
   };
   return {
     input(message) { if (socket.readyState === WebSocket.OPEN && socket.bufferedAmount <= 65536) socket.send(JSON.stringify(message)); },
+    timeline: () => decoder?.timeline?.() ?? [],
     close
   };
 }

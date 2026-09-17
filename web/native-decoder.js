@@ -233,6 +233,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
       lastInputAt = performance.now();
       accessUnit(new Uint8Array(data), timestamp);
     },
+    timeline() { return frames.timeline.slice(); },
     destroy() {
       stopped = true; clearInterval(timer); presentation.destroy(); queue.destroy();
       frames.destroy(); pending.clear(); parameters.clear();

@@ -114,3 +114,21 @@ test('a 60 Hz display whose refresh runs slightly fast holds one frame every few
   assert.ok(holds <= 6, `at most one hold per three seconds, got ${holds}`);
   assert.equal(queue.dropped, 0);
 });
+
+test('recurring drift waits raise the cushion target once', () => {
+  const released = [];
+  const queue = new FrameQueue(frame => released.push(frame));
+  let fed = 0;
+  const feed = until => { for (; fed < until; fed += INTERVAL) queue.push({ id: fed, savedAt: fed }); }; // keepingUp needs ~60 arrivals in the last second
+  const wait = at => { feed(at); queue.waited(at); };
+  for (let i = 0; i < 4; i++) wait(1000 + i * 100);
+  assert.equal(queue.target, 1, 'four waits in ten seconds are tolerated');
+  wait(1500);
+  assert.equal(queue.target, 2, 'the fifth wait raises the target');
+  for (let i = 0; i < 6; i++) wait(1600 + i * 100);
+  assert.equal(queue.target, 2, 'a further raise waits at least five seconds');
+  for (let i = 0; i < 6; i++) wait(7000 + i * 100);
+  assert.equal(queue.target, 3, 'and then raises again, up to the maximum');
+  for (let i = 0; i < 20; i++) wait(13000 + i * 100);
+  assert.equal(queue.target, 3);
+});

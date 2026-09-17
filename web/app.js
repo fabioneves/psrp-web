@@ -766,7 +766,22 @@ function renderEvents() {
   $('event-log').replaceChildren(...(recent.length ? recent.map(event => { const item = document.createElement('li'); item.textContent = describeEvent(event); return item; })
     : [Object.assign(document.createElement('li'), { className: 'hint', textContent: 'No stalls, drops or reconnects recorded yet.' })]));
 }
-function diagnosticsCapture() {
+// Arrival/presentation moments of the last ~600 frames, from whichever thread runs the decoder.
+function frameTimeline() {
+  if (stream) return Promise.resolve(stream.timeline());
+  if (!worker) return Promise.resolve([]);
+  return new Promise(resolve => {
+    const timer = setTimeout(() => { worker.removeEventListener('message', onMessage); resolve([]); }, 500);
+    const onMessage = event => { if (event.data?.type === 'timeline') { clearTimeout(timer); worker.removeEventListener('message', onMessage); resolve(event.data.entries); } };
+    worker.addEventListener('message', onMessage);
+    worker.postMessage({ type: 'timeline' });
+  });
+}
+async function diagnosticsCapture() {
+  const timeline = await frameTimeline();
+  return { ...diagnosticsSummary(), timeline };
+}
+function diagnosticsSummary() {
   return log.export({ title: target?.title ?? $('stream-title').textContent, codec: activeCodec, engine: $('engine').textContent, profile: target?.profile,
     pacing: $('frame-pacing').value, audioDelayMs: Number($('audio-delay').value), worker: !!worker, userAgent: navigator.userAgent, secureContext: isSecureContext,
     latest: { video: $('timing-status').dataset.metrics ? JSON.parse($('timing-status').dataset.metrics) : null, audio: $('audio-status').textContent, console: $('console-status').textContent } });
@@ -777,7 +792,7 @@ function saveJson(data, name) {
   document.body.append(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function downloadDiagnostics() { saveJson(diagnosticsCapture(), `remote-play-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`); }
+async function downloadDiagnostics() { saveJson(await diagnosticsCapture(), `remote-play-diagnostics-${new Date().toISOString().replace(/[:.]/g, '-')}.json`); }
 // For browsers that cannot save files (the Tesla): the capture is stored on the server under this account
 // and listed in the lobby, where any signed-in device can download it.
 async function sendDiagnostics(button) {
@@ -785,7 +800,7 @@ async function sendDiagnostics(button) {
   status.textContent = 'Sending…';
   button.disabled = true;
   try {
-    const saved = await api('diagnostics', diagnosticsCapture());
+    const saved = await api('diagnostics', await diagnosticsCapture());
     status.textContent = `Saved on the server as ${saved.name}. Download it from Saved diagnostics in the lobby.`;
     if (button.id === 'hud-send') notify(`Diagnostics saved on the server as ${saved.name}.`, 'success');
   } catch (error) { status.textContent = `Could not send diagnostics: ${error.message}`; }

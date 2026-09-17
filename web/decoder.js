@@ -89,6 +89,7 @@ export async function createDecoder(canvas, report, options = {}) {
       if (frames.pending) presentation.request();
       decoded += count; decodeMs += performance.now() - before;
     },
+    timeline() { return frames.timeline.slice(); },
     destroy() { stopped = true; clearInterval(timer); presentation.destroy(); frames.destroy(); decoder.destroy?.(); }
   };
 }

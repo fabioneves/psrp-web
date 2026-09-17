@@ -25,6 +25,8 @@ self.onmessage = async ({ data }) => {
       audioEnabled = data.enabled;
     } else if (data.type === 'audio-fallback') {
       audioPort?.close(); audioPort = null;
+    } else if (data.type === 'timeline') {
+      postMessage({ type: 'timeline', entries: stream?.timeline() ?? [] });
     } else if (data.type === 'stop') {
       stream?.close();
       self.close();
