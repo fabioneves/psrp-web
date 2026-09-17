@@ -48,12 +48,12 @@ export class FrameQueue {
     // Cellular links deliver frames in pairs ~33 ms apart, which lifts the queue by one; the latency bound
     // sits one frame above that so a pair costs no skip. Bound: target + 3 frames.
     if (this.frames.length > this.target + 3) { this.release(this.frames.shift()); this.dropped++; }
-    // A momentary dip below the cushion is jitter, and drawing the cushion frame is what it is for. A
-    // cushion that stays low at three consecutive refreshes is cadence drift: wait one more refresh so
-    // presentation re-aligns to arrivals (8 ms at 120 Hz, one frame at 60 Hz) instead of draining and
-    // repeating a picture later.
+    // A dip below the cushion is jitter, and drawing the cushion frame is what it is for; on a bursty link a
+    // 50 ms gap empties it for three refreshes at a time. A cushion that stays low for half a second of
+    // refreshes is cadence drift: wait one more refresh so presentation re-aligns to arrivals (8 ms at
+    // 120 Hz, one frame at 60 Hz) instead of draining and repeating a picture later.
     this.lowTicks = this.frames.length <= this.target ? this.lowTicks + 1 : 0;
-    if (this.lowTicks >= 3 && this.last != null && now - this.last < this.interval * 1.5 && this.keepingUp(now)) { this.lowTicks = 0; this.rebuilt++; this.waited(now); return null; }
+    if (this.lowTicks >= this.fps / 2 && this.last != null && now - this.last < this.interval * 1.5 && this.keepingUp(now)) { this.lowTicks = 0; this.rebuilt++; this.waited(now); return null; }
     this.last = now;
     const frame = this.frames.shift();
     // Timeline of arrival and presentation moments (last ten seconds at 60 fps) for offline analysis of a capture.
