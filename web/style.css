@@ -494,10 +494,13 @@ main:has(#account:not([hidden])) {
   display:inline-block;
   width:10px;
   height:10px;
+  margin-right:8px;
   border-radius:50%;
   background:var(--accent);
   box-shadow:0 0 0 2px #0b1023;
   vertical-align:middle;
+  position:relative;
+  top:-1px;
 }
 .health-dot[data-level=fair] { background:#f4c95d; }
 .health-dot[data-level=poor] { background:#ff6b6b; }
