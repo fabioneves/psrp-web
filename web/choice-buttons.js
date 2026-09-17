@@ -30,7 +30,7 @@ export function bindChoiceButtons(root = document) {
       button.setAttribute('aria-label', title);
       if (select.id === 'video-mode') {
         const icon = document.createElement('img'); icon.src = codecArt[option.value]; icon.width = 32; icon.height = 32; icon.alt = '';
-        const text = document.createElement('strong'); text.textContent = title;
+        const text = document.createElement('strong'); text.textContent = option.value === 'auto' ? 'Auto' : title; // the tile is narrow; the accessible name stays 'Automatic'
         const detail = document.createElement('small'); detail.textContent = codecDescriptions[option.value];
         button.append(icon, text, detail);
       } else if (select.id === 'hud-style') {

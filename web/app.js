@@ -806,7 +806,10 @@ function onStreamMessage(message) {
       const change = quality?.sample(message, performance.now(), !document.hidden);
       if (change) changeProfile(change.profile, change.reason);
     }
-  } else if (message.type === 'status') { log.event('status', { message: message.message }); $('stream-status').textContent = message.message; }
+  } else if (message.type === 'status') {
+    log.event('status', { message: message.message }); $('stream-status').textContent = message.message;
+    if (/release the previous session/.test(message.message)) notify(message.message, 'busy');
+  }
   else if (message.type === 'error' || message.type === 'closed') {
     log.event(message.type, { message: message.message });
     if (target?.auto && quality && /cannot keep up|falling behind/.test(message.message)) {

@@ -190,6 +190,9 @@ main {
   padding:32px 4vw 52px;
   min-height:100vh;
 }
+main:has(#player:not([hidden])) {
+  max-width:none;
+}
 main:has(#account:not([hidden])) {
   display:grid;
   align-content:center;
