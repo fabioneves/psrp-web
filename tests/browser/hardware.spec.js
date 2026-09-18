@@ -145,6 +145,28 @@ for (const resolution of ['720p', '1080p']) {
   });
 }
 
+test('a decoder that needs over a second for its first picture still plays natively', async ({ page }) => {
+  page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log(message.text()); });
+  await page.addInitScript(() => {
+    const Native = globalThis.VideoDecoder;
+    globalThis.VideoDecoder = class extends Native {
+      constructor(options) { super(options); this.held = []; this.started = false; }
+      get decodeQueueSize() { return this.held.length + super.decodeQueueSize; }
+      decode(chunk) {
+        if (this.started) return super.decode(chunk);
+        this.held.push(chunk);
+        if (this.held.length === 1) setTimeout(() => { this.started = true; for (const item of this.held.splice(0)) super.decode(item); }, 1500);
+      }
+    };
+  });
+  await register(page);
+  await chooseSetting(page, 'video-mode', 'h264');
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#engine')).toContainText('H.264', { timeout: 30000 });
+  await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
+  await page.locator('#stop').click();
+});
+
 test('native decoder failure automatically retries in software without changing the preference', async ({ page }) => {
   await useNativeSoftwareDecoder(page, true);
   await register(page);

@@ -206,6 +206,12 @@ export function createNativeDecoder(canvas, report, options = {}) {
         prefixed.set(data, position); data = prefixed;
       }
     }
+    // A decoder that has not produced its first picture is starting, not falling behind: drop the backlog and
+    // resume at a fresh keyframe. The stall watchdog below still ends a decoder that never starts.
+    if (!everDecoded && queue.items.length >= 30) {
+      queue.items.length = 0;
+      if (!info.key) { waitingForKey = true; askKeyframe(); return; }
+    }
     waitingForKey = false;
     firstMedia ??= mediaTimestamp;
     const timestamp = Math.max(lastTimestamp + 1, Math.round((mediaTimestamp - firstMedia) * 1000));

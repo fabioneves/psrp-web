@@ -140,6 +140,36 @@ test('a corrupt frame after playback resets the decoder, asks for a keyframe and
   } finally { decoder.destroy(); Object.assign(globalThis, saved); }
 });
 
+test('a decoder still producing its first picture is given a fresh keyframe, not abandoned as falling behind', () => {
+  const saved = { VideoDecoder: globalThis.VideoDecoder, EncodedVideoChunk: globalThis.EncodedVideoChunk };
+  globalThis.EncodedVideoChunk = class { constructor(init) { Object.assign(this, init); } };
+  let instance;
+  globalThis.VideoDecoder = class {
+    constructor(callbacks) { this.callbacks = callbacks; this.decodeQueueSize = 0; this.state = 'unconfigured'; this.decoded = []; instance = this; }
+    configure() { this.state = 'configured'; }
+    decode(chunk) { this.decoded.push(chunk); this.decodeQueueSize++; }
+    close() { this.state = 'closed'; }
+  };
+  const canvas = { width: 0, height: 0, getContext: () => ({ drawImage() {} }) };
+  const errors = [], requests = [];
+  const decoder = createNativeDecoder(canvas, () => {}, { videoCodec: 'h264', fps: 60, onError: message => errors.push(message), requestKeyframe: () => requests.push(1) });
+  try {
+    const idr = Uint8Array.from([0, 0, 0, 1, 103, 100, 0, 42, 0, 0, 0, 1, 104, 5, 0, 0, 0, 1, 101, 128, 9]);
+    const delta = Uint8Array.from([0, 0, 0, 1, 65, 128, 9]);
+    let time = 1000;
+    decoder.write(idr.buffer, time);
+    for (let i = 0; i < 59; i++) decoder.write(delta.buffer, time += 16);
+    assert.deepEqual(errors, [], 'a cold decoder gets the stall watchdog\'s three seconds, not half a second of backlog');
+    assert.equal(instance.decoded.length, 4, 'only the decoder\'s own small queue was submitted');
+    assert.equal(requests.length, 1, 'the dropped backlog is replaced by a keyframe request');
+    instance.decodeQueueSize = 0;
+    decoder.write(delta.buffer, time += 16);
+    assert.equal(instance.decoded.length, 4, 'pictures that depend on the dropped backlog are skipped');
+    decoder.write(idr.buffer, time += 16);
+    assert.equal(instance.decoded.at(-1).type, 'key', 'decoding resumes at the next keyframe');
+  } finally { decoder.destroy(); Object.assign(globalThis, saved); }
+});
+
 test('balanced native playback decodes every reference but presents only the newest pair from a burst', () => {
   const saved = Object.fromEntries(['VideoDecoder', 'EncodedVideoChunk', 'requestAnimationFrame', 'cancelAnimationFrame'].map(key => [key, globalThis[key]]));
   const decoded = [], drawn = [], closed = [];
