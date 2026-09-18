@@ -4,7 +4,7 @@
 
 1. Browser signs into the upstream local-account service. API requests use a bearer
    token in page memory. An HttpOnly session cookie restores a valid login after
-   refresh, up to the token's existing 24-hour expiration.
+   refresh and renews it for another 400 days (see Browser login persistence).
 2. `POST /api/software/tickets` authenticates the user, validates the bitrate and
    checks their active console association. Demo tickets require authentication
    but no console. A cryptographically random ticket expires after 30 seconds.
