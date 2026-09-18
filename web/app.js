@@ -164,7 +164,6 @@ async function run(button, action, clearMessage = true) {
   finally { button.disabled = false; button.removeAttribute('aria-busy'); }
 }
 function showAccount() {
-  $('restoring')?.remove();
   $('account').hidden = !!token;
   $('library').hidden = !token;
   $('logout').hidden = !token;

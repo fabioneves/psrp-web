@@ -42,9 +42,15 @@ test('simple console screen restores silently and setup fits small screens', asy
   await mockDiscovery(page);
   await register(page);
   await expect(page.getByRole('button', { name: 'Example PS5 · Set up' })).toBeVisible();
+  await page.waitForLoadState('networkidle');
+  let restore;
+  await page.route('**/api/auth/session', async route => { await new Promise(resolve => { restore = resolve; }); await route.continue(); });
   await page.reload();
+  await expect.poll(() => !!restore).toBe(true);
+  await expect(page.getByText(/restoring/i)).toHaveCount(0);
+  restore();
+  await page.unroute('**/api/auth/session');
   await expect(page.locator('#library')).toBeVisible();
-  await expect(page.getByText(/restoring.*session/i)).toHaveCount(0);
   await expect(page.locator('#setup-dialog')).toBeHidden();
   await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();
   await page.getByRole('button', { name: 'Example PS5 · Set up' }).click();

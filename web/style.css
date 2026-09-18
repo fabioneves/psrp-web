@@ -298,17 +298,6 @@ main:has(#account:not([hidden])) {
 .symbol-row span:nth-child(4) {
   color:var(--pink);
 }
-.splash {
-  margin:18vh auto;
-  text-align:center;
-  font-family:monospace;
-  color:var(--accent);
-  opacity:0;
-  animation:appear 0s .4s forwards;
-}
-@keyframes appear {
-  to { opacity:1; }
-}
 .status-dot {
   display:inline-block;
   width:9px;
