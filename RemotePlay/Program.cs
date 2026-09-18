@@ -343,6 +343,17 @@ app.UseMiddleware<RemotePlay.Middleware.HlsPathFixMiddleware>();
 // 静态文件中间件（处理所有静态文件，包括 .ts 文件）
 app.UseStaticFiles(staticFileOptions);
 
+// No static file and no route: without this the fallback authorization policy challenges, and a missing page
+// answered 401 with an empty body, which browsers such as iOS Safari offer as a download. A catch-all fallback
+// endpoint is not an option, because static files are skipped once any endpoint has matched.
+app.Use(async (context, next) =>
+{
+    if (context.GetEndpoint() != null) { await next(); return; }
+    context.Response.StatusCode = 404;
+    context.Response.ContentType = "text/plain";
+    await context.Response.WriteAsync("Not found.");
+});
+
 app.UseErrorHandling();
 
 // 认证和授权中间件
