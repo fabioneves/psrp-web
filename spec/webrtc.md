@@ -42,7 +42,14 @@ What changes and what does not:
 4. Controller input stays on the WebSocket. A lost button release is worse than
    a late one.
 5. The Tesla browser supports `RTCPeerConnection` data channels and the car's
-   network allows outbound UDP. **Unverified**; see Open Questions.
+   network allows outbound UDP. **Verified 2026-09-18** with `/probe.html` in
+   the car (Chrome 148) on two networks, a phone hotspot and Tesla Premium
+   Connectivity: data channels present, both public STUN servers answered over
+   UDP, and two in-page peers exchanged 30 of 30 Mbps in 1100-byte unreliable
+   messages with 0 % loss. Both networks map a different public port per
+   destination (symmetric NAT), which the forwarded-port design does not
+   depend on. The browser is current Chromium, so nothing here needs to allow
+   for an old engine.
 
 ## Tech Stack
 
@@ -253,11 +260,8 @@ stretches:
 
 ## Open Questions
 
-1. Does the Tesla browser allow WebRTC data channels and outbound UDP, and can
-   it receive 30 Mbps on a data channel? `/probe.html` answers all three; run
-   it in the car, signed in, so the result is saved on the server.
-2. Should the Proxmox installer ask for the UDP port, or only document it?
-3. Should the default become "WebRTC with fallback" once criterion 6 holds, or
+1. Should the Proxmox installer ask for the UDP port, or only document it?
+2. Should the default become "WebRTC with fallback" once criterion 6 holds, or
    stay opt-in?
-4. Audio: leave on the WebSocket for good, or move to a second unreliable
+3. Audio: leave on the WebSocket for good, or move to a second unreliable
    channel later if audio underruns still track TCP stalls?
