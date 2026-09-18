@@ -1,0 +1,229 @@
+:root {
+  --bg:#0b1023;
+  --panel:#151e36;
+  --line:#52617e;
+  --muted:#b3bfd5;
+  --shell:#c9cbd1;
+}
+body {
+  background-image:radial-gradient(#8293bc0a 1px,transparent 1px);
+  background-size:8px 8px;
+}
+h1,h2,.brand,.preset-grid strong {
+  font-weight:400;
+}
+button:not([data-command]),a.tesla-link {
+  touch-action:manipulation;
+}
+button[data-icon]::before,.device-actions .primary::before,.device-actions .wake::before,.device-actions .sleep::before {
+  content:'';
+  display:inline-block;
+  width:28px;
+  height:28px;
+  flex:none;
+  vertical-align:middle;
+  margin-right:10px;
+  background:currentColor;
+  mask:var(--button-icon) center/contain no-repeat;
+  -webkit-mask:var(--button-icon) center/contain no-repeat;
+}
+[data-icon=play],.device-actions .primary { --button-icon:url('/art/action-play.svg'); }
+[data-icon=plus] { --button-icon:url('/art/action-plus.svg'); }
+[data-icon=refresh] { --button-icon:url('/art/action-refresh.svg'); }
+[data-icon=power],.device-actions .wake { --button-icon:url('/art/action-power.svg'); }
+[data-icon=moon],.device-actions .sleep { --button-icon:url('/art/action-moon.svg'); }
+[data-icon=settings] { --button-icon:url('/art/action-settings.svg'); }
+[data-icon=account] { --button-icon:url('/art/action-account.svg'); }
+[data-icon=exit] { --button-icon:url('/art/action-exit.svg'); }
+[data-icon=close] { --button-icon:url('/art/action-close.svg'); }
+[data-icon=check] { --button-icon:url('/art/action-check.svg'); }
+button[aria-busy=true]::before { visibility:hidden; }
+button:disabled:hover { border-color:var(--line); }
+.brand {
+  font-size:1.6rem;
+  gap:16px;
+  letter-spacing:.04em;
+}
+.brand img,.banner-nav .brand img { width:72px; height:48px; }
+.brand span:last-child { font:11px/1.4 ui-monospace,monospace; }
+.lobby-banner {
+  padding:0;
+  border:4px solid var(--shell);
+  box-shadow:6px 6px #040817;
+  background-size:auto 130%;
+  background-position:right 62%;
+  margin-bottom:36px;
+}
+.banner-nav {
+  padding:16px 24px;
+  margin:0;
+  background:var(--shell);
+  border-bottom:4px solid #747986;
+  color:#19243a;
+}
+.banner-nav .brand { text-shadow:none; }
+.banner-nav .brand span { color:#39445c; border-color:#818795; }
+.banner-nav button { min-height:52px; }
+.lobby-banner .banner-copy {
+  max-width:65%;
+  padding:32px;
+  background:linear-gradient(90deg,#0b1023 50%,#0b1023e8 75%,transparent);
+}
+.lobby-banner h2 {
+  font-size:clamp(3rem,4.5vw,4.6rem);
+  line-height:.98;
+  letter-spacing:0;
+  margin-bottom:20px;
+}
+.lobby-banner .eyebrow { font-size:.72rem; margin-bottom:20px; }
+.lobby-banner .symbol-row { font-size:36px; gap:24px; margin-top:24px; }
+.lobby-banner p:not(.eyebrow) { max-width:350px; }
+.lobby-grid { grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:32px; }
+.lobby-grid .section-heading h1 { font-size:2.6rem; }
+.section-heading h2 { font-size:2.3rem; }
+.section-heading .eyebrow { margin-bottom:8px; }
+.setup-actions button,.library-tools button,#auth-submit,#auth-toggle { min-height:56px; }
+.device {
+  padding:24px;
+  gap:24px;
+  border:2px solid var(--line);
+  border-top:4px solid var(--blue);
+  box-shadow:5px 5px #040817;
+}
+.device-icon {
+  width:144px;
+  height:144px;
+  background-size:128px;
+  background-color:#0c1429;
+  border-bottom:4px solid #384d76;
+}
+.device h2 { font-size:2.5rem; overflow-wrap:anywhere; }
+.device p { font-size:.9rem; line-height:1.8; }
+.device .status-dot { width:10px; height:10px; }
+.lobby-grid .device-actions { gap:12px; }
+.lobby-grid .device-actions button { min-height:56px; font-size:.9rem; }
+.lobby-grid .device-actions .primary { min-height:68px; font-size:2rem; font-weight:400; }
+.device-actions .primary::before { width:32px; height:32px; }
+.play-actions .fullscreen-toggle { max-width:50%; min-height:64px; font-size:.85rem; padding:12px; gap:12px; }
+.fullscreen-toggle img { width:28px; height:28px; }
+.lobby-grid .device-actions>.sleep,.lobby-grid .device-actions>[data-icon=settings] { grid-column:auto; }
+.device-recovery { border-top:1px solid var(--line); padding-top:8px; }
+.device-recovery summary { min-height:44px; }
+.library-tools { padding-top:8px; }
+.empty { padding:32px; border-style:solid; text-align:center; }
+.empty::before {
+  content:'';
+  display:block;
+  width:144px;
+  height:112px;
+  margin:0 auto 24px;
+  background:url('/art/controller.svg') center/contain no-repeat;
+  image-rendering:pixelated;
+}
+.empty h2 { font-size:2.3rem; }
+#stream-settings { border-top:4px solid var(--pink); }
+#stream-settings .section-heading { margin-bottom:12px; }
+#stream-settings .section-heading img { width:64px; height:64px; image-rendering:pixelated; }
+.settings-intro { font-size:.9rem; margin:0 0 20px; }
+.lobby-grid .preset-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.lobby-grid .preset-grid button { position:relative; padding:16px; min-height:132px; }
+.lobby-grid .preset-icon { float:left; font-size:44px; line-height:1; margin:0 16px 24px 0; }
+.lobby-grid .preset-grid strong { font-size:1.55rem; line-height:1.1; margin:0 0 8px; }
+.lobby-grid .preset-grid small { font-size:.78rem; line-height:1.5; }
+.preset-grid [data-preset=balanced] .preset-icon { color:var(--blue); }
+.preset-grid [data-preset=detail] .preset-icon { color:var(--pink); }
+.preset-grid [data-preset=cellular] .preset-icon { color:var(--red); }
+.preset-grid button[aria-pressed=true] { box-shadow:inset 0 -4px var(--accent),3px 3px #050a18; }
+.choice-field legend { font-size:.9rem; color:var(--text); }
+.choice-buttons button { min-height:56px; font-size:.9rem; }
+.codec-field .choice-buttons button { gap:8px; padding:16px 4px; }
+.codec-field img { width:48px; height:48px; }
+.codec-field strong { font-size:1.7rem; font-weight:400; }
+.codec-field small { font-size:.73rem; }
+.choice-buttons button[aria-checked=true] { outline:1px solid var(--accent); outline-offset:2px; }
+#session-tabs button { min-height:72px; font-size:1.4rem; }
+#session-tabs img { width:32px; height:32px; object-fit:contain; image-rendering:pixelated; }
+.deck-heading img { width:128px; height:52px; }
+.session-title>img { width:48px; height:56px; }
+.player-actions img { width:28px; height:28px; }
+.stop-icon { width:20px; height:20px; }
+#playing-profile .codec-field img { width:40px; height:40px; }
+#playing-profile .codec-field .choice-buttons button { padding:12px 4px; gap:8px; }
+#playing-profile .codec-field strong { font-size:1.35rem; }
+#playing-profile .settings-intro { display:none; }
+#session-tabs button { flex-direction:column; gap:8px; }
+.account-layout { padding:32px; border:4px solid var(--shell); box-shadow:6px 6px #040817; }
+.intro h1 { font-size:clamp(3.5rem,6vw,5.5rem); letter-spacing:0; }
+#auth-form h2 { font-size:2.4rem; }
+#auth-form input { min-height:56px; }
+#auth-submit { font:400 1.7rem Jersey,monospace; }
+.check { white-space:normal; }
+@media(max-width:1100px) {
+  .lobby-grid { grid-template-columns:1fr; }
+  .lobby-banner .banner-copy { max-width:75%; }
+  .lobby-grid .preset-grid { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .lobby-grid .preset-icon { float:none; margin:0 0 12px; }
+}
+@media(max-width:680px) {
+  main { padding:16px 16px 32px; }
+  .banner-nav { padding:12px; flex-wrap:wrap; gap:12px; }
+  .banner-nav .brand { font-size:1.35rem; }
+  .banner-nav .brand img,.brand img { width:60px; height:40px; }
+  .banner-nav .brand span { display:none; }
+  .banner-nav #logout { font-size:.8rem; padding:8px; }
+  .banner-nav #logout::before { width:24px; height:24px; margin-right:6px; }
+  .lobby-banner { background-size:auto 100%; background-position:65% center; }
+  .lobby-banner::before { display:none; }
+  .lobby-banner .banner-copy { max-width:none; padding:24px 20px; background:#0b1023b8; }
+  .lobby-banner h2 { font-size:3.1rem; }
+  .lobby-banner .eyebrow { font-size:.6rem; }
+  .lobby-banner p:not(.eyebrow) { font-size:.9rem; }
+  .lobby-grid .preset-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .lobby-grid .preset-grid button { padding:12px; }
+  .lobby-grid .preset-grid strong { font-size:1.25rem; }
+  .lobby-grid .section-heading h1 { font-size:2.3rem; }
+  .device { padding:16px; gap:16px; }
+  .device-icon { width:112px; height:112px; background-size:104px; }
+  .device h2 { font-size:2rem; }
+  .device>div:not(.device-actions) { min-width:100px; }
+  .device p { font-size:.8rem; overflow-wrap:anywhere; }
+  .lobby-grid .device-actions>.sleep,.lobby-grid .device-actions>[data-icon=settings] { grid-column:1/-1; }
+  .play-actions .fullscreen-toggle { font-size:.75rem; padding:8px; gap:8px; }
+  .play-actions .fullscreen-toggle img { width:24px; height:24px; }
+  .lobby-grid .device-actions .primary { font-size:1.7rem; }
+  .panel { padding:18px; }
+  #stream-settings .section-heading h2 { font-size:2rem; }
+  #stream-settings .section-heading img { width:52px; height:52px; }
+  .codec-field small { font-size:.65rem; }
+  .codec-field img { width:40px; height:40px; }
+  .codec-field strong { font-size:1.5rem; }
+  .account-layout { padding:16px; }
+  .intro { padding:8px; }
+  .intro .brand span { display:none; }
+  .intro h1 { font-size:3.5rem; }
+  #auth-form h2 { font-size:2rem; }
+  .session-title>img { width:32px; height:40px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  button { transition:none; }
+  button:active { transform:none; }
+  .toast[data-tone=busy]::before,button[aria-busy=true]::after { animation:none; }
+}
+
+@media(max-width:420px) {
+  .choice-buttons[data-count="4"] { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .lobby-grid .preset-grid { grid-template-columns:1fr; }
+  .lobby-grid .preset-grid button { min-height:96px; padding:16px; }
+  .lobby-grid .preset-icon { float:left; margin:0 16px 8px 0; }
+  .lobby-grid .preset-grid strong { font-size:1.4rem; }
+  .console-column>.section-heading .setup-actions { width:100%; display:grid; grid-template-columns:1fr 1fr; }
+  .console-column>.section-heading .setup-actions button { display:grid; justify-items:center; gap:8px; padding:12px 4px; }
+  .console-column>.section-heading .setup-actions button::before { margin:0; }
+  .intro h1 { font-size:2.8rem; }
+  .intro>p:not(.eyebrow) { font-size:.9rem; }
+  .intro>.tesla-hint { font-size:.75rem!important; }
+  .intro>.symbol-row { display:none; }
+  .intro>.brand { margin-bottom:20px; }
+  .intro a.tesla-link { margin-top:12px; }
+  .account-layout { gap:16px; background-image:linear-gradient(#0b102399,#0b1023dd),url('/art/console-room.webp'); }
+}

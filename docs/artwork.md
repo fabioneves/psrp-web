@@ -11,3 +11,5 @@ The console, controller and disc SVGs are original pixel-grid UI assets. Jersey 
 The codec Canvas/H.264/H.265 tiles, Control deck illustration, speaker and fullscreen icons are original SVG pixel-grid assets authored for the touch interface. They use crisp edges and the existing mint, blue and lilac palette.
 
 Three original miniature monitor SVGs preview the Detailed, Minimal and Horizontal HUD layouts.
+
+The classic UI refresh adds ten original 24 × 24 pixel-grid action SVGs (`action-*.svg`). They scale to 28–32 CSS pixels as decorative masks beside readable button labels; existing console, codec and controller artwork is enlarged without additional bitmap downloads. `classic.css` supplies the gray console frame, navy menu panels, colored face symbols and responsive sizing. Assets remain self-hosted and go through the existing versioned web build.

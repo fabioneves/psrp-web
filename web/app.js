@@ -418,7 +418,7 @@ async function refresh() {
       wake.textContent = 'Waking…';
       try { await wakeConsole(device.hostId); } finally { wake.textContent = 'Wake up'; }
     });
-    const settings = document.createElement('button'); settings.className = 'quiet'; settings.textContent = 'Console settings';
+    const settings = document.createElement('button'); settings.className = 'quiet'; settings.dataset.icon = 'settings'; settings.textContent = 'Console settings';
     settings.onclick = () => openConsoleDialog(device);
     const disconnect = document.createElement('button'); disconnect.className = 'quiet danger'; disconnect.textContent = 'Disconnect all sessions';
     disconnect.disabled = !device.isRegistered;
