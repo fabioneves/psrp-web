@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="app-version" content="dev">
+  <meta name="theme-color" content="#0b1023">
+  <link rel="icon" href="/art/controller.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/probe.css">
+  <title>WebRTC probe · Player One</title>
+  <script type="module" src="/probe.js"></script>
+</head>
+<body>
+  <main class="probe">
+    <h1>WebRTC probe</h1>
+    <p class="hint">Checks whether this browser and network could use a WebRTC video transport. It runs by itself and takes about fifteen seconds. The UDP check sends one STUN request to each server named in step 2; nothing else leaves this browser unless you press Send to server.</p>
+    <h2>1 · Data channels</h2><p id="api-result" role="status">Checking…</p>
+    <h2>2 · Outbound UDP</h2><p id="stun-result" role="status">Waiting…</p>
+    <h2>3 · Browser throughput</h2><p id="loopback-result" role="status">Waiting…</p>
+    <h2>Result</h2><p id="save-result" role="status">Waiting…</p>
+    <p><button type="button" id="send" disabled>Send to server</button> <button type="button" id="run-again" class="quiet" disabled>Run again</button> <a href="/">Back to Player One</a></p>
+  </main>
+</body>
+</html>
