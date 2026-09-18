@@ -193,6 +193,10 @@ async function loadSetupState() {
     setRegistering(false);
   }
 }
+// The session endpoint renews the saved cookie and sign-out deletes it, so the two must never overlap:
+// a renewal answered after sign-out would re-create the cookie.
+let cookieRequests = Promise.resolve();
+const cookieRequest = send => (cookieRequests = cookieRequests.catch(() => {}).then(send));
 $('auth-form').onsubmit = event => {
   event.preventDefault();
   run($('auth-submit'), async () => {
@@ -209,8 +213,8 @@ $('auth-form').onsubmit = event => {
     void setup.restore();
     const signedInToken = token;
     try {
-      const saved = await api('auth/session');
-      if (token === signedInToken && saved.token !== signedInToken)
+      const saved = await cookieRequest(() => api('auth/session'));
+      if (token === signedInToken && !saved.token)
         notify('Signed in for this page only: the browser did not retain your saved login. Allow cookies for this site, then sign in again.', 'error');
     } catch {
       if (token === signedInToken)
@@ -219,7 +223,7 @@ $('auth-form').onsubmit = event => {
   });
 };
 $('logout').onclick = () => run($('logout'), async () => {
-  await api('auth/logout', {});
+  await cookieRequest(() => api('auth/logout', {}));
   stop(); token = null; setup.reset(); showAccount(); notify('');
   await loadSetupState();
 });

@@ -174,7 +174,7 @@ Registration is open only until the first account exists, unless
 
 ### First use
 
-1. On a fresh server the sign-in page asks you to create the owner account; after that, sign-ups are closed and the page only signs in. Accounts are saved in PostgreSQL. Refresh restores login silently for up to 24 hours; **Sign out** clears it. To let other people in your household create their own accounts, set `ALLOW_REGISTRATION=true` in `.env`; each account pairs its own console.
+1. On a fresh server the sign-in page asks you to create the owner account; after that, sign-ups are closed and the page only signs in. Accounts are saved in PostgreSQL. Login is saved and every visit renews it, so you stay signed in until you choose **Sign out** or stay away for more than 400 days (the longest browsers keep a cookie). To let other people in your household create their own accounts, set `ALLOW_REGISTRATION=true` in `.env`; each account pairs its own console.
 2. Select a nearby console, or choose **Add console** to enter its IP address.
 3. Choose **Sign in to PSN**, sign in on Sony's page, then paste its final redirect URL back into setup. The app saves and encodes your account ID. Choose **Pair automatically**; if it fails, use **Pair with a PIN** and enter the console's Link Device PIN.
 4. Click **Play**; a console in rest mode is woken automatically before connecting. A sleeping console shows **Wake up**, a ready one **Put console to sleep**; the card's status dot is green when ready and amber in rest mode. **Stream settings** offers resolutions through 1080p60, with bitrate and frame pacing under **Advanced**. **Start test stream** checks browser playback. **Disconnect** ends the session.

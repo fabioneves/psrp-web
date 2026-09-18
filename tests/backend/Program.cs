@@ -209,6 +209,10 @@ var auth = new AuthService(null!, new ConfigurationBuilder().Build(), NullLogger
 var passwordHash = auth.GeneratePassword("a locally generated test password");
 Check(BinaryPrimitives.ReadUInt32BigEndian(Convert.FromBase64String(passwordHash).AsSpan(5, 4)) >= 220000, "password hashing meets the configured work factor");
 Check(auth.VerifyHashedPassword(passwordHash, "a locally generated test password") && !auth.VerifyHashedPassword(passwordHash, "wrong"), "password verifier accepts only the matching password");
+var issued = auth.IssueSession(new RemotePlay.Models.DB.User { Id = "1", Username = "alice", Email = "alice@example.test", PasswordHash = passwordHash });
+var nextYear = DateTime.UtcNow.AddDays(365);
+Check(issued.ExpiresAt > nextYear && new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler().ReadJwtToken(issued.Token).ValidTo > nextYear,
+    "a saved login and its token outlive a year, so regular visits never meet a sign-in wall");
 
 sealed class TestClock : TimeProvider
 {

@@ -189,7 +189,13 @@ namespace RemotePlay.Controllers
             if (token != null)
             {
                 var user = await _authService.ValidateTokenAsync(token);
-                if (user?.IsActive == true) return Ok(new { token });
+                if (user?.IsActive == true)
+                {
+                    var renewed = _authService.IssueSession(user);
+                    Response.Cookies.Append(BrowserSession.CookieName, renewed.Token,
+                        BrowserSession.Options(Request, new DateTimeOffset(renewed.ExpiresAt)));
+                    return Ok(new { token = renewed.Token });
+                }
                 Response.Cookies.Delete(BrowserSession.CookieName, BrowserSession.Options(Request));
             }
             return Ok(new { token = (string?)null });

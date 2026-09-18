@@ -18,6 +18,8 @@ namespace RemotePlay.Contracts.Services
         /// </summary>
         Task<AuthResponse?> LoginAsync(LoginRequest request);
 
+        AuthResponse IssueSession(User user);
+
         /// <summary>
         /// 验证JWT令牌
         /// </summary>

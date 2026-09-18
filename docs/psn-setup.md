@@ -8,7 +8,7 @@ Stream profiles are under Stream settings. Saved local login loads silently.
 
 Local accounts remain in PostgreSQL, preserving existing users and registrations.
 Switching to SQLite would not address session-loading UI and would require migrating
-existing data. The HttpOnly session cookie lasts up to 24 hours. PostgreSQL data,
+existing data. The HttpOnly session cookie lasts 400 days and every visit renews it. PostgreSQL data,
 the signing secret and token-protection keys all persist in Docker volumes.
 
 ## Sony sign-in

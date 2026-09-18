@@ -87,5 +87,5 @@ Browser login persistence follows the cookie attribute and lifetime guidance in
 [ASP.NET Core cookie authentication](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/cookie?view=aspnetcore-10.0)
 and the request-isolation guidance in
 [ASP.NET Core antiforgery documentation](https://learn.microsoft.com/en-us/aspnet/core/security/anti-request-forgery?view=aspnetcore-10.0).
-The session cookie restores an existing JWT; protected console APIs retain their
+The session cookie exchanges a saved JWT for a renewed one; protected console APIs retain their
 bearer-token authorization rather than accepting cookies directly.

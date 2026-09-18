@@ -184,15 +184,19 @@ automatic changes. Profile changes therefore briefly interrupt media.
 ## Browser login persistence
 
 Same-origin browser login requests receive a host-only `remote-play-session` cookie scoped to
-`/api/auth`, with HttpOnly, SameSite=Strict, and the JWT's existing expiration. HTTPS
+`/api/auth`, with HttpOnly, SameSite=Strict, and the JWT's 400-day expiration (the longest
+browsers keep a cookie). HTTPS
 logins set Secure, including the same-origin HTTPS request through the Caddy proxy.
 Local HTTP deployment remains supported. The token is not saved to web storage.
 
 On page load, `GET /api/auth/session` validates the cookie's JWT signature, issuer,
-audience and expiration, checks the account is active, then restores the existing
-in-memory bearer token. Invalid saved sessions are cleared. The account form stays
-hidden while restoration runs. This endpoint does not renew the expiration.
+audience and expiration, checks the account is active, then issues a fresh 400-day JWT,
+sets it as the cookie and returns it as the in-memory bearer token, so a login only ends
+by signing out or after 400 days without a visit. Invalid saved sessions are cleared. The
+account form stays hidden while this runs, and nothing is shown in its place.
 `POST /api/auth/logout` clears the saved cookie before the page clears its token.
+The page never sends it alongside a session request, because a renewal answered after
+sign-out would re-create the cookie.
 Both endpoints use no-store responses and require an explicit browser-session
 header; cross-origin Origin and Fetch Metadata values are rejected independently
 of CORS configuration. Login also recognizes same-origin browser requests from older open pages that

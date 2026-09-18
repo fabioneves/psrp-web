@@ -68,17 +68,7 @@ namespace RemotePlay.Services.Auth
 
             _logger.LogInformation("新用户注册成功: {Username}, Email: {Email}", user.Username, user.Email);
 
-            // 生成JWT令牌
-            var token = GenerateJwtToken(user);
-            var expiresAt = DateTime.UtcNow.AddHours(24); // 默认24小时过期
-
-            return new AuthResponse
-            {
-                Token = token,
-                Username = user.Username,
-                Email = user.Email,
-                ExpiresAt = expiresAt
-            };
+            return IssueSession(user);
         }
 
         /// <summary>
@@ -106,13 +96,19 @@ namespace RemotePlay.Services.Auth
 
             _logger.LogInformation("用户登录成功: {Username}", user.Username);
 
-            // 生成JWT令牌
-            var token = GenerateJwtToken(user);
-            var expiresAt = DateTime.UtcNow.AddHours(24); // 默认24小时过期
+            return IssueSession(user);
+        }
 
+        // Browsers cap cookie lifetimes at 400 days, and every visit renews the saved login,
+        // so a session only ends by signing out or staying away for longer than that.
+        private static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(400);
+
+        public AuthResponse IssueSession(User user)
+        {
+            var expiresAt = DateTime.UtcNow.Add(SessionLifetime);
             return new AuthResponse
             {
-                Token = token,
+                Token = GenerateJwtToken(user, expiresAt),
                 Username = user.Username,
                 Email = user.Email,
                 ExpiresAt = expiresAt
@@ -252,7 +248,7 @@ namespace RemotePlay.Services.Auth
         /// <summary>
         /// 生成JWT令牌
         /// </summary>
-        private string GenerateJwtToken(User user)
+        private string GenerateJwtToken(User user, DateTime expiresAt)
         {
             var claims = new[]
             {
@@ -269,7 +265,7 @@ namespace RemotePlay.Services.Auth
                 issuer: GetJwtIssuer(),
                 audience: GetJwtAudience(),
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(24),
+                expires: expiresAt,
                 signingCredentials: creds
             );
 

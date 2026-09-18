@@ -143,6 +143,43 @@ test('login survives refresh, uses an HttpOnly cookie, and sign-out survives ref
   await expect(page.locator('#library')).toBeHidden();
 });
 
+test('a saved login lasts over a year and every visit renews it', async ({ page, context }) => {
+  const verified = page.waitForResponse(async response => response.url().endsWith('/api/auth/session') && !!(await response.json()).token);
+  await register(page);
+  await verified;
+  await page.evaluate(() => new Promise(resolve => setTimeout(resolve, 250)));
+  await expect(page.locator('#message')).toBeEmpty();
+  const saved = async () => (await context.cookies()).find(cookie => cookie.name === 'remote-play-session');
+  const nextYear = Date.now() / 1000 + 365 * 86400;
+  const first = await saved();
+  expect(first.expires).toBeGreaterThan(nextYear);
+  expect(JSON.parse(Buffer.from(first.value.split('.')[1], 'base64url')).exp).toBeGreaterThan(nextYear);
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Your consoles', exact: true })).toBeVisible();
+  const renewed = await saved();
+  expect(renewed.value).not.toBe(first.value);
+  expect(renewed.expires).toBeGreaterThan(nextYear);
+});
+
+test('signing out while the saved login is still being verified stays signed out', async ({ page, context }) => {
+  let calls = 0, release;
+  await page.route('**/api/auth/session', async route => {
+    if (++calls !== 2) return route.continue();
+    const response = await route.fetch();
+    await new Promise(resolve => { release = resolve; });
+    await route.fulfill({ response });
+  });
+  await register(page);
+  await expect.poll(() => !!release).toBe(true);
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await page.waitForTimeout(500);
+  release();
+  await expect(page.locator('#account')).toBeVisible();
+  await expect.poll(async () => (await context.cookies()).some(cookie => cookie.name === 'remote-play-session')).toBe(false);
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Sign in', exact: true })).toBeVisible();
+});
+
 test('a stale cached unversioned client cannot prevent session restoration', async ({ page }) => {
   await page.route(url => url.pathname === '/app.js', route => route.fulfill({
     contentType: 'text/javascript',
