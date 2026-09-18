@@ -126,7 +126,7 @@ export function createNativeDecoder(canvas, report, options = {}) {
   let stopped = false, configuration, progressAt = null, waitingForKey = true, firstMedia = null, lastTimestamp = -1, everDecoded = false, lastInputAt = null;
   let decoded = 0, drawn = 0, totalFrames = 0, bytesReceived = 0, decodeMs = 0, drawMs = 0, queueMs = 0;
   let start = performance.now();
-  const frames = new FrameQueue(item => item.frame.close(), options.fps, options.pacing !== 'responsive');
+  const frames = new FrameQueue(item => item.frame.close(), options.fps, options.pacing);
   const presentation = new FramePresenter(() => {
     const item = frames.take(performance.now());
     if (!item) return frames.pending ? 'waiting' : false;

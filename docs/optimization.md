@@ -73,6 +73,46 @@ queue wait stayed at 57 ms, because bursts refill the queue faster than
 that cadence drains it. The depth is the price of the link's burstiness,
 not something the client can trade away without visible skips.
 
+### Balanced frame pacing (2026-09-18)
+
+The optional Balanced pacing mode targets one frame of cushion and keeps at most
+two decoded pictures waiting for presentation. Its target never grows after
+underruns or repeated cadence corrections. A new picture replaces the oldest when
+the queue is full; at presentation, a picture older than two frame intervals is
+skipped if a newer one is available. A lone late picture is retained. This applies
+to both the native and software decoders, after reference decoding is complete.
+
+At 60 fps the stale-picture threshold is 33.3 ms; at 30 fps it is 66.7 ms. These
+are presentation-queue rules, not guarantees for network delay, decoder backlog
+or screen scanout. Large bursts or missed display refreshes can cost pictures.
+Smooth remains the default, including the Cellular preset. Choose Balanced under
+Advanced frame pacing and Apply during playback; account and per-console settings
+retain the choice.
+
+Deterministic queue simulations in `tests/frame-queue.test.mjs` run 20 seconds at
+60 fps with a two-second warm-up. In the burst case, the first three pictures of
+each second arrive together at 50 ms; other pictures arrive at their usual cadence.
+
+| Pacing | Mean queue wait | p95 queue wait | Refreshes with no new picture after warm-up |
+|---|---:|---:|---:|
+| Smooth | 47.4 ms | 49.0 ms | 0 |
+| Balanced | 31.5 ms | 32.3 ms | 18 |
+| Responsive | 15.4 ms | 15.7 ms | 36 |
+
+With paired arrivals every 33.3 ms, both Smooth and Balanced present every picture
+with zero repeated refreshes after warm-up; Responsive repeats 540 refreshes.
+These are synthetic queue measurements. They do not establish Tesla playback
+latency or smoothness on a particular cellular connection.
+
+Validation passed 67 JavaScript tests and all 84 isolated Chrome browser tests,
+including native worker playback with Balanced, software playback across Apply
+and reload, and account/per-console preference restoration. The runtime Docker
+build and the backend test build also passed. Chrome ran with GPU acceleration
+disabled. After widening the three-choice controls, all three layout regressions
+passed again; desktop and 390-pixel mobile screenshots showed readable choices
+with no horizontal overflow or console errors. Tesla hardware still needs a direct
+playback comparison.
+
 ### Video element on a 60 Hz Mac (2026-09-17)
 
 Three cellular captures from a Mac with a 60 Hz external display, 720p60
@@ -182,10 +222,10 @@ A scalar WASM implementation was slower than JavaScript and was not retained.
 The SIMD version processes four pixels together using CPU vector instructions.
 Unsupported SIMD, missing WASM, or a failed converter download selects JavaScript.
 
-The renderer still decodes all required references, but copies only the newest
-image from a decode batch and presents only the newest pending frame. It skips
-color conversion and canvas writes for superseded images. One pending image bounds
-presentation memory; it does not queue images behind a stalled display.
+The renderer decodes all required references and stores decoded pictures in a
+bounded queue controlled by the pacing mode. It skips color conversion and canvas
+writes for superseded pictures and reuses their pixel buffers. Responsive retains
+one picture, Balanced two and Smooth up to six.
 
 [Pixel measurements](benchmarks/pixels.json).
 

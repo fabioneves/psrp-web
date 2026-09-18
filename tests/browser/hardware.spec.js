@@ -165,6 +165,8 @@ test('native H.264 runs in the video worker with direct audio output', async ({ 
   await useNativeSoftwareDecoder(page);
   await page.addInitScript(() => localStorage.setItem('remote-play:video-output', 'canvas'));
   await register(page, '');
+  await page.locator('#advanced-settings > summary').click();
+  await chooseSetting(page, 'frame-pacing', 'balanced');
   await page.getByRole('button', { name: 'Start test stream' }).click();
   await expect(page.locator('#engine')).toHaveText('H.264 · hardware preferred · Canvas 2D · worker', { timeout: 30000 });
   await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);

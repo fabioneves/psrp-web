@@ -315,7 +315,8 @@ function writeSettings(values) {
   savePlaybackPreferences();
 }
 function describeProfile(profile) {
-  return `${profile.resolution}${profile.fps} · ${{ auto: 'Automatic', mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[profile.codec] || profile.codec} · ${Number(profile.bitrateKbps) / 1000} Mbps${profile.pacing === 'responsive' ? ' · responsive' : ''}`;
+  const pacing = ['balanced', 'responsive'].includes(profile.pacing) ? ` · ${profile.pacing}` : '';
+  return `${profile.resolution}${profile.fps} · ${{ auto: 'Automatic', mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[profile.codec] || profile.codec} · ${Number(profile.bitrateKbps) / 1000} Mbps${pacing}`;
 }
 function enterConsoleScope(hostId) {
   if (profileScope === hostId) return;

@@ -1,22 +1,14 @@
-// Presentation queue between the decoder and the display refresh loop.
-//
-// Smooth mode keeps a cushion of `target` frames queued behind the one being drawn, so a frame
-// that arrives late by up to a refresh interval (or more, as the target grows) is still followed
-// by a new picture on every refresh. When the cushion runs low the queue waits one refresh so the
-// cadence re-aligns to arrivals, grows the target after real underruns, and bounds latency so it
-// never exceeds target + 2 frames. Sources that deliver fewer frames than the refresh rate are left
-// alone: repeats are then inherent and adding cushion would only add latency.
-//
-// Responsive mode keeps nothing queued and presents the newest frame immediately.
+// Only decoded pictures enter this queue, so dropping one cannot break codec reference frames.
 export class FrameQueue {
-  constructor(release, fps = 60, smooth = true) {
+  constructor(release, fps = 60, pacing = 'smooth') {
     this.release = release;
     this.fps = fps;
     this.interval = 1000 / fps;
-    this.smooth = smooth;
-    this.capacity = smooth ? 6 : 1;
-    this.target = smooth ? 1 : 0;
-    this.maxTarget = 3;
+    this.buffered = pacing !== 'responsive';
+    this.capacity = pacing === 'balanced' ? 2 : this.buffered ? 6 : 1;
+    this.target = this.buffered ? 1 : 0;
+    this.maxTarget = pacing === 'balanced' ? 1 : 3;
+    this.maxQueueMs = pacing === 'balanced' ? 2 * this.interval : null;
     this.frames = [];
     this.started = false;
     this.last = null;
@@ -30,10 +22,10 @@ export class FrameQueue {
       this.dropped++;
     }
     this.frames.push(frame);
-    if (this.smooth) this.arrivals.push(frame.savedAt);
+    if (this.buffered) this.arrivals.push(frame.savedAt);
   }
   take(now) {
-    if (!this.smooth) return this.frames.shift() ?? null;
+    if (!this.buffered) return this.frames.shift() ?? null;
     if (!this.frames.length) {
       if (this.started && this.last != null && now - this.last >= this.interval - 2) this.underrun(now);
       return null;
@@ -84,7 +76,7 @@ export class FrameQueue {
     return this.arrivals.length >= this.fps * 0.97;
   }
   trim(now) {
-    const stale = (this.target + 3.5) * this.interval;
+    const stale = this.maxQueueMs ?? (this.target + 3.5) * this.interval;
     while (this.frames.length > 1 && now - this.frames[0].savedAt > stale) { this.release(this.frames.shift()); this.dropped++; }
   }
   get pending() { return this.frames.length > 0; }

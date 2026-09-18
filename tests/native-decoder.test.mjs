@@ -139,3 +139,33 @@ test('a corrupt frame after playback resets the decoder, asks for a keyframe and
     assert.equal(errors, 1, 'a fourth failure inside 30 s reports the error');
   } finally { decoder.destroy(); Object.assign(globalThis, saved); }
 });
+
+test('balanced native playback decodes every reference but presents only the newest pair from a burst', () => {
+  const saved = Object.fromEntries(['VideoDecoder', 'EncodedVideoChunk', 'requestAnimationFrame', 'cancelAnimationFrame'].map(key => [key, globalThis[key]]));
+  const decoded = [], drawn = [], closed = [];
+  let present;
+  globalThis.requestAnimationFrame = callback => { present = callback; return 1; };
+  globalThis.cancelAnimationFrame = () => {};
+  globalThis.EncodedVideoChunk = class { constructor(init) { Object.assign(this, init); } };
+  globalThis.VideoDecoder = class {
+    constructor(callbacks) { this.callbacks = callbacks; this.decodeQueueSize = 0; this.state = 'unconfigured'; }
+    configure() { this.state = 'configured'; }
+    decode(chunk) {
+      const id = decoded.length;
+      decoded.push(chunk);
+      this.callbacks.output({ id, timestamp: chunk.timestamp, displayWidth: 16, displayHeight: 16, close() { closed.push(id); } });
+    }
+    close() { this.state = 'closed'; }
+  };
+  const canvas = { width: 16, height: 16, getContext: () => ({ drawImage(frame) { drawn.push(frame.id); } }) };
+  const decoder = createNativeDecoder(canvas, () => {}, { videoCodec: 'h264', fps: 60, pacing: 'balanced' });
+  try {
+    decoder.write(Uint8Array.from([0, 0, 1, 103, 100, 0, 42, 0, 0, 1, 104, 5]).buffer, 1000);
+    for (let id = 0; id < 4; id++) decoder.write(Uint8Array.from([0, 0, 1, id ? 65 : 101, 128]).buffer, 1000 + id * 17);
+    assert.equal(decoded.length, 4);
+    present();
+    assert.deepEqual(drawn, [2]);
+    assert.deepEqual(closed, [0, 1, 2]);
+  } finally { decoder.destroy(); Object.assign(globalThis, saved); }
+  assert.deepEqual(closed, [0, 1, 2, 3]);
+});

@@ -542,6 +542,26 @@ test('audio fallback and automatic video worker fallback remain playable', async
   await page.getByRole('button', { name: 'Disconnect', exact: true }).click();
 });
 
+test('balanced software playback applies during a stream and survives refresh', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await register(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Playing');
+  await page.getByRole('tab', { name: 'Picture', exact: true }).click();
+  await page.locator('#advanced-settings > summary').click();
+  await chooseSetting(page, 'frame-pacing', 'balanced');
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
+  await expect(page.locator('#engine')).toContainText('Canvas 2D');
+  await page.reload();
+  await expect(page.locator('#stream-status')).toHaveText('Playing');
+  await expect(page.locator('#frame-pacing')).toHaveValue('balanced');
+  await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number)).toBeGreaterThan(100);
+  await page.locator('#stop').click();
+  expect(errors).toEqual([]);
+});
+
 test('lower profiles use the selected dimensions and frame rate', async ({ page }) => {
   await register(page);
   await expect(page.locator('[data-choice-for=video-mode]')).toBeVisible();

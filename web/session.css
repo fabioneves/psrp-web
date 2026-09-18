@@ -4,6 +4,7 @@
 .lobby-banner { padding-top:16px; }
 .intro>.brand { margin-bottom:30px; }
 .choice-field { min-width:0; border:0; padding:0; margin:0; }
+[data-choice-for=frame-pacing],[data-choice-for=video-output] { grid-column:1/-1; }
 .choice-field legend { font-size:.8rem; font-weight:650; margin-bottom:8px; padding:0; color:var(--muted); }
 .choice-buttons { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
 .choice-buttons[data-count="3"],.choice-buttons[data-count="6"] { grid-template-columns:repeat(3,minmax(0,1fr)); }

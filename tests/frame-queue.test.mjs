@@ -61,7 +61,7 @@ test('backlog is bounded and responsive mode presents the newest frame immediate
   assert.equal(queue.frames.length, 6);
   assert.equal(released.length, 14);
   queue.destroy(); assert.equal(released.length, 20);
-  const immediate = new FrameQueue(() => {}, 60, false);
+  const immediate = new FrameQueue(() => {}, 60, 'responsive');
   immediate.push({ id: 1, savedAt: 0 }); immediate.push({ id: 2, savedAt: 1 });
   assert.equal(immediate.take(1).id, 2);
   assert.equal(immediate.take(2), null);
@@ -131,4 +131,63 @@ test('recurring drift waits raise the cushion target once', () => {
   assert.equal(queue.target, 3, 'and then raises again, up to the maximum');
   for (let i = 0; i < 20; i++) wait(13000 + i * 100);
   assert.equal(queue.target, 3);
+});
+
+test('balanced pacing absorbs paired arrivals that responsive pacing skips', () => {
+  const arrivals = cadence(1200, id => (id % 2 ? 0 : INTERVAL));
+  const balanced = simulate(arrivals, { queue: new FrameQueue(() => {}, 60, 'balanced') });
+  const responsive = simulate(arrivals, { queue: new FrameQueue(() => {}, 60, 'responsive') });
+  assert.equal(balanced.emptyTicks.length, 0);
+  assert.equal(balanced.queue.dropped, 0);
+  assert.deepEqual(balanced.displayed, arrivals.slice(0, balanced.displayed.length).map(frame => frame.id));
+  assert.ok(responsive.emptyTicks.length > 500);
+});
+
+test('balanced pacing trades some burst recovery smoothness for at least one frame less delay', () => {
+  const arrivals = cadence(1200).map(frame => ({ ...frame, savedAt: Math.max(frame.savedAt, Math.floor(frame.id / 60) * 1000 + 50) }));
+  const smooth = simulate(arrivals);
+  const balanced = simulate(arrivals, { queue: new FrameQueue(() => {}, 60, 'balanced') });
+  const responsive = simulate(arrivals, { queue: new FrameQueue(() => {}, 60, 'responsive') });
+  const percentile = result => result.waits.slice(120).sort((a, b) => a - b)[Math.floor((result.waits.length - 120) * 0.95)];
+  assert.ok(percentile(smooth) - percentile(balanced) >= INTERVAL - 0.01);
+  assert.ok(percentile(balanced) <= INTERVAL * 2);
+  assert.ok(balanced.emptyTicks.length < responsive.emptyTicks.length);
+  assert.ok(balanced.queue.dropped < responsive.queue.dropped);
+});
+
+for (const fps of [30, 60]) {
+  test(`balanced ${fps} fps pacing bounds backlog, skips stale pictures and releases each frame once`, () => {
+    const interval = 1000 / fps, released = [];
+    const queue = new FrameQueue(frame => released.push(frame.id), fps, 'balanced');
+    queue.push({ id: 0, savedAt: 0 });
+    assert.equal(queue.take(interval), null, 'startup retains a one-frame cushion');
+    for (let id = 1; id < 8; id++) queue.push({ id, savedAt: interval });
+    assert.equal(queue.frames.length, 2);
+    const first = queue.take(interval);
+    assert.equal(first.id, 6, 'only the newest pair survives a large burst');
+    queue.release(first);
+    queue.push({ id: 8, savedAt: 4 * interval });
+    const next = queue.take(4 * interval);
+    assert.equal(next.id, 8, 'an old picture does not delay a fresh one after a stall');
+    queue.release(next);
+    queue.push({ id: 9, savedAt: 5 * interval });
+    const lone = queue.take(10 * interval);
+    assert.equal(lone.id, 9, 'the only available picture is retained even when late');
+    queue.release(lone);
+    queue.push({ id: 10, savedAt: 11 * interval });
+    queue.destroy();
+    assert.deepEqual(released.sort((a, b) => a - b), Array.from({ length: 11 }, (_, id) => id));
+  });
+}
+
+test('balanced pacing keeps its one-frame target through sustained underruns and drift', () => {
+  const queue = new FrameQueue(() => {}, 60, 'balanced');
+  for (let tick = 0; tick < 1200; tick++) {
+    const at = tick * INTERVAL;
+    queue.push({ id: tick, savedAt: at });
+    queue.take(at);
+    if (tick % 60 === 0) queue.underrun(at);
+    if (tick % 30 === 0) queue.waited(at);
+    assert.equal(queue.metrics().pacingTarget, 1);
+  }
 });

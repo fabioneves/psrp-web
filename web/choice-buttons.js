@@ -1,7 +1,7 @@
 const titles = {
   'video-mode': ['Automatic', 'H.264', 'H.265', 'Canvas'],
   'resolution-profile': ['360p', '540p', '720p', '1080p'],
-  'frame-pacing': ['Smooth', 'Responsive'],
+  'frame-pacing': ['Smooth', 'Balanced', 'Responsive'],
   'audio-delay': ['40 ms', '120 ms', '240 ms'],
   'controller-mode': ['Automatic', 'Physical', 'Tesla virtual'],
   'controller-swap': ['Automatic', 'On', 'Off']

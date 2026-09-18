@@ -17,7 +17,7 @@ Use the isolated `psrp-ui-test` Compose project on port 18081 for all synthetic 
 
 ## Timing changes
 
-Smooth pacing primes one frame interval, retains at most three decoded frames, releases a frame that has waited 2.5 intervals whenever a newer one is queued, and releases superseded buffers immediately. Responsive pacing keeps just the newest frame. Canvas reuses four YUV buffers; native decoding closes every discarded VideoFrame. The HUD updates once per second; its FPS history is limited to 30 points and frame interval measurements to 120 samples.
+Smooth pacing adapts its cushion target from one to three frames, with at most six decoded pictures queued. Balanced fixes the target at one, keeps at most two pictures queued and skips a picture older than two frame intervals when a newer one is ready. Responsive keeps just the newest picture. All modes release superseded buffers immediately. Canvas reuses a bounded YUV pool sized for its queue; native decoding closes every discarded VideoFrame. The HUD updates once per second; its FPS history is limited to 30 points and frame interval measurements to 120 samples. See the [Balanced comparison](optimization.md#balanced-frame-pacing-2026-09-18) for the current queue tradeoffs.
 
 Audio uses a continuous sample timeline with gradual clock correction (up to 1% for the worklet), instead of hard corrections for ordinary video jitter. Large discontinuities still realign, and output remains bounded to half a second. A deterministic 10-second ±32 ms video-jitter regression produced 1,521 silent blocks before the fix and zero afterward. Capture-to-display synchronization is approximate because the existing transport does not carry a shared console capture clock.
 

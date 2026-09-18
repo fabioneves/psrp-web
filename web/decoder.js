@@ -28,7 +28,7 @@ export async function createDecoder(canvas, report, options = {}) {
   const demuxer = new JSMpeg.Demuxer.TS(settings);
   const dimensions = { width: canvas.width, height: canvas.height };
   const pool = [];
-  const frames = new FrameQueue(frame => pool.push(frame), options.fps, options.pacing !== 'responsive');
+  const frames = new FrameQueue(frame => pool.push(frame), options.fps, options.pacing);
   let pixels, image, decoded = 0, drawn = 0, totalFrames = 0, decodeMs = 0, colorMs = 0, drawMs = 0, bytesReceived = 0;
   let start = performance.now(), stopped = false, queueMs = 0, mediaTimestamp = null;
   const timestamps = [];

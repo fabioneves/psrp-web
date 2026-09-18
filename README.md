@@ -181,6 +181,13 @@ Registration is open only until the first account exists, unless
 
 Manual account-ID entry and public online-name lookup are also available under PIN pairing. The public lookup provider may be unavailable; Sony sign-in does not depend on it. See [setup details and verification limits](docs/psn-setup.md).
 
+For lower playback delay, open **Stream settings → Advanced → Frame pacing →
+Balanced**, then **Apply** if already playing. Balanced keeps a small video
+cushion and skips older pictures when delivery falls behind. Smooth offers more
+protection against jitter; Responsive gives the lowest delay. Balanced works with
+browser decoding and the software fallback, and is saved with your stream settings.
+It reduces video buffering, not network ping.
+
 ### Operations, logs and backups
 
 ```sh
@@ -374,7 +381,7 @@ Enable **Automatically adjust quality** to let playback reduce bitrate for susta
 
 The debug HUD reports server-to-canvas age, network round trip, arrival jitter (p95 and longest gap between video packets reaching the browser), presentation stalls per second, frame interval p95 and max, console packet loss and keyframe requests, and audio queue and underruns. During playback, expand **Stream diagnostics** below the player for separate processing costs, queue delays, console→server packet loss and keyframe requests, and a list of recent stalls, superseded frames, audio underruns and reconnects. **Download diagnostics log** saves the last five minutes of per-second metrics and every event as JSON for analysis; the debug HUD has the same button. **Send to server** stores the same capture on the server for browsers that cannot save files, such as a Tesla, and **Saved diagnostics** in the lobby lists and downloads them from any device signed in to the account (`psrp diagnostics` copies them out on the server). The server logs a console stream summary with the loss counters when a session ends. Use the **Picture** tab for the selected profile. **Apply** applies changed settings during playback. Manual quality is the default.
 
-Smooth frame pacing primes one frame interval, keeps up to three decoded images to absorb uneven delivery, and skips an image that has waited 2.5 intervals when a newer one is ready. Responsive pacing draws only the newest pending image for the lowest delay. Both modes reuse pixel storage and skip color conversion for discarded frames. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
+Smooth frame pacing grows its video cushion from one to three frames to absorb uneven delivery. Balanced fixes the cushion target at one frame, keeps at most two decoded pictures waiting, and skips a picture older than two frame intervals when a newer one is ready. Responsive draws only the newest pending picture for the lowest delay. All three modes decode required reference frames, reuse software pixel storage and skip color conversion for discarded pictures. If browser animation callbacks stall during fullscreen or a display change, presentation uses a timer and resumes animation callbacks when they return, without reconnecting the console. See [measured results, timing limits and benchmark commands](docs/optimization.md).
 
 ## Video modes
 
@@ -515,7 +522,7 @@ The retro interface uses custom pixel art and self-hosted fonts. Video presets, 
 - **Touch fullscreen exit:** swipe down on the picture to return to the Control deck. With touch controls off, a tap also reveals a large **Exit fullscreen** button for five seconds. Double-tap and Escape remain available. In fullscreen, **two-finger tap** toggles debug, **three-finger tap** toggles touch controls, and **swipe left/right** cycles HUD layouts while debug is on. These gestures work with native fullscreen and the iPhone-style theater fallback.
 - **On-screen controller** buttons always sit under the video in the normal layout for mouse, keyboard and touch use. The **Fullscreen touch overlay** switch (off by default) also shows them over fullscreen video.
 - **Debug HUD** (or **Shift+D**) has three saved layouts, selected with illustrated buttons: **Detailed** keeps all metrics and the FPS graph; **Minimal** shows FPS, codec, and resolution; **Horizontal** spans the top edge with smaller text, mint video, blue network, amber timing, and pink audio groups, plus a tiny FPS graph on wider screens. Pixel headings and colored dividers separate the readings; codec appears once without the redundant hardware-preference description. All have translucent backgrounds. **Shift+H** cycles layouts while debug is on, including in fullscreen. Compact layouts let taps pass through to the picture. Detailed includes frame interval p95, estimated video age, decode/draw times, audio queue/underruns and Copy diagnostics; copied data contains no account credentials or stream tickets.
-- **Smooth** pacing trades a small video buffer for fewer dropped frames. **Responsive** minimizes delay. See [comparison and timing limits](docs/retro-player.md).
+- **Smooth** pacing buffers more video for fewer dropped pictures. **Balanced** keeps a smaller cushion for less delay. **Responsive** minimizes delay. See [comparison and timing limits](docs/optimization.md#balanced-frame-pacing-2026-09-18).
 - **Put console to sleep** requests rest mode from a paired console, then releases this server's session. It works from the library or player. An idle console uses a short authenticated control connection; an already sleeping console is left asleep. Enable network wake in the console's rest-mode settings to wake it again remotely.
 
 [Artwork provenance and generation prompt](docs/artwork.md).

@@ -27,6 +27,8 @@ test('settings follow the account to a browser that never saw them', async ({ br
   const page = await first.newPage();
   await register(page, name);
   await chooseSetting(page, 'resolution-profile', '540p');
+  await page.locator('#advanced-settings > summary').click();
+  await chooseSetting(page, 'frame-pacing', 'balanced');
   await page.getByLabel('Automatically adjust quality').check();
   const upload = page.waitForResponse(response => response.url().endsWith('/api/settings') && response.request().method() === 'PUT' && response.status() === 204 && response.request().postData().includes('"fps-profile":"30"'));
   await chooseSetting(page, 'fps-profile', '30');
@@ -39,6 +41,8 @@ test('settings follow the account to a browser that never saw them', async ({ br
   await expect(other.locator('#resolution-profile')).toHaveValue('540p');
   await expect(other.getByLabel('Automatically adjust quality')).toBeChecked();
   await expect(other.locator('#fps-profile')).toHaveValue('30');
+  await expect(other.locator('#frame-pacing')).toHaveValue('balanced');
+  await expect(other.getByRole('radio', { name: 'Balanced', exact: true })).toHaveAttribute('aria-checked', 'true');
   await expect(other.locator('#quality-status')).toContainText('Automatic');
   await second.close();
 });

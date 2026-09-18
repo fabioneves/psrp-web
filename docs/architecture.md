@@ -17,7 +17,7 @@
    codec headers, waits for an IDR and queues Annex B units with their arrival time. Opus audio packets lose their `0x01` prefix and are CPU-decoded to PCM.
 6. In Canvas mode FFmpeg decodes on the CPU and encodes MPEG-1 without B frames at the selected profile. Its
    MPEG-TS output is sent as binary WebSocket messages. The browser demuxes,
-   software-decodes reference frames, retains one pending image and renders the newest image on each presentation tick.
+   software-decodes reference frames and queues decoded pictures for presentation according to the selected pacing mode.
    In H.264 and H.265 mode no FFmpeg process runs: each console access unit is sent as
    its own binary message (envelope kind 3) and handed straight to WebCodecs. The test
    stream splits the generator's raw Annex B output on access unit delimiters.
@@ -155,8 +155,18 @@ measured. See optimization.md for the tradeoff and validation scope.
 
 ## Rendering and automatic quality
 
+Frame pacing is selected independently of codec and output. Smooth uses an
+adaptive one-to-three-frame presentation cushion. Balanced fixes the target at
+one frame, holds at most two decoded pictures and skips a picture older than two
+frame intervals when a newer one is available. Responsive retains only the latest
+decoded picture. All modes decode required reference frames before dropping
+presentation output, and release discarded pictures. Pacing is stored in account
+preferences and per-console profiles; changing it during playback uses Apply and
+the existing reconnect path.
+
 Reference decoding and pixel presentation are separate. A burst still decodes its
-references, but copies only its last image into one owned pending YUV buffer.
+references; decoded pictures enter the bounded presentation queue. The software
+path reuses a YUV buffer pool and converts pixels only for the picture being drawn.
 Presentation uses requestAnimationFrame where available (a 60 Hz timer otherwise).
 Color conversion uses WASM SIMD with a 32 MiB fixed memory; failed capability/load
 checks select the original JavaScript converter. No GPU path is introduced.
