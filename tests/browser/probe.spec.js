@@ -52,3 +52,10 @@ test('the probe reports blocked UDP when no STUN server answers, and saves the r
   expect(capture.stun.udp).toBe(false);
   expect(capture.loopback.receivedMbps).toBeGreaterThan(0);
 });
+
+test('peers that cannot reach each other inside the page read as not measurable, not as a WebRTC failure', async ({ page }) => {
+  await page.addInitScript(() => { RTCPeerConnection.prototype.addIceCandidate = async () => {}; });
+  await page.goto('/probe.html?stun=127.0.0.1:9');
+  await expect(page.locator('#loopback-result')).toContainText('Could not measure here', { timeout: 30000 });
+  await expect(page.locator('#loopback-result')).not.toHaveAttribute('data-tone', 'bad');
+});

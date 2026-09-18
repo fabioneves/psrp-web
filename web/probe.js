@@ -78,7 +78,7 @@ async function run() {
         result.loopback = await loopback();
         const enough = result.loopback.receivedMbps >= result.loopback.targetMbps * 0.95;
         show('loopback-result', `Received ${result.loopback.receivedMbps} of ${result.loopback.sentMbps} Mbps sent (${result.loopback.lossPercent}% lost). ${enough ? 'Enough for 1080p.' : 'Below the 30 Mbps a 1080p stream can reach; 720p at 10 Mbps needs a third of that.'}`, enough ? 'ok' : 'bad');
-      } catch (error) { result.loopback = { error: error.message }; show('loopback-result', error.message, 'bad'); }
+      } catch (error) { result.loopback = { error: error.message }; show('loopback-result', `Could not measure here: ${error.message} This is common on phones and mobile data and says nothing about WebRTC to a server.`); }
     }
   } finally { latest = result; $('run-again').disabled = $('send').disabled = false; }
 }
