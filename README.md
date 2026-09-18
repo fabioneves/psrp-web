@@ -323,6 +323,7 @@ The test pattern travels through a real H.264 encoder, the production CPU transc
 ## Controls and limits
 
 - Touch: D-pad, move/look direction buttons, face buttons, shoulders, triggers, stick clicks, PS, Share, Options and touchpad click.
+- Rumble: the console's classic rumble packets drive the pad through the browser's vibration API. PS5 games that only use DualSense haptics send none over Remote Play, and the DualSense speaker is not reachable from a browser. **Test rumble** in the Controls tab shakes the pad without the console, and captures count rumble packets from the console and in the browser.
 - Controller: Share + Options pressed together send the PS button, because macOS reserves a DualSense's PS button for itself; either button alone still works after a 150 ms hold-off.
 - Keyboard: arrows = D-pad; WASD = left stick; IJKL = right stick; X/C/Z/V = cross/circle/square/triangle; Q/E = L1/R1; 1/3 = L2/R2; 2/4 = L3/R3; Enter = Options; Backspace = Share; Space = PS; T = touchpad click.
 - Input resets on focus loss, hidden tabs and disconnect. Opposing directions cancel; simultaneous touch and keyboard holds work together.

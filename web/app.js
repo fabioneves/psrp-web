@@ -842,7 +842,7 @@ function onStreamMessage(message) {
     if (delta) updateHud({ type: 'console-stats', ...delta }, activeCodec);
     return;
   }
-  if (message.type === 'rumble') { gamepads.rumble(message.left / 255, message.right / 255); return; }
+  if (message.type === 'rumble') { log.rumble(); gamepads.rumble(message.left / 255, message.right / 255); return; }
   if (message.type === 'decoder-reset') { log.event('decoder-reset', { message: message.message, resets: message.resets }); return; }
   if (message.type === 'stopped') { log.event('stopped', { message: message.message }); stop(); notify(message.message); }
   else if (message.type === 'audio') audio?.write(message.bytes, message.timestamp);
@@ -975,6 +975,14 @@ function updateDebug() {
   $('hud-settings').hidden = !$('debug-mode').checked;
   $('telemetry-switch').hidden = !$('debug-mode').checked;
 }
+$('test-rumble').onclick = () => {
+  const pads = typeof navigator.getGamepads === 'function' ? [...navigator.getGamepads()].filter(Boolean) : [];
+  const status = $('rumble-status');
+  if (!pads.length) status.textContent = 'No controller detected. Press a button on it first.';
+  else if (!$('rumble').checked) status.textContent = 'Rumble is switched off above.';
+  else if (!pads.some(pad => pad.vibrationActuator)) status.textContent = 'This controller or browser does not expose vibration. Over Bluetooth on a Mac, try a USB cable.';
+  else status.textContent = gamepads.rumble(1, 1) ? 'Sent a 400 ms rumble to the controller.' : 'The selected controller does not expose vibration; check the controller index under Advanced.';
+};
 $('debug-mode').onchange = updateDebug;
 $('hud-style').onchange = updateDebug;
 updateDebug();

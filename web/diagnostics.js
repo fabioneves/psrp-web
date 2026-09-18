@@ -36,6 +36,7 @@ export class StreamLog {
   mainThread(longTasks, longTaskMs) { this.longTasks = (this.longTasks || 0) + longTasks; this.longTaskMs = (this.longTaskMs || 0) + longTaskMs; }
   // Longest gap between the page's own animation-frame callbacks since the last sample, to compare with the worker's.
   pageRefresh(gapMs) { this.pageRefreshMax = Math.max(this.pageRefreshMax || 0, gapMs); }
+  rumble() { this.rumbleCount = (this.rumbleCount || 0) + 1; }
   videoStats(stats) {
     const dropped = Math.max(0, (stats.droppedFrames ?? 0) - this.dropped);
     this.dropped = stats.droppedFrames ?? 0;
@@ -51,9 +52,10 @@ export class StreamLog {
       stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, refresh: round(stats.refreshMs), refreshMax: round(stats.refreshMaxMs), target: stats.pacingTarget ?? null, videoUnderruns: stats.underruns ?? null, rebuilt: stats.rebuilt ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,
       longTasks: this.longTasks || 0, longTaskMs: Math.round(this.longTaskMs || 0), pageRefreshMax: this.pageRefreshMax ? Math.round(this.pageRefreshMax * 10) / 10 : null,
       audioMs: round(this.audio?.bufferedMs), underruns: this.audio?.underruns ?? null,
-      lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null });
+      lost: this.server?.lost ?? null, serverDropped: this.server?.dropped ?? null, idr: this.server?.idr ?? null,
+      rumble: this.rumbleCount || 0, consoleRumble: this.server?.rumble ?? null });
     if (this.samples.length > SAMPLE_LIMIT) this.samples.shift();
-    this.longTasks = 0; this.longTaskMs = 0; this.pageRefreshMax = 0;
+    this.longTasks = 0; this.longTaskMs = 0; this.pageRefreshMax = 0; this.rumbleCount = 0;
     return this.samples.at(-1);
   }
   recent(count = 8) { return this.events.slice(-count); }

@@ -620,3 +620,13 @@ test('live telemetry reaches the server while the debug switch is on', async ({ 
   await page.locator('#stop').click();
   await expect.poll(async () => (await live()).status()).toBe(404);
 });
+
+test('Test rumble explains itself without a controller', async ({ page }) => {
+  await register(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#stream-status')).toHaveText('Playing', { timeout: 30000 });
+  await page.getByRole('tab', { name: 'Controls', exact: true }).click();
+  await page.getByRole('button', { name: 'Test rumble' }).click();
+  await expect(page.locator('#rumble-status')).toContainText('No controller detected');
+  await page.locator('#stop').click();
+});

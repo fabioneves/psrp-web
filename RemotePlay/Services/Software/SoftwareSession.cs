@@ -120,7 +120,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             published.Input = input;
             var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
             var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
-            if (stream != null) { _ = SendConsoleStatsAsync(socket, stream, receiver, sendGate, ct); _ = SendRumbleAsync(socket, stream, sendGate, ct); }
+            if (stream != null) { _ = SendConsoleStatsAsync(socket, stream, receiver, published, sendGate, ct); _ = SendRumbleAsync(socket, stream, published, sendGate, ct); }
             workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
             var completed = await Task.WhenAny(workers);
             await completed;
@@ -186,10 +186,10 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         finally { sendGate?.Release(); }
     }
 
-    private async Task SendRumbleAsync(WebSocket socket, RPStreamV2 stream, SemaphoreSlim sendGate, CancellationToken ct)
+    private async Task SendRumbleAsync(WebSocket socket, RPStreamV2 stream, ActiveSoftwareStream published, SemaphoreSlim sendGate, CancellationToken ct)
     {
         var latest = Channel.CreateBounded<(byte Left, byte Right)>(new BoundedChannelOptions(1) { FullMode = BoundedChannelFullMode.DropOldest, SingleReader = true });
-        void OnRumble(object? sender, RumbleEventArgs e) => latest.Writer.TryWrite((e.AdjustedLeft, e.AdjustedRight));
+        void OnRumble(object? sender, RumbleEventArgs e) { published.CountRumble(); latest.Writer.TryWrite((e.AdjustedLeft, e.AdjustedRight)); }
         stream.RumbleReceived += OnRumble;
         try
         {
@@ -210,7 +210,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         finally { stream.RumbleReceived -= OnRumble; }
     }
 
-    private async Task SendConsoleStatsAsync(WebSocket socket, RPStreamV2 stream, SoftwareReceiver receiver, SemaphoreSlim sendGate, CancellationToken ct)
+    private async Task SendConsoleStatsAsync(WebSocket socket, RPStreamV2 stream, SoftwareReceiver receiver, ActiveSoftwareStream published, SemaphoreSlim sendGate, CancellationToken ct)
     {
         using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
         object? last = null;
@@ -226,7 +226,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 last = new { type = "console-stats", lost = pipeline.VideoLost, timeoutDropped = pipeline.VideoTimeoutDropped,
                     dropped = snapshot.TotalDroppedFrames, recovered = snapshot.TotalRecoveredFrames, frozen = snapshot.TotalFrozenFrames,
                     idr = pipeline.TotalIdrRequests, fecFailures = pipeline.FecFailures, pending = pipeline.PendingPackets,
-                    consoleFps, consoleMbps = Math.Round(snapshot.MeasuredBitrateMbps, 1) };
+                    consoleFps, consoleMbps = Math.Round(snapshot.MeasuredBitrateMbps, 1), rumble = published.RumblePackets };
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(1));
                 await sendGate.WaitAsync(timeout.Token);
