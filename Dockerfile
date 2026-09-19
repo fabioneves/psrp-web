@@ -8,6 +8,12 @@ COPY Dockerfile /src/Dockerfile
 RUN tar --exclude=.git -czf /native-psn-source.tar.gz /chiaki /src 2>/dev/null
 RUN cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCHIAKI_SOURCE_DIR=/chiaki && cmake --build build --target remote-play-psn -j 4
 
+# libdatachannel carries the WebRTC video transport. Data channels only: no media, and ASP.NET Core does the signaling.
+FROM psn-build AS rtc-build
+ARG LIBDATACHANNEL_TAG=v0.24.5
+RUN git clone --depth 1 --branch "$LIBDATACHANNEL_TAG" --recurse-submodules --shallow-submodules https://github.com/paullouisageneau/libdatachannel.git /ldc
+RUN cmake -S /ldc -B /ldc/build -DCMAKE_BUILD_TYPE=Release -DNO_MEDIA=ON -DNO_WEBSOCKET=ON -DNO_EXAMPLES=ON -DNO_TESTS=ON && cmake --build /ldc/build -j 4 && mkdir /out && cp -L /ldc/build/libdatachannel.so /out/ && strip /out/libdatachannel.so
+
 FROM node:24-bookworm-slim AS web
 ARG APP_VERSION=dev
 ENV APP_VERSION=$APP_VERSION
@@ -28,6 +34,8 @@ RUN dotnet publish RemotePlay/RemotePlay.csproj -c Release --no-restore -o /out/
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS test-base
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 FROM test-base AS test
+# The loader finds a library in /usr/lib by file name; ldconfig would index it only under its versioned soname.
+COPY --from=rtc-build /out/libdatachannel.so /usr/lib/
 WORKDIR /src
 COPY --from=build /src/ /src/
 COPY --from=build /root/.nuget/ /root/.nuget/
@@ -46,6 +54,8 @@ COPY --from=psn-build /src/build/remote-play-psn ./remote-play-psn
 COPY --from=psn-build /chiaki/COPYING /usr/share/doc/remote-play-psn/COPYING
 COPY --from=psn-build /chiaki/LICENSES/ /usr/share/doc/remote-play-psn/LICENSES/
 COPY --from=psn-build /native-psn-source.tar.gz ./wwwroot/native-psn-source.tar.gz
+COPY --from=rtc-build /out/libdatachannel.so /usr/lib/
+COPY --from=rtc-build /ldc/LICENSE /usr/share/doc/libdatachannel/LICENSE
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN mkdir -p /data && chown app:app /data && chmod +x /entrypoint.sh
 USER app
