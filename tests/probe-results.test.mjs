@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseCandidate, summarizeStun, summarizeLoopback } from '../web/probe-results.js';
+import { parseCandidate, summarizeStun, summarizeLoopback, summarizeWorkerTransfer } from '../web/probe-results.js';
 
 test('candidate lines yield protocol, endpoint and type, and junk yields null', () => {
   assert.deepEqual(parseCandidate('candidate:842163049 1 udp 1677729535 203.0.113.7 4242 typ srflx raddr 0.0.0.0 rport 0 generation 0'),
@@ -33,4 +33,19 @@ test('loopback totals become rates and a loss percentage, and an empty run stays
   assert.deepEqual(summarizeLoopback({ sent: 1000, received: 950, bytes: 1100, seconds: 2 }),
     { sentMbps: 4.4, receivedMbps: 4.18, lossPercent: 5 });
   assert.deepEqual(summarizeLoopback({ sent: 0, received: 0, bytes: 1100, seconds: 2 }), { sentMbps: 0, receivedMbps: 0, lossPercent: 0 });
+});
+
+test('a data channel that reaches a worker and delivers there reads as transferable', () => {
+  const result = summarizeWorkerTransfer({ transferred: true, sent: 200, received: 200 });
+  assert.equal(result.mode, 'transfer');
+  assert.match(result.verdict, /200 of 200/);
+});
+
+test('a refused or silent hand-off reads as forwarding through the page, with the reason', () => {
+  const refused = summarizeWorkerTransfer({ transferred: false, error: 'DataCloneError' });
+  assert.equal(refused.mode, 'forward');
+  assert.match(refused.verdict, /DataCloneError/);
+  const silent = summarizeWorkerTransfer({ transferred: true, sent: 200, received: 3 });
+  assert.equal(silent.mode, 'forward');
+  assert.match(silent.verdict, /3 of 200/);
 });

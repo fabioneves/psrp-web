@@ -1,4 +1,4 @@
-import { parseCandidate, summarizeStun, summarizeLoopback } from './probe-results.js';
+import { parseCandidate, summarizeStun, summarizeLoopback, summarizeWorkerTransfer } from './probe-results.js';
 
 const $ = id => document.getElementById(id);
 const stunServers = (new URLSearchParams(location.search).get('stun') || 'stun.l.google.com:19302,stun.cloudflare.com:3478').split(',').filter(Boolean);
@@ -19,15 +19,13 @@ async function gatherStun() {
   } finally { peer.close(); }
 }
 
-// Two peers in this page exchange video-sized unreliable messages at the top stream bitrate:
-// what arrives is the most this browser's data channel stack can take, before any network.
-async function loopback({ mbps = 30, bytes = 1100, seconds = 3 } = {}) {
+// Two peers in this page joined by an unreliable, unordered channel like the one video would use.
+async function connectPair(onChannel) {
   const sender = new RTCPeerConnection(), receiver = new RTCPeerConnection();
   try {
     sender.onicecandidate = event => event.candidate && receiver.addIceCandidate(event.candidate);
     receiver.onicecandidate = event => event.candidate && sender.addIceCandidate(event.candidate);
-    let received = 0;
-    receiver.ondatachannel = event => { event.channel.onmessage = () => received++; };
+    receiver.ondatachannel = event => onChannel(event.channel);
     const channel = sender.createDataChannel('load', { ordered: false, maxRetransmits: 0 });
     const open = new Promise((resolve, reject) => { channel.onopen = resolve; channel.onerror = () => reject(new Error('The data channel failed to open.')); });
     await sender.setLocalDescription(await sender.createOffer());
@@ -35,16 +33,49 @@ async function loopback({ mbps = 30, bytes = 1100, seconds = 3 } = {}) {
     await receiver.setLocalDescription(await receiver.createAnswer());
     await sender.setRemoteDescription(receiver.localDescription);
     await Promise.race([open, wait(8000).then(() => { throw new Error('Two peers in this page could not connect within 8 seconds.'); })]);
+    return { channel, close() { sender.close(); receiver.close(); } };
+  } catch (error) { sender.close(); receiver.close(); throw error; }
+}
+
+// Video-sized unreliable messages at the top stream bitrate: what arrives is the most this browser's
+// data channel stack can take, before any network.
+async function loopback({ mbps = 30, bytes = 1100, seconds = 3 } = {}) {
+  let received = 0;
+  const pair = await connectPair(channel => { channel.onmessage = () => received++; });
+  try {
     const payload = new Uint8Array(bytes), perSecond = mbps * 1e6 / 8 / bytes, started = performance.now();
     let sent = 0;
     while (performance.now() - started < seconds * 1000) {
       const due = Math.floor((performance.now() - started) / 1000 * perSecond);
-      while (sent < due && channel.bufferedAmount < 1 << 20) { channel.send(payload); sent++; }
+      while (sent < due && pair.channel.bufferedAmount < 1 << 20) { pair.channel.send(payload); sent++; }
       await wait(4);
     }
     await wait(500);
     return { targetMbps: mbps, messageBytes: bytes, ...summarizeLoopback({ sent, received, bytes, seconds }) };
-  } finally { sender.close(); receiver.close(); }
+  } finally { pair.close(); }
+}
+
+// The receiving channel goes to a worker before anything touches it, then the worker counts what arrives.
+async function workerTransfer({ messages = 200, bytes = 1100 } = {}) {
+  const worker = new Worker('/probe-worker.js');
+  const reply = () => new Promise(resolve => { worker.onmessage = event => resolve(event.data); });
+  let transferred = false, error, arrived;
+  // The sender's channel can open before the receiving side announces its end, so the hand-off is awaited on its own.
+  const handedOver = new Promise(resolve => { arrived = resolve; });
+  const pair = await connectPair(channel => {
+    const ready = reply();
+    try { worker.postMessage({ channel }, [channel]); transferred = true; } catch (failure) { error = failure.name; }
+    arrived(transferred ? ready : null);
+  });
+  try {
+    if (!await Promise.race([handedOver, wait(2000)])) return summarizeWorkerTransfer({ transferred: false, error: error ?? 'the worker never answered' });
+    const payload = new Uint8Array(bytes);
+    for (let sent = 0; sent < messages; sent++) { pair.channel.send(payload); if (sent % 20 === 19) await wait(4); }
+    await wait(500);
+    const counted = reply();
+    worker.postMessage({});
+    return summarizeWorkerTransfer({ transferred, sent: messages, received: (await Promise.race([counted, wait(2000)]))?.received ?? 0 });
+  } finally { pair.close(); worker.terminate(); }
 }
 
 async function save(result) {
@@ -61,7 +92,7 @@ async function save(result) {
 let latest;
 async function run() {
   $('run-again').disabled = $('send').disabled = true;
-  for (const id of ['stun-result', 'loopback-result']) show(id, 'Waiting…');
+  for (const id of ['stun-result', 'loopback-result', 'worker-result']) show(id, 'Waiting…');
   show('save-result', 'Send the result to the server when the checks finish.');
   const result = { kind: 'webrtc-probe', at: new Date().toISOString(), userAgent: navigator.userAgent, page: location.origin };
   try {
@@ -79,6 +110,11 @@ async function run() {
         const enough = result.loopback.receivedMbps >= result.loopback.targetMbps * 0.95;
         show('loopback-result', `Received ${result.loopback.receivedMbps} of ${result.loopback.sentMbps} Mbps sent (${result.loopback.lossPercent}% lost). ${enough ? 'Enough for 1080p.' : 'Below the 30 Mbps a 1080p stream can reach; 720p at 10 Mbps needs a third of that.'}`, enough ? 'ok' : 'bad');
       } catch (error) { result.loopback = { error: error.message }; show('loopback-result', `Could not measure here: ${error.message} This is common on phones and mobile data and says nothing about WebRTC to a server.`); }
+      show('worker-result', 'Handing a data channel to a worker…');
+      try {
+        result.worker = await workerTransfer();
+        show('worker-result', result.worker.verdict, result.worker.mode === 'transfer' ? 'ok' : undefined);
+      } catch (error) { result.worker = { error: error.message }; show('worker-result', `Could not check here: ${error.message}`); }
     }
   } finally { latest = result; $('run-again').disabled = $('send').disabled = false; }
 }

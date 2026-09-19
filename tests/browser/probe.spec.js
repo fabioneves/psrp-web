@@ -26,6 +26,7 @@ test('the WebRTC probe reports data channel support, a UDP answer and loopback t
     await expect(page.locator('#stun-result')).toContainText('Outbound UDP works.', { timeout: 15000 });
     await expect(page.locator('#stun-result')).toContainText('203.0.113.7:4242');
     await expect(page.locator('#loopback-result')).toContainText('Mbps', { timeout: 20000 });
+    await expect(page.locator('#worker-result')).toContainText(/handed to a worker|forward each message/, { timeout: 20000 });
     await page.getByRole('button', { name: 'Send to server' }).click({ timeout: 20000 });
     await expect(page.locator('#save-result')).toContainText('Sign in');
   } finally { stun.close(); }
@@ -51,6 +52,21 @@ test('the probe reports blocked UDP when no STUN server answers, and saves the r
   expect(capture.kind).toBe('webrtc-probe');
   expect(capture.stun.udp).toBe(false);
   expect(capture.loopback.receivedMbps).toBeGreaterThan(0);
+  expect(['transfer', 'forward']).toContain(capture.worker.mode);
+});
+
+test('a browser that refuses to hand a data channel to a worker is told the page will forward messages', async ({ page }) => {
+  await page.addInitScript(() => {
+    const post = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message, transfer) {
+      if ([].concat(transfer?.transfer ?? transfer ?? []).some(item => item instanceof RTCDataChannel)) throw new DOMException('RTCDataChannel could not be cloned.', 'DataCloneError');
+      return post.call(this, message, transfer);
+    };
+  });
+  await page.goto('/probe.html?stun=127.0.0.1:9');
+  await expect(page.locator('#worker-result')).toContainText('forward each message', { timeout: 30000 });
+  await expect(page.locator('#worker-result')).toContainText('DataCloneError');
+  await expect(page.locator('#worker-result')).not.toHaveAttribute('data-tone', 'bad');
 });
 
 test('peers that cannot reach each other inside the page read as not measurable, not as a WebRTC failure', async ({ page }) => {

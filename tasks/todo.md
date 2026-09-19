@@ -29,6 +29,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Accept: `/probe.html` shows whether an `RTCDataChannel` can be transferred to a worker and still receive; result included in the copied report.
   - Verify: `npm run test:unit`, `npx playwright test tests/browser/probe.spec.js`; run in the car and record the result in the spec.
   - Depends: none. Files: `web/probe.js`, `web/probe-results.js`, `tests/probe-results.test.mjs`, `tests/browser/probe.spec.js`. Size: S.
+  - State 2026-09-19: built and tested; desktop Chrome 150 hands the channel over (200 of 200). Open until it has run in the car, which needs a deploy.
 - [ ] **Checkpoint A:** library chosen by the user; car probe result recorded.
 
 ### Phase 1: pure modules
