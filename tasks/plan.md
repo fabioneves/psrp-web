@@ -133,6 +133,40 @@ branch so the probe's worker check can run in the car. Whether the WebSocket
 path gets backlog skipping was listed beside these but not among the four
 questions asked, so it stays open.
 
+### Field results, 2026-09-19 evening (iPhone, Chrome on iOS, mobile data)
+
+Captures on the production server: `20260919T190916Z.json` (720p60, 6 Mbps) and
+`20260919T191905Z.json` (1080p60, 10 Mbps), both over WebRTC through the
+forwarded UDP 8443.
+
+- **WebRTC works from outside, on WebKit too.** 720p: 133 s at a median 59 fps,
+  video never more than 264 ms behind, through a 2.3 s pause in arrivals; one
+  second at 0 fps; keyframe requests 2 → 8.
+- **1080p is not usable yet.** 70 of 124 seconds at 0 fps, freezes of 37 s and
+  19 s, keyframe requests 2 → 55, the server's backlog skipping firing ten
+  times. Delay was about 100 ms until the first event, so the link carried the
+  stream; what fails is recovery. Best explanation, not yet proven because the
+  captures carry no reassembler counts (task 11): a 1080p keyframe is several
+  hundred datagrams, nothing is retransmitted, so one lost datagram loses the
+  whole keyframe; the browser asks again every 500 ms, the bursts congest the
+  link and lose the next one too. The Moonlight fork's notes describe the same
+  storm. The spec's "no retransmission in this version" is what has to change
+  for keyframes: task 16 below.
+- **Console lockout.** With the goodbye acknowledged (`e291b1a`) the PS5 freed
+  the session in about 8 s, twice, against 42 s to over 2 minutes before. A
+  session that ends before its stream starts still cannot say goodbye.
+
+### Added tasks
+
+- [ ] **16. Keyframes survive loss.** Decide and specify first (spec change:
+  retransmission was "Ask first"). Candidates: a partially reliable lifetime
+  for key units with the browser holding the deltas that overtake them; a
+  slower keyframe request rate so storms cannot build; pacing keyframes.
+  Needs task 11's counters to confirm the cause, and a 1080p car or phone
+  session to accept.
+- [ ] **17. A session that dies while starting says goodbye.** Finish bringing
+  the console stream up under its own short deadline, then stop it normally.
+
 ### Open questions
 
 1. Should the WebSocket path get the same backlog skipping? It is the fallback
