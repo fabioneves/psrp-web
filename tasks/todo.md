@@ -37,7 +37,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Accept: round trip for 1 byte, exactly 1100 bytes and 2 MiB; `count` overflow rejected.
   - Verify: `docker build --target test -t player-one-tests .`
   - Depends: none. Files: `RemotePlay/Services/Software/FrameFragmenter.cs`, `tests/backend/RtcTests.cs`, `tests/backend/Program.cs`. Size: S.
-- [ ] **4. Frame reassembler.** Fragments → complete access units with the spec's drop policy.
+- [x] **4. Frame reassembler.** Fragments → complete access units with the spec's drop policy.
   - Accept: in-order, reorder and duplicates deliver; a lost fragment abandons only that frame; newer-complete and two-interval deadline abandon; after abandonment nothing is delivered until a keyframe; keyframe requests ≤ 1 per 500 ms; ≤ 4 frames and 2 MiB per frame held.
   - Verify: `node --test tests/frame-reassembler.test.mjs`
   - Depends: none. Files: `web/frame-reassembler.js`, `tests/frame-reassembler.test.mjs`. Size: S.
