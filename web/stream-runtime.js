@@ -1,4 +1,5 @@
-import { createNativeDecoder } from './native-decoder.js';
+import { createNativeDecoder, h264Info, h265Info } from './native-decoder.js';
+import { createVideoSource } from './video-source.js';
 import { createDecoder } from './decoder.js';
 import { now, StreamClock, unpackMedia } from './timing.js';
 
@@ -22,6 +23,25 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
   }) : null;
   const socket = new WebSocket(url);
   socket.binaryType = 'arraybuffer';
+  const frameInfo = videoCodec === 'h265' ? h265Info : h264Info;
+  const video = decoder && videoCodec !== 'mpeg1' ? createVideoSource({
+    frameIntervalMs: 1000 / (presentation.fps || 60),
+    // The server opens a keyframe with a unit of parameter sets alone; the picture follows in the next unit.
+    isKey(data) { const info = frameInfo(data.subarray(32)); return info.key || (!info.picture && info.parameters.length > 0); },
+    requestKeyframe() { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'keyframe' })); },
+    deliver(payload, transport) { playVideo(transport === 'websocket' ? payload : unpackMedia(payload)); }
+  }) : null;
+  function playVideo(media) {
+    transportMs = clock.age(media.sent);
+    if (transportMs != null) transports.push(transportMs);
+    const arrival = performance.now();
+    if (lastArrival != null) gaps.push(arrival - lastArrival);
+    lastArrival = arrival;
+    serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
+    lastVideo = performance.now();
+    decoder?.write(media.bytes, media.timestamp);
+  }
+  const fromChannel = message => { if (stopped) return; try { video?.fromChannel(message); } catch (error) { fail(error.message, failureType()); } };
   let stopped = false;
   let lastVideo = performance.now();
   const failureType = () => videoCodec !== 'mpeg1' && !decoder?.healthy ? 'renderer-error' : 'error';
@@ -46,25 +66,17 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
         const message = JSON.parse(event.data);
         if (message.type === 'pong') { clock.sample(message); if (!canvas) lastVideo = performance.now(); return; }
         if (message.type === 'status') lastVideo = performance.now();
+        if (message.type === 'transport') video?.announce(message);
         report(message);
         if (message.type === 'error') close();
       } else {
         const media = unpackMedia(event.data);
         if (media.kind !== 2 && (media.kind === 3) !== (videoCodec !== 'mpeg1')) throw new Error('The server sent an unexpected video format. Reload the page.');
-        if (media.kind !== 2) {
-          transportMs = clock.age(media.sent);
-          if (transportMs != null) transports.push(transportMs);
-          const arrival = performance.now();
-          if (lastArrival != null) gaps.push(arrival - lastArrival);
-          lastArrival = arrival;
-        }
-        serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
-        if (media.kind === 2)
+        if (media.kind === 2) {
+          serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
           report({ type: 'audio', bytes: media.bytes, timestamp: media.timestamp });
-        else {
-          lastVideo = performance.now();
-          decoder?.write(media.bytes, media.timestamp);
-        }
+        } else if (video) video.fromSocket(media);
+        else playVideo(media);
       }
     } catch (error) { fail(error.message, failureType()); }
   };
@@ -78,6 +90,16 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
   return {
     input(message) { if (socket.readyState === WebSocket.OPEN && socket.bufferedAmount <= 65536) socket.send(JSON.stringify(message)); },
     timeline: () => decoder?.timeline?.() ?? [],
+    // The receiving end of the WebRTC video channel, handed over by the page; its events fire on this thread from now on.
+    rtcChannel(channel) {
+      channel.binaryType = 'arraybuffer';
+      channel.onmessage = event => fromChannel(event.data);
+      channel.onopen = () => report({ type: 'rtc-open' });
+      channel.onclose = () => { if (!stopped) report({ type: 'rtc-closed' }); };
+      if (channel.readyState === 'open') report({ type: 'rtc-open' });
+    },
+    // One message of that channel, forwarded by a page whose browser cannot hand the channel over.
+    rtcData: fromChannel,
     close
   };
 }

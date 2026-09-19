@@ -15,12 +15,36 @@ import { AdaptiveQuality } from './adaptive.js';
 import { encodeAccountId } from './account-id.js';
 import { bindSetup } from './setup.js';
 import { StreamLog, describeEvent } from './diagnostics.js';
+import { startRtcVideo } from './rtc-video.js';
 
 const $ = id => document.getElementById(id);
 let token = null, registering = false, worker = null, stream = null, playing = false, attempt = 0;
 const setup = bindSetup(api, refresh, notify);
 let pairedConsoleIds = new Set(), scanning = false, knownDevices = [];
 const sendToServer = message => { worker?.postMessage(message); stream?.input(message); };
+// WebRTC video: what the ticket asked for, what currently carries video, and the page's end of the negotiation.
+let activeTransport = 'websocket', videoTransport = 'websocket', rtcVideo = null;
+function connectRtcVideo() {
+  rtcVideo?.close();
+  rtcVideo = startRtcVideo({
+    sendOffer: sdp => sendToServer({ type: 'rtc-offer', sdp }),
+    handOver(channel) {
+      if (stream) return stream.rtcChannel(channel);
+      // The worker reads the channel itself where the browser can transfer one; elsewhere every message is relayed.
+      try { worker.postMessage({ type: 'rtc-channel', channel }, [channel]); }
+      catch {
+        channel.onopen = () => rtcVideo?.opened();
+        channel.onclose = () => rtcVideo?.closed();
+        channel.onmessage = event => worker?.postMessage({ type: 'rtc-data', bytes: event.data }, [event.data]);
+      }
+    },
+    onState({ state, reason }) {
+      if (state !== 'failed') return;
+      log.event('transport', { transport: 'websocket', reason });
+      $('engine').title = reason; rtcVideo = null;
+    }
+  });
+}
 const resetInputs = bindInputs($('controls'), sendToServer, () => playing);
 let telemetryEventsSent = 0;
 
@@ -77,7 +101,7 @@ try {
 } catch {}
 let startInFullscreen = false;
 try { startInFullscreen = localStorage.getItem('remote-play:auto-fullscreen') === 'true'; } catch {}
-const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'hud-style', 'auto-quality', 'video-output', 'debug-telemetry'];
+const preferenceIds = ['controller-mode', 'controller-index', 'controller-swap', 'dead-zone', 'invert-ab', 'invert-xy', 'invert-y', 'rumble', 'keep-awake', 'video-mode', 'resolution-profile', 'fps-profile', 'bitrate', 'show-controls', 'debug-mode', 'mute', 'volume', 'audio-delay', 'frame-pacing', 'transport', 'hud-style', 'auto-quality', 'video-output', 'debug-telemetry'];
 for (const id of preferenceIds) {
   const element = $(id);
   try {
@@ -298,7 +322,7 @@ function applySettings(saved) {
     if (typeof saved.autoFullscreen === 'boolean') setStartInFullscreen(saved.autoFullscreen);
     if (!['auto', 'mpeg1', 'h264', 'h265'].includes($('video-mode').value)) $('video-mode').value = 'auto';
     if (!['detailed', 'minimal', 'horizontal'].includes($('hud-style').value)) $('hud-style').value = 'detailed';
-    $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+    syncAdvancedSettings();
     $('controller-advanced').open = controllerOverridden();
     savePlaybackPreferences(); updateQuality(); updateDebug(); syncAudio(); updateTouchOverlay(); gamepads.reset(); void updateWakeLock();
   } finally { applyingSettings = false; }
@@ -311,10 +335,17 @@ async function loadSettings() {
     else uploadSettings();
   } catch (error) { notify(`Could not load your saved settings: ${error.message}`, 'error'); }
 }
+// Advanced stays open while anything in it differs from its default, so a non-default choice is never hidden.
+// Canvas mode is an ordered byte stream that only the WebSocket can carry, so it has no transport to choose.
+function syncAdvancedSettings() {
+  $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('transport').value !== 'websocket' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+  $('transport').closest('fieldset, label').hidden = $('video-mode').value === 'mpeg1';
+}
+$('video-mode').addEventListener('change', syncAdvancedSettings);
 function readSettings() { return Object.fromEntries(Object.entries(profileFields).map(([key, id]) => [key, $(id).value])); }
 function writeSettings(values) {
   for (const [key, id] of Object.entries(profileFields)) if (values[key] !== undefined && [...$(id).options].some(option => option.value === String(values[key]))) $(id).value = String(values[key]);
-  $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+  syncAdvancedSettings();
   savePlaybackPreferences();
 }
 function describeProfile(profile) {
@@ -617,7 +648,7 @@ async function discoverConsoles(hostIp = '') {
 async function play(hostId, title, demo = false, inputSession = null, hostType = null) {
   stop();
   if (hostId && !inputSession && consoleProfiles[hostId]) enterConsoleScope(hostId);
-  target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile(), codec: $('video-mode').value, pacing: $('frame-pacing').value, auto: $('auto-quality').checked };
+  target = { hostId, title, demo, inputSession, hostType, profile: selectedProfile(), codec: $('video-mode').value, pacing: $('frame-pacing').value, transport: $('transport').value, auto: $('auto-quality').checked };
   resetHud(); log.reset(); telemetryEventsSent = 0; health.reset(); showHealth({ level: 'good', reason: '' }); renderEvents();
   log.event('play', { hostId, demo, inputSession: !!inputSession, profile: target.profile, codec: $('video-mode').value });
   quality = new AdaptiveQuality(target.profile);
@@ -722,7 +753,10 @@ async function openStream({ hostId, title, demo, inputSession, hostType, profile
     : `Using ${label}; ${decoderFailure || 'the selected mode is unavailable for this browser or console'}.${!isSecureContext ? ' Open the HTTPS address for browser decoding.' : ''}`;
   await audio?.ready;
   if (current !== attempt) return;
-  const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile, videoCodec: activeCodec });
+  // Canvas mode is an ordered byte stream and an input-only client receives no video: both stay on the WebSocket.
+  activeTransport = target.transport === 'webrtc' && activeCodec !== 'mpeg1' && !inputSession ? 'webrtc' : 'websocket';
+  videoTransport = 'websocket';
+  const { ticket } = await api('software/tickets', { hostId, demo, inputSession, ...profile, videoCodec: activeCodec, transport: activeTransport });
   if (current !== attempt) return;
   const url = new URL('/api/software/stream', location.href);
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -865,6 +899,7 @@ function onStreamMessage(message) {
     log.event('connected', { inputOnly: !!message.inputOnly, codec: activeCodec });
     resetInputs(); gamepads.reset();
     if (message.inputOnly) $('stream-status').textContent = 'Controller connected';
+    if (activeTransport === 'webrtc') connectRtcVideo();
   } else if (message.type === 'stats') {
     if (worker && videoSink) Object.assign(message, videoSink.metrics()); // screen timing lives with the element on the page
     const sample = log.videoStats(message);
@@ -885,7 +920,7 @@ function onStreamMessage(message) {
     $('render-status').textContent = `Decode ${ms(message.nativeDecodeMs ?? message.codecMs)} · color ${ms(message.colorMs)} (${message.pixelEngine}) · draw ${ms(message.drawMs)} · canvas queue ${ms(message.queueMs)} · ${message.droppedFrames} superseded frames`;
     $('timing-status').dataset.metrics = JSON.stringify(message);
     $('resolution').textContent = `${message.width} × ${message.height}`;
-    $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}`;
+    $('engine').textContent = `${message.engine} · Canvas 2D${worker ? ' · worker' : ''}${activeTransport === 'webrtc' ? ` · ${videoTransport === 'webrtc' ? 'WebRTC' : 'WebSocket'}` : ''}`;
     if (target && message.totalFrames)
       $('stream-profile').textContent = `${target.profile.resolution}${target.profile.fps} · ${{ mpeg1: 'Canvas', h264: 'H.264', h265: 'H.265' }[activeCodec]} · ${message.mbps.toFixed(1)} Mbps`;
     if (message.totalFrames) {
@@ -899,6 +934,17 @@ function onStreamMessage(message) {
       const change = quality?.sample(message, performance.now(), !document.hidden);
       if (change) changeProfile(change.profile, change.reason);
     }
+  } else if (message.type === 'rtc-answer') {
+    rtcVideo?.answer(message.sdp);
+  } else if (message.type === 'rtc-open') {
+    rtcVideo?.opened();
+  } else if (message.type === 'rtc-closed') {
+    rtcVideo?.closed();
+  } else if (message.type === 'transport') {
+    // The server says which transport carries video from here on, and after a fallback, why.
+    videoTransport = message.transport === 'webrtc' ? 'webrtc' : 'websocket';
+    log.event('transport', { transport: videoTransport, ...(message.reason ? { reason: message.reason } : {}) });
+    if (message.reason) { $('engine').title = message.reason; rtcVideo?.close(); rtcVideo = null; } else $('engine').title = '';
   } else if (message.type === 'status') {
     log.event('status', { message: message.message }); $('stream-status').textContent = message.message;
     if (/release the previous session/.test(message.message)) notify(message.message, 'busy');
@@ -913,6 +959,7 @@ function onStreamMessage(message) {
   }
 }
 function stop(preserveTarget = false) {
+  rtcVideo?.close(); rtcVideo = null; $('engine').title = '';
   attempt++;
   if (!preserveTarget) { retry.reset(); target = null; quality = null; }
   if (preserveTarget) audio?.reset();
@@ -1067,12 +1114,12 @@ document.addEventListener('keydown', () => { if (audio?.context.state === 'suspe
 $('resolution-profile').onchange = () => {
   $('bitrate').value = defaultBitrate[$('resolution-profile').value];
 };
-$('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+syncAdvancedSettings();
 
 // Settings changed during playback are a draft until Apply copies them onto the target.
 function sessionChanged() {
   const selected = selectedProfile();
-  return $('video-mode').value !== target.codec || $('frame-pacing').value !== target.pacing || Object.keys(selected).some(key => selected[key] !== target.profile[key]);
+  return $('video-mode').value !== target.codec || $('frame-pacing').value !== target.pacing || $('transport').value !== target.transport || Object.keys(selected).some(key => selected[key] !== target.profile[key]);
 }
 function pendingSettings() { return !!target && !target.inputSession && (sessionChanged() || $('auto-quality').checked !== target.auto); }
 function updateQuality(reason = '') {
@@ -1093,7 +1140,7 @@ function changeProfile(profile, reason) {
 $('apply-profile').onclick = () => {
   if (!target || target.inputSession) return;
   const selected = selectedProfile(), changed = sessionChanged();
-  Object.assign(target, { codec: $('video-mode').value, pacing: $('frame-pacing').value, auto: $('auto-quality').checked });
+  Object.assign(target, { codec: $('video-mode').value, pacing: $('frame-pacing').value, transport: $('transport').value, auto: $('auto-quality').checked });
   failedCodecs.clear(); decoderFailure = '';
   quality = new AdaptiveQuality(selected);
   if (changed) changeProfile(selected, 'Settings applied');
@@ -1131,7 +1178,7 @@ for (const button of document.querySelectorAll('[data-preset]')) button.onclick 
   $('bitrate').value = String(preset.bitrateKbps);
   $('frame-pacing').value = preset.pacing ?? 'smooth';
   if (preset.audioDelayMs) { $('audio-delay').value = String(preset.audioDelayMs); audio?.setDelay(preset.audioDelayMs); }
-  $('advanced-settings').open = $('frame-pacing').value !== 'smooth' || $('bitrate').value !== defaultBitrate[$('resolution-profile').value];
+  syncAdvancedSettings();
   savePlaybackPreferences();
   updateQuality();
 };

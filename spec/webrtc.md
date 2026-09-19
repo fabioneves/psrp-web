@@ -71,8 +71,8 @@ Run:            docker compose up --build -d
 Unit tests:     npm run test:unit
 Backend tests:  docker build --target test -t player-one-tests .
 Browser tests:  TEST_URL=http://127.0.0.1:18081 npx playwright test
-Isolated instance for browser tests:
-  COMPOSE_FILE=compose.yaml COMPOSE_PROJECT_NAME=psrp-ui-test PORT=18081 \
+Isolated instance for browser tests (the second file publishes the WebRTC port to the host):
+  COMPOSE_FILE=compose.yaml:tests/browser/compose.rtc.yaml COMPOSE_PROJECT_NAME=psrp-ui-test PORT=18081 \
   ALLOW_REGISTRATION=true DISCOVERY_SUBNETS= docker compose up --build -d
 Live telemetry: docker compose logs -f remote-play | rg 'Stream telemetry'
 ```

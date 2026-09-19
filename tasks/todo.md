@@ -54,9 +54,10 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Verify: backend test with an in-process peer receives fragments that reassemble to the sent access units.
   - Built 2026-09-19 in two commits. Differs from the first wording: signaling is one `rtc-offer` and one `rtc-answer`, no candidate messages; the `transport` message carries the frame number where the change takes effect; a channel that closes or fails a send already falls back to the WebSocket at the next keyframe (task 10 adds the browser test and the 2 s check). The session glue in `SoftwareSession` has no test of its own yet: task 7's end-to-end test is the first thing to exercise it.
   - Depends: 1, 3, 5. Files: `RtcVideoChannel.cs`, `SoftwareSession.cs`, `SoftwareInputRouter.cs`, `SoftwareInputState.cs`, `RemotePlay.csproj` (+ `Dockerfile` if native). Size: M.
-- [ ] **7. Browser data channel, setting and label.**
+- [x] **7. Browser data channel, setting and label.**
   - Accept: Stream settings → Advanced → Transport, saved with the other settings and hidden for Canvas; with WebRTC selected the test stream plays through the reassembler, the playback label says WebRTC, and 720p60 H.264 holds > 55 fps.
   - Verify: `tests/browser/webrtc.spec.js` against the isolated instance; `npm run test:unit`.
+  - Built 2026-09-19. The end-to-end test needs the isolated instance started with `COMPOSE_FILE=compose.yaml:tests/browser/compose.rtc.yaml`, which publishes UDP 18444 and advertises 127.0.0.1. The channel is transferred to the worker, with forwarding as the fallback; only the transfer path is exercised by a test. A real PS5 session (checkpoint B) has not been run.
   - Depends: 2, 4, 6. Files: `web/rtc-video.js`, `web/stream-runtime.js`, `web/stream-worker.js`, `web/app.js`, `web/index.html`. Size: M.
 - [ ] **Checkpoint B:** all suites green; a real PS5 session plays over WebRTC on the LAN (criterion 1) before anything else is built.
 

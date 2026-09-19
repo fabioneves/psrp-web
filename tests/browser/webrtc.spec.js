@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { chooseSetting } from './settings.js';
 
 async function signedIn(page) {
   await page.goto('/');
@@ -23,4 +24,36 @@ test('a stream ticket accepts a transport, and refuses WebRTC for Canvas mode', 
   expect(canvas.status()).toBe(400);
   expect((await canvas.json()).message).toContain('WebRTC');
   expect((await ticket({ videoCodec: 'h264', transport: 'quic' })).status()).toBe(400);
+});
+
+// Needs the isolated instance started with tests/browser/compose.rtc.yaml, which publishes the WebRTC port to this host.
+test('with WebRTC selected the test stream plays over the data channel and says so', async ({ page }) => {
+  page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log(message.text()); });
+  await page.addInitScript(() => { localStorage.setItem('remote-play:video-output', 'canvas'); localStorage.setItem('remote-play:video-mode', 'h264'); });
+  await signedIn(page);
+  await page.locator('#advanced-settings > summary').click();
+  await chooseSetting(page, 'transport', 'webrtc');
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  // Headless Chrome may settle on software decoding; the transport at the end of the label is what this test is about.
+  await expect(page.locator('#engine')).toHaveText(/^H\.264 · .+ · Canvas 2D · worker · WebRTC$/, { timeout: 30000 });
+  const framesAtSwitch = Number(await page.locator('#fps').getAttribute('data-frames'));
+  await expect.poll(() => page.locator('#fps').getAttribute('data-frames').then(Number), { timeout: 20000 }).toBeGreaterThan(framesAtSwitch + 300);
+  expect(parseFloat(await page.locator('#fps').textContent())).toBeGreaterThan(55);
+  const metrics = JSON.parse(await page.locator('#timing-status').getAttribute('data-metrics'));
+  expect(metrics.width).toBe(1280);
+  await page.locator('#stop').click();
+});
+
+test('the transport choice is saved with the other stream settings and hidden for Canvas mode', async ({ page }) => {
+  await signedIn(page);
+  await page.locator('#advanced-settings > summary').click();
+  await chooseSetting(page, 'transport', 'webrtc');
+  await page.reload();
+  await expect(page.locator('#library')).toBeVisible();
+  await expect(page.locator('#advanced-settings')).toHaveAttribute('open', '');
+  await expect(page.locator('[data-choice-for=transport] [data-value=webrtc]')).toHaveAttribute('aria-checked', 'true');
+  await chooseSetting(page, 'video-mode', 'mpeg1');
+  await expect(page.locator('[data-choice-for=transport]')).toBeHidden();
+  await chooseSetting(page, 'video-mode', 'h264');
+  await expect(page.locator('[data-choice-for=transport]')).toBeVisible();
 });

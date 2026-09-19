@@ -21,6 +21,10 @@ self.onmessage = async ({ data }) => {
         else postMessage(message);
       }, data.videoCodec, data.hardwareAcceleration, trackSink ? { ...data.presentation, sink: trackSink } : data.presentation);
       postMessage({ type: 'ready' });
+    } else if (data.type === 'rtc-channel') {
+      stream?.rtcChannel(data.channel);
+    } else if (data.type === 'rtc-data') {
+      stream?.rtcData(data.bytes);
     } else if (data.type === 'audio-enabled') {
       audioEnabled = data.enabled;
     } else if (data.type === 'audio-fallback') {

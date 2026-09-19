@@ -1,0 +1,10 @@
+# Browser tests only. Lets a browser on the host reach the WebRTC port of the isolated instance:
+#   COMPOSE_FILE=compose.yaml:tests/browser/compose.rtc.yaml COMPOSE_PROJECT_NAME=psrp-ui-test PORT=18081 ...
+# A bridge-network container only knows its own private address, so the published port is advertised on loopback.
+services:
+  remote-play:
+    ports:
+      - "${WEBRTC_PORT:-18444}:${WEBRTC_PORT:-18444}/udp"
+    environment:
+      WEBRTC_PORT: ${WEBRTC_PORT:-18444}
+      WEBRTC_PUBLIC_ADDRESS: ${WEBRTC_PUBLIC_ADDRESS:-127.0.0.1}
