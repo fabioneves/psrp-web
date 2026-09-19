@@ -160,6 +160,45 @@ docs/architecture.md, README.md                wire format, setup, troubleshooti
   (same limit as the receiver, 33 messages), enforced by the sender too;
   fragments for unknown or abandoned frames are dropped.
 
+### Loss recovery (proposed 2026-09-19, task 16, not approved)
+
+Field result that prompts it: at 1080p over mobile data the stream froze for
+70 of 124 seconds while keyframe requests went from 2 to 55; at 720p the same
+phone had one frozen second. Today every lost datagram costs a whole frame,
+every lost frame costs a keyframe, and a 1080p keyframe is a burst of several
+hundred datagrams that is itself likely to lose one and to congest the link.
+Task 11's counters are there to confirm this on the next 1080p capture before
+anything below is built.
+
+1. **Retransmit, but only briefly.** The browser opens the channel with
+   `maxPacketLifeTime: 250` instead of `maxRetransmits: 0`. SCTP then repairs a
+   lost datagram in about one round trip and gives the message up after
+   250 ms. A loss costs one late frame, not a keyframe. This replaces "no
+   retransmission in this version"; nothing is ever held longer than the
+   lifetime, so delay still cannot build the way it does on TCP.
+2. **The browser waits for the late frame.** Frames are delivered in frame-id
+   order. A complete frame whose predecessor is still missing is held for up
+   to 300 ms (at most 24 frames, 8 MiB); only when that runs out is the
+   missing frame abandoned and a keyframe asked for. "Abandon when a newer
+   frame completes first" goes away: with retransmission a newer frame
+   completing first is normal.
+3. **No keyframe storms.** The browser asks at most once a second instead of
+   every 500 ms, and the server ignores a request while the keyframe it
+   already asked the console for has not yet gone out.
+4. **Sender backlog** stays as it is: it is what handles a link that cannot
+   carry the stream, which retransmission cannot help.
+5. **Tests.** Rehearsed loss moves below SCTP, where retransmission can see
+   it: the browser test runs a small lossy UDP relay and the server advertises
+   the relay's port (new `WEBRTC_PUBLIC_PORT`, also useful where the same port
+   number cannot be forwarded). Accept: at 1 % datagram loss the 720p test
+   stream holds over 55 fps with no keyframe requests; at 1080p on the phone,
+   fewer than one frozen second a minute.
+
+Cost: up to 250 ms of extra delay for the few frames behind a loss, caught up
+by the frame queue's existing drop policy. Risk: usrsctp's fast retransmit
+under real cellular loss patterns is unmeasured; the relay test and one phone
+session decide whether 250 ms is the right lifetime.
+
 ### Sender backlog
 
 A data channel is still congestion-controlled and buffers what the link cannot
