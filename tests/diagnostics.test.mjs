@@ -43,3 +43,24 @@ test('stream log bounds its buffers and resets between sessions', () => {
   log.reset();
   assert.deepEqual([log.events.length, log.samples.length, log.server], [0, 0, null]);
 });
+
+test('samples carry the video transport, what the data channel lost, and what the server gave up', () => {
+  const log = new StreamLog();
+  log.serverStats({ type: 'console-stats', idr: 3, rtcSkipped: 0 });
+  log.videoStats({ fps: 60, totalFrames: 60, videoTransport: 'webrtc', rtcFragments: 80, rtcAbandoned: 0, rtcDiscarded: 0, rtcKeyframeRequests: 0, pairRttMs: 41.26, pairType: 'host' });
+  log.serverStats({ type: 'console-stats', idr: 4, rtcSkipped: 5 });
+  const sample = log.videoStats({ fps: 31, totalFrames: 91, videoTransport: 'webrtc', rtcFragments: 150, rtcAbandoned: 2, rtcDiscarded: 9, rtcKeyframeRequests: 1, pairRttMs: 44, pairType: 'host' });
+  assert.deepEqual({ transport: sample.transport, fragments: sample.fragments, abandoned: sample.abandoned, discarded: sample.discarded, rtcKeyframes: sample.rtcKeyframes, senderSkipped: sample.senderSkipped, pairRtt: sample.pairRtt, pairType: sample.pairType },
+    { transport: 'webrtc', fragments: 70, abandoned: 2, discarded: 9, rtcKeyframes: 1, senderSkipped: 5, pairRtt: 44, pairType: 'host' });
+  const events = log.events.map(event => event.type);
+  assert.ok(events.includes('frames-abandoned') && events.includes('sender-skipped'), `events were ${events}`);
+  assert.deepEqual(log.events.find(event => event.type === 'frames-abandoned'), { t: log.events.find(event => event.type === 'frames-abandoned').t, type: 'frames-abandoned', frames: 2, discarded: 9, keyframeRequests: 1 });
+});
+
+test('a WebSocket session records its transport and leaves the channel figures empty', () => {
+  const log = new StreamLog();
+  const sample = log.videoStats({ fps: 60, totalFrames: 60 });
+  assert.equal(sample.transport, 'websocket');
+  assert.equal(sample.abandoned, null);
+  assert.equal(sample.pairRtt, null);
+});

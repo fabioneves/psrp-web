@@ -79,9 +79,10 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 
 ### Phase 4: see it, ship it, measure it
 
-- [ ] **11. Diagnostics and the loss test.**
+- [x] **11. Diagnostics and the loss test.**
   - Accept: per-second samples and server telemetry carry transport in use, fragments, abandoned frames, sender-skipped units, transport-caused keyframe requests, and the candidate pair's round trip and type; a test-only server option drops 2 % of fragments and playback continues with bounded media-ready-to-canvas age.
   - Verify: `tests/diagnostics.test.mjs`, `tests/backend/StreamTelemetryTests.cs`, browser loss test.
+  - Built 2026-09-19, ahead of tasks 9 and 10's own tests, because the 1080p field failure needed the counters. The loss option is a ticket field (`testDropPercent`) that only a server started with `WEBRTC_TEST_DROP=1` accepts; that refusal itself is untested. The candidate pair's figures come from the page's peer connection and were not checked against a real remote peer.
   - Depends: 8, 10. Files: `web/diagnostics.js`, `web/rtc-video.js`, `StreamTelemetry.cs`, `RtcVideoChannel.cs`, tests. Size: M.
 - [x] **Checkpoint C:** approved 2026-09-19; the user forwards UDP 8443 to the server.
 - [ ] **12. Port publishing and docs.**

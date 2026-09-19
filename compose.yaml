@@ -35,6 +35,8 @@ services:
       # Addresses or names browsers can reach this server on. Empty: the public name below, plus whatever the host itself has.
       WEBRTC_PUBLIC_ADDRESS: ${WEBRTC_PUBLIC_ADDRESS:-}
       REMOTE_PLAY_DOMAIN: ${REMOTE_PLAY_DOMAIN:-}
+      # Browser tests only: lets a ticket ask for lost data-channel fragments.
+      WEBRTC_TEST_DROP: ${WEBRTC_TEST_DROP:-}
       Database__Host: database
       Database__Port: 5432
       Database__Name: remoteplay

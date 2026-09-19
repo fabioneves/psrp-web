@@ -47,6 +47,9 @@ public sealed class ActiveSoftwareStream(StreamTicket grant, CancellationTokenSo
     /// <summary>Rumble packets the console sent this session; tells "the game never rumbled" from "the pad did not vibrate".</summary>
     public long RumblePackets => Interlocked.Read(ref rumblePackets);
     public void CountRumble() => Interlocked.Increment(ref rumblePackets);
+    private long videoSkipped;
+    /// <summary>Video units the server gave up because the WebRTC channel's send buffer was backed up.</summary>
+    public long VideoSkipped { get => Interlocked.Read(ref videoSkipped); set => Interlocked.Exchange(ref videoSkipped, value); }
     private readonly SemaphoreSlim clients = new(4, 4);
     public int InputClients => 4 - clients.CurrentCount;
     public bool IsOpen => Input != null && !StopRequested && !lifetime.IsCancellationRequested;

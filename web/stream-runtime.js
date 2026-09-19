@@ -10,7 +10,7 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
   const percentile = (values, share) => values.length ? [...values].sort((a, b) => a - b)[Math.ceil(values.length * share) - 1] : null;
   const decoder = canvas ? await (videoCodec !== 'mpeg1' ? createNativeDecoder : createDecoder)(canvas, message => {
     report({ ...message, videoAgeMs, transportMs, serverQueueMs, rttMs: clock.rttMs,
-      arrivalP95Ms: percentile(gaps, 0.95), arrivalMaxMs: gaps.length ? Math.max(...gaps) : null, transportP95Ms: percentile(transports, 0.95) });
+      arrivalP95Ms: percentile(gaps, 0.95), arrivalMaxMs: gaps.length ? Math.max(...gaps) : null, transportP95Ms: percentile(transports, 0.95), ...channelMetrics() });
     serverQueueMs = 0; gaps = []; transports = [];
   }, {
     ...presentation, videoCodec, hardwareAcceleration,
@@ -40,6 +40,12 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
     serverQueueMs = Math.max(serverQueueMs, media.sent - media.ready);
     lastVideo = performance.now();
     decoder?.write(media.bytes, media.timestamp);
+  }
+  // Running totals of what the data channel delivered and lost; the diagnostics log turns them into per-second figures.
+  function channelMetrics() {
+    if (!video) return {};
+    const { transport, fragments, abandoned, discarded, keyframeRequests } = video.metrics();
+    return { videoTransport: transport, rtcFragments: fragments, rtcAbandoned: abandoned, rtcDiscarded: discarded, rtcKeyframeRequests: keyframeRequests };
   }
   const fromChannel = message => { if (stopped) return; try { video?.fromChannel(message); } catch (error) { fail(error.message, failureType()); } };
   let stopped = false;

@@ -112,13 +112,16 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
             return BadRequest(new { message = "H.265 requires a PS5. Select H.264 or Canvas for this console." });
         if (request.Transport == "webrtc" && request.VideoCodec == "mpeg1")
             return BadRequest(new { message = StreamTickets.WebRtcNeedsAccessUnits });
+        // Loss on the data channel can be rehearsed, but only on a server started for tests.
+        if (request.TestDropPercent > 0 && Environment.GetEnvironmentVariable("WEBRTC_TEST_DROP") != "1")
+            return BadRequest(new { message = "This server does not allow test packet loss." });
         if (request.InputSession == null)
         {
             if (!await tickets.Viewer.WaitAsync(TimeSpan.FromSeconds(8), ct))
                 return Conflict(new { message = "Another stream is still active on this server. Disconnect that stream before trying again." });
             tickets.Viewer.Release();
         }
-        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec, request.Transport);
+        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec, request.Transport, request.TestDropPercent);
         Response.Headers.CacheControl = "no-store";
         return Ok(new { ticket });
     }
@@ -175,6 +178,6 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
 public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 30000)] int BitrateKbps = 10000,
     Guid? InputSession = null, string Resolution = "720p", int Fps = 60,
     [Required, RegularExpression("^(mpeg1|h264|h265)$")] string VideoCodec = "mpeg1",
-    [Required, RegularExpression("^(websocket|webrtc)$")] string Transport = "websocket");
+    [Required, RegularExpression("^(websocket|webrtc)$")] string Transport = "websocket", [Range(0, 50)] int TestDropPercent = 0);
 
 public sealed record WakeRequest([Required, MaxLength(100)] string HostId);

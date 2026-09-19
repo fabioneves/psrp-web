@@ -902,6 +902,7 @@ function onStreamMessage(message) {
     if (activeTransport === 'webrtc') connectRtcVideo();
   } else if (message.type === 'stats') {
     if (worker && videoSink) Object.assign(message, videoSink.metrics()); // screen timing lives with the element on the page
+    if (rtcVideo) Object.assign(message, rtcVideo.stats()); // so does the peer connection
     const sample = log.videoStats(message);
     if ($('debug-telemetry').checked && sample) {
       // Live telemetry: the same per-second sample the diagnostics file holds, plus events since the last one.

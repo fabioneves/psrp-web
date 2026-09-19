@@ -1,7 +1,7 @@
 namespace RemotePlay.Services.Software;
 
 /// <summary>The server end of the browser's unreliable video channel: answers one offer completely, then sends access units as fragments.</summary>
-public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertised) : IDisposable
+public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertised, int testDropPercent = 0) : IDisposable
 {
     private readonly RtcPeer peer = new(port);
 
@@ -19,7 +19,8 @@ public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertise
     public bool Send(uint frameId, ReadOnlyMemory<byte> packet)
     {
         foreach (var fragment in FrameFragmenter.Split(frameId, packet))
-            if (!peer.Send(fragment)) return false;
+            if (testDropPercent > 0 && Random.Shared.Next(100) < testDropPercent) continue; // rehearsed loss, tests only
+            else if (!peer.Send(fragment)) return false;
         return true;
     }
 
@@ -114,7 +115,7 @@ public sealed class VideoTransportSwitch(int bitrateKbps = 10000)
 }
 
 /// <summary>A session's WebRTC side: turns the browser's offer into an open channel, answering on the stream's WebSocket.</summary>
-public sealed class RtcVideoLink(RtcOptions options, ILogger logger) : IDisposable
+public sealed class RtcVideoLink(RtcOptions options, ILogger logger, int testDropPercent = 0) : IDisposable
 {
     private readonly object sync = new();
     private RtcVideoChannel? channel;
@@ -130,7 +131,7 @@ public sealed class RtcVideoLink(RtcOptions options, ILogger logger) : IDisposab
             if (!RtcPeer.Available) throw new IOException("This server was built without WebRTC support.");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
-            created = new RtcVideoChannel(options.Port, await options.ResolveAsync(timeout.Token));
+            created = new RtcVideoChannel(options.Port, await options.ResolveAsync(timeout.Token), testDropPercent);
             reply = new { type = "rtc-answer", sdp = await created.AnswerAsync(offer, timeout.Token) };
             RtcVideoChannel? previous;
             lock (sync)

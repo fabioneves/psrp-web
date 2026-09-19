@@ -8,6 +8,7 @@ export class StreamLog {
   reset() {
     this.events = []; this.samples = []; this.started = this.clock(); this.startedAt = this.wall();
     this.server = null; this.audio = null; this.dropped = 0;
+    this.rtc = { fragments: 0, abandoned: 0, discarded: 0, keyframeRequests: 0, skipped: 0 };
   }
   at() { return Math.round(this.clock() - this.started); }
   event(type, detail = {}) {
@@ -46,7 +47,15 @@ export class StreamLog {
     if (stats.arrivalMaxMs > 100) this.event('delivery-gap', { maxMs: Math.round(stats.arrivalMaxMs), p95Ms: Math.round(stats.arrivalP95Ms ?? 0) });
     if (stats.stalls > 0) this.event('stall', { count: stats.stalls, ms: stats.stallMs });
     if (stats.underruns > 0) this.event('underrun', { count: stats.underruns, target: stats.pacingTarget });
-    this.samples.push({ t: this.at(), fps: round(stats.fps), decodedFps: round(stats.decodedFps), display: round(stats.displayP95Ms), displayMax: round(stats.displayMaxMs), displaySkipped: stats.displaySkipped ?? null, displayed: stats.displayedFrames ?? null, displayReplaced: stats.displayReplaced ?? null, p95: round(stats.frameP95Ms), max: round(stats.frameMaxMs), age: round(stats.videoAgeMs),
+    // Data-channel counters arrive as running totals; a sample holds what happened in its own second.
+    const since = (key, total) => { if (total == null) return null; const delta = Math.max(0, total - this.rtc[key]); this.rtc[key] = total; return delta; };
+    const channel = stats.rtcFragments == null ? null : { fragments: since('fragments', stats.rtcFragments), abandoned: since('abandoned', stats.rtcAbandoned),
+      discarded: since('discarded', stats.rtcDiscarded), keyframeRequests: since('keyframeRequests', stats.rtcKeyframeRequests) };
+    const senderSkipped = since('skipped', this.server?.rtcSkipped);
+    if (channel?.abandoned) this.event('frames-abandoned', { frames: channel.abandoned, discarded: channel.discarded, keyframeRequests: channel.keyframeRequests });
+    if (senderSkipped) this.event('sender-skipped', { frames: senderSkipped });
+    this.samples.push({ t: this.at(), transport: stats.videoTransport ?? 'websocket', fragments: channel?.fragments ?? null, abandoned: channel?.abandoned ?? null,
+      discarded: channel?.discarded ?? null, rtcKeyframes: channel?.keyframeRequests ?? null, senderSkipped, pairRtt: round(stats.pairRttMs), pairType: stats.pairType ?? null, fps: round(stats.fps), decodedFps: round(stats.decodedFps), display: round(stats.displayP95Ms), displayMax: round(stats.displayMaxMs), displaySkipped: stats.displaySkipped ?? null, displayed: stats.displayedFrames ?? null, displayReplaced: stats.displayReplaced ?? null, p95: round(stats.frameP95Ms), max: round(stats.frameMaxMs), age: round(stats.videoAgeMs),
       queue: round(stats.queueMs), decode: round(stats.nativeDecodeMs ?? stats.codecMs), rtt: round(stats.rttMs), mbps: round(stats.mbps), dropped,
       decodeQueue: stats.decodeQueue ?? null, arrivalP95: round(stats.arrivalP95Ms), arrivalMax: round(stats.arrivalMaxMs), transportP95: round(stats.transportP95Ms),
       stalls: stats.stalls ?? null, stallMs: stats.stallMs ?? null, refresh: round(stats.refreshMs), refreshMax: round(stats.refreshMaxMs), target: stats.pacingTarget ?? null, videoUnderruns: stats.underruns ?? null, rebuilt: stats.rebuilt ?? null, consoleFps: this.server?.consoleFps ?? null, pending: this.server?.pending ?? null,

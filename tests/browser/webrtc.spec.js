@@ -58,3 +58,28 @@ test('the transport choice is saved with the other stream settings and hidden fo
   await chooseSetting(page, 'video-mode', 'h264');
   await expect(page.locator('[data-choice-for=transport]')).toBeVisible();
 });
+
+// Needs the instance started with WEBRTC_TEST_DROP=1 as well. The test stream cannot make a keyframe on request, so each lost
+// frame freezes the picture until the generator's next one, at most a second away; a console answers within a few frames.
+test('lost fragments are counted, a keyframe is asked for, and playback carries on without falling behind', async ({ page }) => {
+  await page.addInitScript(() => { localStorage.setItem('remote-play:video-output', 'canvas'); localStorage.setItem('remote-play:video-mode', 'h264'); localStorage.setItem('remote-play:transport', 'webrtc'); });
+  await page.route('**/api/software/tickets', route => route.continue({ postData: JSON.stringify({ ...route.request().postDataJSON(), testDropPercent: 1 }) }));
+  await signedIn(page);
+  await page.getByRole('button', { name: 'Start test stream' }).click();
+  await expect(page.locator('#engine')).toHaveText(/ · WebRTC$/, { timeout: 30000 });
+  const metrics = async () => JSON.parse(await page.locator('#timing-status').getAttribute('data-metrics'));
+  await expect.poll(async () => (await metrics()).rtcAbandoned, { timeout: 60000 }).toBeGreaterThan(2);
+  const lossy = await metrics();
+  expect(lossy.rtcKeyframeRequests).toBeGreaterThan(0);
+  expect(lossy.videoTransport).toBe('webrtc');
+  const frames = lossy.totalFrames;
+  await expect.poll(async () => (await metrics()).totalFrames, { timeout: 30000 }).toBeGreaterThan(frames + 120);
+  expect((await metrics()).videoAgeMs).toBeLessThan(1500);
+  await page.locator('#stop').click();
+});
+
+test('rehearsed loss above one fragment in two is refused even where tests may ask for it', async ({ page }) => {
+  const headers = await signedIn(page);
+  const response = await page.request.post('/api/software/tickets', { headers, data: { demo: true, videoCodec: 'h264', transport: 'webrtc', testDropPercent: 80 } });
+  expect(response.status()).toBe(400);
+});

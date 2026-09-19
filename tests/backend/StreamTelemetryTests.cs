@@ -15,5 +15,7 @@ static class StreamTelemetryTests
         check(events.Count == 163 && received == StreamTelemetry.SampleLimit + 25 && lastAt == now.AddSeconds(StreamTelemetry.SampleLimit + 24), "events accumulate up to their limit and counters track every message");
         var summary = StreamTelemetry.Summary(JsonDocument.Parse("{\"t\":5000,\"fps\":59.9,\"consoleFps\":60,\"rtt\":4.2}").RootElement);
         check(summary.StartsWith("t=5000 fps=59.9 consoleFps=60 display=- displayMax=- ") && summary.Contains("rtt=4.2") && summary.Contains(" rebuilt=- "), "the log summary names each field and marks missing ones");
+        var channel = StreamTelemetry.Summary(JsonDocument.Parse("{\"transport\":\"webrtc\",\"abandoned\":2,\"rtcKeyframes\":1,\"senderSkipped\":5,\"pairRtt\":44}").RootElement);
+        check(channel.Contains(" transport=webrtc abandoned=2 rtcKeyframes=1 senderSkipped=5 pairRtt=44 "), "the log summary shows the video transport and what it lost, so a session can be followed over SSH");
     }
 }

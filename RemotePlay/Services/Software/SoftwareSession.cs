@@ -37,7 +37,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         active.Set(published);
         var input = new SoftwareInputRouter(controller, null, initializing: true);
         // Video starts on the WebSocket either way; an offer from the browser only adds a channel it may move to.
-        using var rtc = grant.Transport == "webrtc" ? new RtcVideoLink(RtcOptions.FromEnvironment(), logger) : null;
+        using var rtc = grant.Transport == "webrtc" ? new RtcVideoLink(RtcOptions.FromEnvironment(), logger, grant.TestDropPercent) : null;
         if (rtc != null) input.RtcOffer = sdp => rtc.AnswerAsync(sdp, socket, sendGate, ct);
         var telemetryCount = 0;
         input.Telemetry = message =>
@@ -121,7 +121,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct, sendGate: sendGate);
             await input.BindSessionAsync(sessionId, ct);
             published.Input = input;
-            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, rtc, grant.BitrateKbps, () => input.RequestKeyframe?.Invoke() ?? Task.CompletedTask, ct) : transcoder!.SendAsync(socket, ct, sendGate);
+            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, rtc, published, grant.BitrateKbps, () => input.RequestKeyframe?.Invoke() ?? Task.CompletedTask, ct) : transcoder!.SendAsync(socket, ct, sendGate);
             var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
             if (stream != null) { _ = SendConsoleStatsAsync(socket, stream, receiver, published, sendGate, ct); _ = SendRumbleAsync(socket, stream, published, sendGate, ct); }
             workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
@@ -231,7 +231,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 last = new { type = "console-stats", lost = pipeline.VideoLost, timeoutDropped = pipeline.VideoTimeoutDropped,
                     dropped = snapshot.TotalDroppedFrames, recovered = snapshot.TotalRecoveredFrames, frozen = snapshot.TotalFrozenFrames,
                     idr = pipeline.TotalIdrRequests, fecFailures = pipeline.FecFailures, pending = pipeline.PendingPackets,
-                    consoleFps, consoleMbps = Math.Round(snapshot.MeasuredBitrateMbps, 1), rumble = published.RumblePackets };
+                    consoleFps, consoleMbps = Math.Round(snapshot.MeasuredBitrateMbps, 1), rumble = published.RumblePackets, rtcSkipped = published.VideoSkipped };
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(1));
                 await sendGate.WaitAsync(timeout.Token);
@@ -244,7 +244,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         finally { if (last != null) logger.LogInformation("Console stream summary {Summary}", JsonSerializer.Serialize(last)); }
     }
 
-    private async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, RtcVideoLink? rtc, int bitrateKbps,
+    private async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, RtcVideoLink? rtc, ActiveSoftwareStream published, int bitrateKbps,
         Func<Task> requestKeyframe, CancellationToken ct)
     {
         var route = new VideoTransportSwitch(bitrateKbps);
@@ -264,6 +264,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 reason = announce == "websocket" ? "The WebRTC channel closed." : null }, ct, sendGate);
             if (announce != null) logger.LogInformation("Video now travels over {Transport}, from frame {Frame}", announce == "webrtc" ? "WebRTC" : "the WebSocket", frameId + (announce == "webrtc" ? 1u : 0u));
             if (route.NeedsKeyframe && (askedAt is null || Environment.TickCount64 - askedAt >= 500)) { askedAt = Environment.TickCount64; await requestKeyframe(); }
+            published.VideoSkipped = route.Skipped;
             if (target == VideoRoute.Skip) continue;
             if (target == VideoRoute.DataChannel)
             {
