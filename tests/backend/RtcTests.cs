@@ -61,6 +61,26 @@ static class RtcTests
         route.SendFailed();
         check(route.Next(false, true) == (VideoRoute.Skip, "websocket") && route.NeedsKeyframe, "a failed send is treated like a closed channel even while it still reads open");
 
+        // Sender backlog: 6 Mbps allows 187,500 buffered bytes, a quarter of a second, before video is given up.
+        var backlog = new VideoTransportSwitch(bitrateKbps: 6000);
+        check(backlog.BacklogLimit == 192 * 1024 && new VideoTransportSwitch(bitrateKbps: 30000).BacklogLimit == 937_500,
+            "the backlog limit is a quarter second of the bitrate, and never less than 192 KiB so one keyframe cannot trip it");
+        backlog.Next(true, true);
+        check(backlog.Next(false, true, buffered: 150_000) == (VideoRoute.DataChannel, null) && backlog.Skipped == 0,
+            "a keyframe still draining from the send buffer does not count as a backlog");
+        check(backlog.Next(false, true, buffered: 200_000) == (VideoRoute.Skip, null) && backlog.NeedsKeyframe && backlog.Skipped == 1,
+            "past the limit the unit is given up instead of queued, and a keyframe is wanted");
+        check(backlog.Next(false, true, buffered: 0) == (VideoRoute.Skip, null) && backlog.Skipped == 2,
+            "deltas stay withheld after the backlog clears: the frames they build on were never sent");
+        check(backlog.Next(true, true, buffered: 120_000) == (VideoRoute.Skip, null) && backlog.NeedsKeyframe && backlog.Skipped == 3,
+            "a keyframe that arrives while the buffer is still well filled would only queue behind it, so it is skipped too");
+        check(backlog.Next(true, true, buffered: 40_000) == (VideoRoute.DataChannel, null) && !backlog.NeedsKeyframe &&
+            backlog.Next(false, true, buffered: 60_000) == (VideoRoute.DataChannel, null) && backlog.Skipped == 3,
+            "video resumes on the channel, unannounced, at the first keyframe that finds the buffer nearly empty");
+        backlog.Next(false, true, buffered: 500_000);
+        check(backlog.Next(false, false) == (VideoRoute.Skip, "websocket") && backlog.Next(true, false) == (VideoRoute.WebSocket, null),
+            "a channel that closes during a backlog still falls back to the WebSocket at the next keyframe");
+
         var options = RtcOptions.Parse("18444", " 203.0.113.7, play.example.test ,", "fallback.example.test");
         check(options.Port == 18444 && options.Advertise.SequenceEqual(new[] { "203.0.113.7", "play.example.test" }), "WEBRTC_PORT and WEBRTC_PUBLIC_ADDRESS are read; the domain is not needed when addresses are given");
         options = RtcOptions.Parse(null, null, "play.example.test");

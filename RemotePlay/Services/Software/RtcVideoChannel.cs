@@ -76,22 +76,37 @@ public enum VideoRoute { WebSocket, DataChannel, Skip }
 
 /// <summary>Decides, unit by unit, which transport carries video. Transport only changes at a keyframe, because frames sent on the
 /// data channel may never have arrived and a delta frame that follows them cannot be decoded.</summary>
-public sealed class VideoTransportSwitch
+public sealed class VideoTransportSwitch(int bitrateKbps = 10000)
 {
     private bool onChannel, failed;
+    /// <summary>Send-buffer bytes beyond which video is given up rather than queued: a quarter second of the stream, and never
+    /// so little that one keyframe draining through a slow link looks like a backlog.</summary>
+    public int BacklogLimit { get; } = Math.Max(192 * 1024, bitrateKbps * 1000 / 8 / 4);
+    /// <summary>The channel's buffer passed the limit and video is being skipped until a keyframe finds it nearly empty.</summary>
+    public bool Behind { get; private set; }
+    public long Skipped { get; private set; }
     /// <summary>Video is being withheld until a keyframe; the caller asks the console for one.</summary>
     public bool NeedsKeyframe { get; private set; }
 
     public void SendFailed() => failed = true;
 
     /// <returns>The route for this unit, and the transport to announce to the browser when it just changed.</returns>
-    public (VideoRoute Route, string? Announce) Next(bool key, bool channelOpen)
+    public (VideoRoute Route, string? Announce) Next(bool key, bool channelOpen, int buffered = 0)
     {
         string? announce = null;
-        if (onChannel && (!channelOpen || failed)) { onChannel = false; NeedsKeyframe = true; announce = "websocket"; }
+        if (onChannel && (!channelOpen || failed)) { onChannel = false; Behind = false; NeedsKeyframe = true; announce = "websocket"; }
         if (!channelOpen) failed = false;
         if (!onChannel && channelOpen && !failed && key) { onChannel = true; NeedsKeyframe = false; return (VideoRoute.DataChannel, "webrtc"); }
-        if (onChannel) return (VideoRoute.DataChannel, null);
+        if (onChannel)
+        {
+            // A data channel queues what the link cannot take, exactly as TCP does; late video is worth nothing, so it is
+            // dropped here and the picture restarts from a keyframe once the queue has drained.
+            if (!Behind && buffered > BacklogLimit) { Behind = true; NeedsKeyframe = true; }
+            else if (Behind && key && buffered <= BacklogLimit / 4) { Behind = false; NeedsKeyframe = false; }
+            if (!Behind) return (VideoRoute.DataChannel, null);
+            Skipped++;
+            return (VideoRoute.Skip, null);
+        }
         if (NeedsKeyframe && !key) return (VideoRoute.Skip, announce);
         NeedsKeyframe = false;
         return (VideoRoute.WebSocket, announce);

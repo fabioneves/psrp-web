@@ -24,12 +24,20 @@ internal static class LibDataChannel
     [StructLayout(LayoutKind.Sequential)]
     public struct DataChannelInit { public Reliability Reliability; public IntPtr Protocol; public byte Negotiated, ManualStream; public ushort Stream; }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SctpSettings
+    {
+        public int RecvBufferSize, SendBufferSize, MaxChunksOnQueue, InitialCongestionWindow, MaxBurst, CongestionControlModule,
+            DelayedSackTimeMs, MinRetransmitTimeoutMs, MaxRetransmitTimeoutMs, InitialRetransmitTimeoutMs, MaxRetransmitAttempts, HeartbeatIntervalMs;
+    }
+
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void StateCallback(int id, int state, IntPtr user);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void ChannelCallback(int pc, int dc, IntPtr user);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void IdCallback(int id, IntPtr user);
     [UnmanagedFunctionPointer(CallingConvention.Cdecl)] public delegate void MessageCallback(int id, IntPtr message, int size, IntPtr user);
 
     [DllImport(Library)] public static extern void rtcInitLogger(int level, IntPtr callback);
+    [DllImport(Library)] public static extern int rtcSetSctpSettings(in SctpSettings settings);
     [DllImport(Library)] public static extern void rtcSetUserPointer(int id, IntPtr user);
     [DllImport(Library)] public static extern int rtcCreatePeerConnection(in Configuration configuration);
     [DllImport(Library)] public static extern int rtcDeletePeerConnection(int pc);

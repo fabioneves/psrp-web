@@ -63,9 +63,10 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 
 ### Phase 3: give up what is late, fall back when it breaks
 
-- [ ] **8. Sender backlog skipping.**
+- [x] **8. Sender backlog skipping.**
   - Accept: with the channel's buffered amount above the threshold the server skips units until a keyframe and requests one at most every 500 ms; skipped units are counted.
   - Verify: backend test with a channel double whose buffer fills and drains.
+  - Built 2026-09-19 with a byte limit instead of "anything buffered" (see spec: one keyframe must pass). Skipped units are counted on the switch and logged when skipping starts and ends; putting the count into telemetry is part of task 11. Only the decision logic is tested; nothing here has met a real backlog yet (task 13).
   - Depends: 6. Files: `RtcVideoChannel.cs`, `SoftwareSession.cs`, `StreamTelemetry.cs`, `tests/backend/RtcTests.cs`. Size: S.
 - [ ] **9. Fallback when the channel never opens.**
   - Accept: not open within 5 s → video stays on the WebSocket, playback within 6 s, label and diagnostics give the reason.

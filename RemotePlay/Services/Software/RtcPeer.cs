@@ -7,7 +7,16 @@ namespace RemotePlay.Services.Software;
 /// <summary>One libdatachannel peer connection with a single data channel, created here or by the remote side.</summary>
 public sealed class RtcPeer : IDisposable
 {
-    public static bool Available { get; } = NativeLibrary.TryLoad("datachannel", typeof(RtcPeer).Assembly, null, out _);
+    public static bool Available { get; } = Load();
+
+    private static bool Load()
+    {
+        if (!NativeLibrary.TryLoad("datachannel", typeof(RtcPeer).Assembly, null, out _)) return false;
+        // The buffered amount does not count what already sits in the SCTP stack's own send buffer, 1 MiB by default,
+        // which hid a backlog for over a second in the spike; with 128 KiB it showed after a third of one.
+        rtcSetSctpSettings(new SctpSettings { SendBufferSize = 128 * 1024 });
+        return true;
+    }
 
     // Native threads call these for the life of the process, so the delegates must never be collected.
     private static readonly StateCallback Gathering = (_, state, user) => { if (state == GatheringComplete) From(user)?.gathered.TrySetResult(); };

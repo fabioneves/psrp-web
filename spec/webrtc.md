@@ -168,16 +168,21 @@ take, so an unreliable channel alone would reproduce the 2.4 s excursion in the
 TCP bytes.
 
 - Before fragmenting an access unit the server reads the channel's buffered
-  amount. When it is above zero the server skips the unit, keeps skipping until
-  a keyframe, and asks the console for one through the existing keyframe path,
-  at most once per 500 ms.
+  amount. Above a limit of a quarter second of the ticket's bitrate, and never
+  less than 192 KiB, it skips the unit and keeps skipping until a keyframe
+  arrives that finds the buffer down to a quarter of the limit, asking the
+  console for one through the existing keyframe path at most once per 500 ms.
+  Frame ids are not used up by skipped units, so the browser sees no gap.
+- The limit must let one keyframe through. A 150 KB keyframe legitimately sits
+  in the buffer for 100–200 ms on a 6–10 Mbps link; "skip on anything
+  buffered", as this section first said, would have skipped the frames behind
+  every keyframe, asked for another, and looped.
 - The buffered amount does not count what already sits in the SCTP stack's own
   send buffer, 1 MiB by default, which at 10 Mbps is 0.8 s of video: in the
-  spike the number first moved 1.1 s into a rate dip. The server therefore sets
-  the SCTP send buffer to 128 KiB (about 100 ms at 10 Mbps; first movement
-  after 0.36 s in the same dip, no cost at 30 Mbps on a clean link), and any
-  buffered amount above zero already means at least that much is waiting.
-  Task 8 settles the exact size against the dip scenario.
+  spike the number first moved 1.1 s into a rate dip. The server sets that
+  buffer to 128 KiB (first movement after 0.36 s in the same dip, no cost at
+  30 Mbps on a clean link). Both numbers are constants; task 13's rate-dip run
+  is what confirms or corrects them.
 - Skipped units and the keyframe requests they cause are counted in telemetry
   separately from receiver-side abandonment.
 
