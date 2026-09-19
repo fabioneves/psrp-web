@@ -125,6 +125,14 @@ the fallback; task 8 sets a 128 KiB SCTP send buffer and skips on any
 buffered amount; task 13 waits on spec Open Question 5, because criterion 2
 as written is beyond any loss-based transport.
 
+### Decided by the user, 2026-09-19 (checkpoint A)
+
+libdatachannel; messages of up to 64 KiB instead of 1100-byte fragments;
+criterion 2 replaced by a rate-dip and a 0.1 % loss scenario; deploy the
+branch so the probe's worker check can run in the car. Whether the WebSocket
+path gets backlog skipping was listed beside these but not among the four
+questions asked, so it stays open.
+
 ### Open questions
 
 1. Should the WebSocket path get the same backlog skipping? It is the fallback

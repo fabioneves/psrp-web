@@ -30,11 +30,11 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Verify: `npm run test:unit`, `npx playwright test tests/browser/probe.spec.js`; run in the car and record the result in the spec.
   - Depends: none. Files: `web/probe.js`, `web/probe-results.js`, `tests/probe-results.test.mjs`, `tests/browser/probe.spec.js`. Size: S.
   - State 2026-09-19: built and tested; desktop Chrome 150 hands the channel over (200 of 200). Open until it has run in the car, which needs a deploy.
-- [ ] **Checkpoint A:** library chosen by the user (spike leaves only libdatachannel); spec Open Questions 5 (criterion 2) and 6 (fragment size) decided; car probe result recorded.
+- [ ] **Checkpoint A:** done 2026-09-19 except the car: the user chose libdatachannel, 64 KiB messages and the replacement for criterion 2. Open: the probe's worker hand-off result from the car (deployed for it).
 
 ### Phase 1: pure modules
 
-- [x] **3. FrameFragmenter.** Access unit → fragments of ≤ 1100 bytes with `frameId, index, count`.
+- [x] **3. FrameFragmenter.** Access unit → messages of ≤ 64 KiB with `frameId, index, count` (first built at 1100 bytes; changed after the spike).
   - Accept: round trip for 1 byte, exactly 1100 bytes and 2 MiB; `count` overflow rejected.
   - Verify: `docker build --target test -t player-one-tests .`
   - Depends: none. Files: `RemotePlay/Services/Software/FrameFragmenter.cs`, `tests/backend/RtcTests.cs`, `tests/backend/Program.cs`. Size: S.
@@ -86,7 +86,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Verify: fresh `docker compose up --build -d`, WebRTC session from another LAN machine.
   - Depends: 11. Files: `compose.yaml`, `compose.lxc.yaml`, `deploy/proxmox/install.sh`, `docs/architecture.md`, `README.md`. Size: M.
 - [ ] **13. Emulated-link comparison.**
-  - Accept: under 80 ms RTT + 2 % loss at 10 Mbps for 5 minutes WebRTC keeps `transportP95` below RTT/2 + 40 ms and WebSocket does not (criterion 2); under a rate dip to 4 Mbps for 30 s, the shape of the 2026-09-19 capture, WebRTC video age recovers within 1 s of the dip ending; 1080p at 30 Mbps holds 60 fps on the LAN (criterion 3).
+  - Accept: criterion 2 as replaced on 2026-09-19: at 80 ms round trip and 10 Mbps, through a 30 s dip to 4 Mbit/s WebRTC video age is back under 150 ms within 1 s of the dip ending and WebSocket is not, and at 0.1 % loss for 5 minutes WebRTC keeps `transportP95` below RTT/2 + 40 ms; 1080p at 30 Mbps holds 60 fps on the LAN (criterion 3).
   - Verify: `tc netem` on the isolated instance; numbers in the commit message and `docs/validation.md`.
   - Depends: 11. Size: S.
 - [ ] **14. Car session against the baseline.**

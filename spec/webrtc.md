@@ -1,6 +1,6 @@
 # Spec: WebRTC video transport
 
-Status: **approved for planning 2026-09-19.** The car-session captures the
+Status: **approved 2026-09-19, in build.** The car-session captures the
 [Decision gate](#decision-gate) asked for exist and point at transport, not
 decoding. Plan and tasks: `tasks/plan.md`, `tasks/todo.md`.
 
@@ -56,9 +56,9 @@ What changes and what does not:
 - Server: .NET 10, ASP.NET Core, existing `RemotePlay/Services/Software/*`.
   New dependency: a WebRTC stack with DTLS + SCTP data channels. Candidates
   were SIPSorcery (managed) and libdatachannel (C API, usrsctp + libjuice).
-  **The spike of 2026-09-19 leaves only libdatachannel v0.24.5**; the choice
-  still needs the user's word (Boundaries: Ask first). See
-  [Spike result](#spike-result-2026-09-19).
+  **libdatachannel v0.24.5, chosen by the user on 2026-09-19** after the spike
+  left it as the only candidate; bound by P/Invoke on its C API and built in
+  the `psn-build` image stage. See [Spike result](#spike-result-2026-09-19).
 - Browser: plain ES modules in `web/`, no bundler dependencies.
   `RTCPeerConnection` + `RTCDataChannel` (`ordered: false, maxRetransmits: 0`).
 - Tests: `node --test`, Playwright 1.58.2 with system Chrome, C# console test
@@ -130,20 +130,28 @@ docs/architecture.md, README.md                wire format, setup, troubleshooti
 
 ### Fragmentation and loss
 
-- Each access unit (already wrapped in its `RPM1` envelope) is split into
-  fragments of at most 1100 bytes so one lost datagram costs one fragment:
-  `uint32 frameId, uint16 index, uint16 count`, little-endian, then payload.
+- Each access unit (already wrapped in its `RPM1` envelope) travels as
+  data-channel messages of at most 64 KiB: `uint32 frameId, uint16 index,
+  uint16 count`, little-endian, then payload. A delta frame is one message and
+  only keyframes are split; SCTP cuts a message into datagrams itself. Smaller
+  fragments would save nothing, because a frame missing any part is abandoned
+  whole, and each message costs the browser an event (decided 2026-09-19 on
+  the spike's numbers; the first draft said 1100 bytes).
 - The reassembler delivers a frame when all fragments arrived. It abandons a
-  frame when a newer frame completes first or when it is older than two frame
-  intervals. After abandoning a frame the browser discards everything until
+  frame when a newer frame completes first or when no fragment of it has
+  arrived for two frame intervals. The clock restarts with every fragment: a
+  150 KB keyframe needs more than two intervals to cross even a fast link, and
+  timing from its first fragment would drop every keyframe and ask for another
+  without end. After abandoning a frame the browser discards everything until
   the next keyframe and sends the existing `{"type":"keyframe"}` message, at
   most once per 500 ms. The server side already handles it
   (`SoftwareSession.cs:113`).
 - No retransmission in this version. If the spike shows keyframe recovery is
   too expensive on a 1–2 % loss link, `maxPacketLifeTime` of about one round
   trip is the first thing to try; this spec is updated before that is built.
-- Bounds: at most 4 frames in reassembly, 2 MiB per frame (same limit as the
-  receiver), fragments for unknown or abandoned frames are dropped.
+- Bounds: at most 4 frames in reassembly, 2 MiB per frame plus its envelope
+  (same limit as the receiver, 33 messages), enforced by the sender too;
+  fragments for unknown or abandoned frames are dropped.
 
 ### Sender backlog
 
@@ -250,9 +258,13 @@ export function createReassembler({ frameIntervalMs, now = () => performance.now
 1. With Transport = WebRTC on a clean LAN, the test stream and a real PS5
    session play at the same frame rate as WebSocket, and median media-ready to
    canvas age is no worse than WebSocket's by more than 5 ms.
-2. Under emulated 80 ms RTT and 2 % loss at 10 Mbps, WebRTC keeps
-   `transportP95` below RTT/2 + 40 ms for a 5-minute run while WebSocket in
-   the same conditions does not. Input-to-picture delay does not drift upward.
+2. On an emulated link with 80 ms round trip, both at 10 Mbps:
+   (a) through a 30 s dip to 4 Mbit/s, WebRTC video age is back under 150 ms
+   within 1 s of the dip ending while WebSocket in the same run is not;
+   (b) at 0.1 % loss for 5 minutes, WebRTC keeps `transportP95` below
+   RTT/2 + 40 ms and input-to-picture delay does not drift upward.
+   (Replaced 2026-09-19: the first draft asked for 10 Mbps at 2 % loss, which
+   no loss-based transport delivers; see Spike result.)
 3. 1080p at 30 Mbps sustains 60 fps over the data channel on the LAN. A
    library that cannot is out, whatever its latency.
 4. With UDP blocked, playback starts within 6 s on WebSocket with no user
@@ -372,18 +384,7 @@ unless the sender drops it. See [Sender backlog](#sender-backlog).
 4. Should the WebSocket path get the same [sender backlog](#sender-backlog)
    skipping? It stays the fallback wherever UDP is blocked and showed the
    2.4 s excursion on 2026-09-19.
-5. Success criterion 2 cannot be met as written (see
-   [Spike result](#spike-result-2026-09-19)). Proposed replacement: (a) the
-   rate-dip scenario, 10 Mbps with 30 s at 4 Mbit/s and 80 ms round trip, where
-   WebRTC video age returns under 150 ms within 1 s of the dip ending and
-   WebSocket does not; (b) 0.1 % loss at 80 ms and 10 Mbps for 5 minutes, where
-   WebRTC keeps `transportP95` below RTT/2 + 40 ms. Not yet decided.
-6. Fragment size. The 1100-byte fragment was chosen so a lost datagram costs
-   one fragment, but with no retransmission a frame missing any fragment is
-   abandoned whole, so small fragments save nothing: a 16 KiB frame is lost
-   26 % of the time at 2 % datagram loss whether it travels as one message or
-   as fifteen. They do cost the browser about three times the CPU, and the
-   Tesla project's stalls scaled with message count. Proposed: fragments of up
-   to 64 KiB, so a delta frame is one message and only keyframes are split;
-   `MaxPayload` / `MAX_PAYLOAD` and the tests' frame sizes change, nothing
-   else. Not yet decided.
+5. ~~Success criterion 2 cannot be met as written.~~ **Decided 2026-09-19:**
+   replaced by the rate-dip and 0.1 % loss scenarios now in criterion 2.
+6. ~~Fragment size.~~ **Decided 2026-09-19:** messages of up to 64 KiB; see
+   Fragmentation and loss.

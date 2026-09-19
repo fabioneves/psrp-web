@@ -1,6 +1,7 @@
 // Wire format of one data-channel message: uint32 frameId, uint16 index, uint16 count (little-endian), then payload.
-export const HEADER_SIZE = 8, MAX_PAYLOAD = 1100;
-const MAX_FRAME_BYTES = 2 * 1024 * 1024, MAX_PENDING = 4, KEYFRAME_REQUEST_MS = 500;
+// A message is 64 KiB at most: a delta frame arrives as one event, and only keyframes are split.
+export const HEADER_SIZE = 8, MAX_PAYLOAD = 64 * 1024 - HEADER_SIZE;
+const MAX_FRAME_BYTES = 2 * 1024 * 1024 + 32, MAX_PENDING = 4, KEYFRAME_REQUEST_MS = 500;
 const MAX_FRAGMENTS = Math.ceil(MAX_FRAME_BYTES / MAX_PAYLOAD);
 
 export function createReassembler({ frameIntervalMs, isKey, requestKeyframe, now = () => performance.now() }) {
@@ -36,6 +37,8 @@ export function createReassembler({ frameIntervalMs, isKey, requestKeyframe, now
       if (pending.size > MAX_PENDING && abandon([Math.min(...pending.keys())])) askKeyframe();
     }
     if (entry.count !== count || entry.parts[index]) return null;
+    // A large keyframe takes many frame intervals to cross the link; only one that stopped arriving is given up.
+    entry.since = now();
     entry.parts[index] = bytes.subarray(HEADER_SIZE);
     entry.bytes += bytes.length - HEADER_SIZE;
     if (++entry.received < count) return null;

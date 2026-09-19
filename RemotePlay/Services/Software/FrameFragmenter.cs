@@ -5,14 +5,16 @@ namespace RemotePlay.Services.Software;
 /// <summary>Splits one access unit into data-channel messages: uint32 frameId, uint16 index, uint16 count (little-endian), then payload.</summary>
 public static class FrameFragmenter
 {
-    // Small enough that a fragment plus SCTP, DTLS and UDP headers stays under a 1280-byte path, so one lost datagram costs one fragment.
-    public const int MaxPayload = 1100, HeaderSize = 8;
+    // With no retransmission a frame missing any part is abandoned whole, so small fragments save nothing and cost the browser
+    // one event each. A 64 KiB message carries a delta frame in one piece; SCTP splits it into datagrams itself.
+    public const int HeaderSize = 8, MaxPayload = 64 * 1024 - HeaderSize;
+    // The 2 MiB the receiver allows an access unit, plus its envelope; web/frame-reassembler.js refuses more.
+    public const int MaxPacketBytes = 2 * 1024 * 1024 + MediaPacket.HeaderSize;
 
     public static IEnumerable<byte[]> Split(uint frameId, ReadOnlyMemory<byte> packet)
     {
-        var count = (packet.Length + MaxPayload - 1) / MaxPayload;
-        if (count is 0 or > ushort.MaxValue) throw new ArgumentException($"An access unit of {packet.Length} bytes cannot be fragmented.", nameof(packet));
-        return Fragments(frameId, packet, count);
+        if (packet.Length is 0 or > MaxPacketBytes) throw new ArgumentException($"An access unit of {packet.Length} bytes cannot be fragmented.", nameof(packet));
+        return Fragments(frameId, packet, (packet.Length + MaxPayload - 1) / MaxPayload);
     }
 
     private static IEnumerable<byte[]> Fragments(uint frameId, ReadOnlyMemory<byte> packet, int count)
