@@ -21,7 +21,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 
 ### Phase 0: decide
 
-- [ ] **1. Library spike.** SIPSorcery and libdatachannel each send 10 and 30 Mbps of 1100-byte unreliable messages to Chrome on the LAN, from inside the Docker image.
+- [x] **1. Library spike.** SIPSorcery and libdatachannel each send 10 and 30 Mbps of 1100-byte unreliable messages to Chrome on the LAN, from inside the Docker image.
   - Accept: per-message delay (median, p95, max), rate, loss and CPU recorded for both; whether each exposes the channel's buffered amount; both channel-to-worker modes timed in Chrome. Added 2026-09-19: proof that `maxRetransmits: 0` really abandons lost messages under 2 % induced loss; the same runs with 16 KiB and 64 KiB messages plus the receiving Chrome's CPU, to choose the fragment size; a complete non-trickle answer on a fixed port with an advertised public address.
   - Verify: numbers written into spec Tech Stack; spike branch not merged.
   - Depends: none. Files: `spikes/webrtc/*`, `spec/webrtc.md`. Size: M.
@@ -30,7 +30,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Verify: `npm run test:unit`, `npx playwright test tests/browser/probe.spec.js`; run in the car and record the result in the spec.
   - Depends: none. Files: `web/probe.js`, `web/probe-results.js`, `tests/probe-results.test.mjs`, `tests/browser/probe.spec.js`. Size: S.
   - State 2026-09-19: built and tested; desktop Chrome 150 hands the channel over (200 of 200). Open until it has run in the car, which needs a deploy.
-- [ ] **Checkpoint A:** library chosen by the user; car probe result recorded.
+- [ ] **Checkpoint A:** library chosen by the user (spike leaves only libdatachannel); spec Open Questions 5 (criterion 2) and 6 (fragment size) decided; car probe result recorded.
 
 ### Phase 1: pure modules
 

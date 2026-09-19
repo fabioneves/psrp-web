@@ -113,6 +113,18 @@ about it.
 - Build proceeds: tasks 1–4 first, stopping at checkpoint A for the library
   choice and the car's probe result.
 
+### Spike outcome, 2026-09-19
+
+Full table in the spec (Spike result). libdatachannel is the only candidate
+left: SIPSorcery delivered 1.4–2.7 Mbps of 10 offered and has no partial
+reliability. Consequences for the tasks: task 6 binds libdatachannel's C API
+by P/Invoke and adds a build stage to the `psn-build` image, signals with one
+offer and one answer, and adds the public address as a candidate line in the
+answer; task 7 transfers the channel to the worker and keeps forwarding as
+the fallback; task 8 sets a 128 KiB SCTP send buffer and skips on any
+buffered amount; task 13 waits on spec Open Question 5, because criterion 2
+as written is beyond any loss-based transport.
+
 ### Open questions
 
 1. Should the WebSocket path get the same backlog skipping? It is the fallback

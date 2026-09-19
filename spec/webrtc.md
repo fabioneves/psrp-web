@@ -54,11 +54,11 @@ What changes and what does not:
 ## Tech Stack
 
 - Server: .NET 10, ASP.NET Core, existing `RemotePlay/Services/Software/*`.
-  New dependency: a WebRTC stack with DTLS + SCTP data channels. Candidates are
-  SIPSorcery (managed; upstream used 8.0.23 before this fork removed it in
-  `22c9119`) and libdatachannel through the existing `native/` CMake build.
-  The rule is decided: use whichever gives the lowest added latency. The spike
-  in the build order measures that; it is not chosen up front.
+  New dependency: a WebRTC stack with DTLS + SCTP data channels. Candidates
+  were SIPSorcery (managed) and libdatachannel (C API, usrsctp + libjuice).
+  **The spike of 2026-09-19 leaves only libdatachannel v0.24.5**; the choice
+  still needs the user's word (Boundaries: Ask first). See
+  [Spike result](#spike-result-2026-09-19).
 - Browser: plain ES modules in `web/`, no bundler dependencies.
   `RTCPeerConnection` + `RTCDataChannel` (`ordered: false, maxRetransmits: 0`).
 - Tests: `node --test`, Playwright 1.58.2 with system Chrome, C# console test
@@ -153,12 +153,18 @@ take, so an unreliable channel alone would reproduce the 2.4 s excursion in the
 TCP bytes.
 
 - Before fragmenting an access unit the server reads the channel's buffered
-  amount. Above a threshold worth about 100 ms of the ticket's bitrate it skips
-  the unit, keeps skipping until a keyframe, and asks the console for one
-  through the existing keyframe path, at most once per 500 ms.
+  amount. When it is above zero the server skips the unit, keeps skipping until
+  a keyframe, and asks the console for one through the existing keyframe path,
+  at most once per 500 ms.
+- The buffered amount does not count what already sits in the SCTP stack's own
+  send buffer, 1 MiB by default, which at 10 Mbps is 0.8 s of video: in the
+  spike the number first moved 1.1 s into a rate dip. The server therefore sets
+  the SCTP send buffer to 128 KiB (about 100 ms at 10 Mbps; first movement
+  after 0.36 s in the same dip, no cost at 30 Mbps on a clean link), and any
+  buffered amount above zero already means at least that much is waiting.
+  Task 8 settles the exact size against the dip scenario.
 - Skipped units and the keyframe requests they cause are counted in telemetry
   separately from receiver-side abandonment.
-- The threshold is a constant confirmed by the spike, not a setting.
 
 ### Worker
 
@@ -260,6 +266,52 @@ export function createReassembler({ frameIntervalMs, now = () => performance.now
 
 Numbers in 2 and 6 are provisional until the baseline capture exists.
 
+## Spike result, 2026-09-19
+
+Branch `spike/webrtc` (`3b88d52`, not merged), 79 result files under
+`spikes/webrtc/results/`. Senders in Docker with host networking, receiver
+headless Chrome 150 on the same host, delay from a same-host clock comparison.
+1100-byte unreliable unordered messages unless stated.
+
+| | libdatachannel v0.24.5 | SIPSorcery 10.0.16 |
+|---|---|---|
+| 10 Mbps offered | 10.0 received, delay 0.1 / 0.4–0.7 / 7–14 ms (median / p95 / max), 6–7 % of a core, 15 MB | 1.4–2.7 received, delay p95 14–17 s, memory growing past 350 MB |
+| 30 Mbps offered | 30.0 received, 0.04–0.08 / 0.4–0.7 / 8–10 ms, 12–13 % | 1.4–2.2 received |
+| 60 Mbps offered | 60.0 received, 18 % | not run |
+| Gives up lost messages (`maxRetransmits: 0`) | Yes: under 2 % loss 1.9–2.0 % of messages missing and delay flat | **No**: no partial reliability in its SCTP; under the same loss nothing missing and delay p95 2.0 s |
+| Buffered amount | `rtcGetBufferedAmount`, follows a backlog up and down | present, but each read walks the whole queue (up to 5 ms) |
+| Fixed UDP port | `portRangeBegin = portRangeEnd`; extra public address only by adding a candidate line to the answer SDP | constructor argument, even ports only, so 8443 fails; public address through its API |
+| Cost | P/Invoke on its C API, no shim; one build stage in the existing `psn-build` image; 2.6 MB added to the runtime image | one package, about 11 MB |
+
+SIPSorcery fails criterion 3 and cannot give up late data at all, so the
+tie-break for managed code never applies.
+
+Other findings the design now depends on:
+
+- **Rate dip, the 2026-09-19 failure shape.** 10 Mbps with 5 s at 4 Mbit/s:
+  without sender skipping, delay reached 4.1 s during the dip, and was back
+  under 1 ms within 0.28 s of the dip ending, 1.7 % of messages abandoned.
+  The WebSocket in the car took 27 s to recover from the same shape.
+- **Loss caps the rate, in any library.** With 2 % loss and 40 ms round trip
+  the channel delivers about 4 Mbps whatever is offered, with all four of
+  usrsctp's congestion-control modules (1.7–3.9 Mbps). That is the loss-based
+  throughput limit and TCP obeys it too. **Success criterion 2 as written
+  (10 Mbps at 2 % loss and 80 ms) cannot be met by either transport.** The car
+  sustained 7.5 Mbps over TCP at about 100 ms, which puts its real loss rate
+  well under 0.1 %. See Open Question 5.
+- **Message size.** At 10 Mbps the receiving renderer used 9–10 % of a core
+  with 1100-byte messages (1136 a second), 4 % at 16 KiB, 3 % at 64 KiB, for
+  1–2 ms more delay on a clean link. Both sides advertise a 256 KiB maximum.
+  See Open Question 6.
+- **Worker.** Chrome 150 accepts a transferred `RTCDataChannel`; 68,182 of
+  68,182 messages arrived in the worker. With the main thread busy half the
+  time, a transferred channel kept p95 at 0.15 ms where forwarding through
+  the page rose to 7.3 ms. Transfer is the mode to build; forwarding stays
+  as the fallback the probe decides.
+- **Signaling.** Both libraries give a complete non-trickle answer on a fixed
+  port, and Chrome connected from a single offer holding one mDNS host
+  candidate, in 57 ms to libdatachannel. No candidate messages are needed.
+
 ## Decision gate
 
 Before planning, read a car-session capture (**Stream diagnostics → Send to
@@ -320,3 +372,18 @@ unless the sender drops it. See [Sender backlog](#sender-backlog).
 4. Should the WebSocket path get the same [sender backlog](#sender-backlog)
    skipping? It stays the fallback wherever UDP is blocked and showed the
    2.4 s excursion on 2026-09-19.
+5. Success criterion 2 cannot be met as written (see
+   [Spike result](#spike-result-2026-09-19)). Proposed replacement: (a) the
+   rate-dip scenario, 10 Mbps with 30 s at 4 Mbit/s and 80 ms round trip, where
+   WebRTC video age returns under 150 ms within 1 s of the dip ending and
+   WebSocket does not; (b) 0.1 % loss at 80 ms and 10 Mbps for 5 minutes, where
+   WebRTC keeps `transportP95` below RTT/2 + 40 ms. Not yet decided.
+6. Fragment size. The 1100-byte fragment was chosen so a lost datagram costs
+   one fragment, but with no retransmission a frame missing any fragment is
+   abandoned whole, so small fragments save nothing: a 16 KiB frame is lost
+   26 % of the time at 2 % datagram loss whether it travels as one message or
+   as fifteen. They do cost the browser about three times the CPU, and the
+   Tesla project's stalls scaled with message count. Proposed: fragments of up
+   to 64 KiB, so a delta frame is one message and only keyframes are split;
+   `MaxPayload` / `MAX_PAYLOAD` and the tests' frame sizes change, nothing
+   else. Not yet decided.
