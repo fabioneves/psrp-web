@@ -25,7 +25,6 @@ export async function startStream(canvas, url, report, videoCodec = 'mpeg1', har
   socket.binaryType = 'arraybuffer';
   const frameInfo = videoCodec === 'h265' ? h265Info : h264Info;
   const video = decoder && videoCodec !== 'mpeg1' ? createVideoSource({
-    frameIntervalMs: 1000 / (presentation.fps || 60),
     // The server opens a keyframe with a unit of parameter sets alone; the picture follows in the next unit.
     isKey(data) { const info = frameInfo(data.subarray(32)); return info.key || (!info.picture && info.parameters.length > 0); },
     requestKeyframe() { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'keyframe' })); },

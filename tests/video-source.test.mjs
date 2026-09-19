@@ -52,5 +52,5 @@ test('metrics name the transport in use and carry the reassembler counts', () =>
   const { source } = setup();
   source.fromChannel(message(1, true, 1));
   source.fromChannel(message(3, false, 2));
-  assert.deepEqual(source.metrics(), { transport: 'webrtc', fragments: 2, delivered: 1, abandoned: 1, discarded: 1, keyframeRequests: 1 });
+  assert.deepEqual(source.metrics(), { transport: 'webrtc', fragments: 2, delivered: 1, abandoned: 0, discarded: 0, keyframeRequests: 0 }, 'frame 2 may still be on its way');
 });

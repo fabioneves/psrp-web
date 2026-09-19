@@ -34,6 +34,8 @@ services:
       WEBRTC_PORT: ${WEBRTC_PORT:-8443}
       # Addresses or names browsers can reach this server on. Empty: the public name below, plus whatever the host itself has.
       WEBRTC_PUBLIC_ADDRESS: ${WEBRTC_PUBLIC_ADDRESS:-}
+      # Only where the router forwards a different outside port to WEBRTC_PORT.
+      WEBRTC_PUBLIC_PORT: ${WEBRTC_PUBLIC_PORT:-}
       REMOTE_PLAY_DOMAIN: ${REMOTE_PLAY_DOMAIN:-}
       # Browser tests only: lets a ticket ask for lost data-channel fragments.
       WEBRTC_TEST_DROP: ${WEBRTC_TEST_DROP:-}

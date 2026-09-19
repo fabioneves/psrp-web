@@ -25,7 +25,7 @@ function setup(options = {}) {
   const state = { time: 0, requests: 0 };
   const reassembler = createReassembler({ frameIntervalMs: 1000 / 60, isKey: data => data[0] === 1,
     requestKeyframe: () => state.requests++, now: () => state.time, ...options });
-  const feed = fragments => fragments.map(fragment => reassembler.push(fragment)).filter(Boolean);
+  const feed = fragments => fragments.flatMap(fragment => reassembler.push(fragment));
   return { state, reassembler, feed };
 }
 
@@ -49,51 +49,58 @@ test('reordered and duplicated fragments still deliver the frame once', () => {
   assert.equal(reassembler.metrics().delivered, 1);
 });
 
-test('a lost fragment abandons only that frame, then nothing is delivered until a keyframe', () => {
+test('a frame whose predecessor is late is held, and both are delivered in order when the retransmission arrives', () => {
   const { feed, reassembler, state } = setup();
-  assert.equal(feed(split(1, frame(true, MAX_PAYLOAD + 900))).length, 1);
-  const [first] = split(2, frame(false, MAX_PAYLOAD + 900));
+  feed(split(1, frame(true, 500)));
+  const [first, second] = split(2, frame(false, MAX_PAYLOAD + 900));
   assert.equal(feed([first]).length, 0);
-  assert.equal(feed(split(3, frame(false, MAX_PAYLOAD + 900))).length, 0, 'a delta after a lost frame would decode to garbage');
-  assert.equal(reassembler.metrics().abandoned, 1);
-  assert.equal(reassembler.metrics().discarded, 1);
-  assert.equal(state.requests, 1);
-  sameFrames(feed(split(4, frame(true, MAX_PAYLOAD + 900))), [frame(true, MAX_PAYLOAD + 900)]);
-  sameFrames(feed(split(5, frame(false, 500))), [frame(false, 500)]);
+  assert.equal(feed(split(3, frame(false, 600))).length, 0, 'frame 3 cannot be decoded before frame 2');
+  state.time = 120;
+  sameFrames(feed([second]), [frame(false, MAX_PAYLOAD + 900), frame(false, 600)]);
+  assert.deepEqual([reassembler.metrics().abandoned, reassembler.metrics().keyframeRequests, state.requests], [0, 0, 0]);
 });
 
-test('a frame that never arrived at all counts as lost', () => {
+test('a frame still missing after 300 ms is given up: a keyframe is asked for and nothing is delivered until it comes', () => {
   const { feed, reassembler, state } = setup();
   feed(split(1, frame(true, 500)));
-  assert.deepEqual(feed(split(3, frame(false, 500))), []);
+  assert.equal(feed(split(3, frame(false, 500))).length, 0);
+  state.time = 299;
+  assert.equal(feed(split(4, frame(false, 500))).length, 0);
+  assert.equal(state.requests, 0, 'still inside the time a retransmission may take');
+  state.time = 301;
+  assert.equal(feed(split(5, frame(false, 500))).length, 0, 'deltas after a lost frame would decode to garbage');
   assert.equal(reassembler.metrics().abandoned, 1);
+  assert.equal(reassembler.metrics().discarded, 3);
   assert.equal(state.requests, 1);
+  sameFrames(feed(split(6, frame(true, 700))), [frame(true, 700)]);
+  sameFrames(feed(split(7, frame(false, 500))), [frame(false, 500)]);
 });
 
-test('a keyframe after a gap is delivered without asking for another', () => {
-  const { feed, state } = setup();
+test('a keyframe ends the wait for anything older at once', () => {
+  const { feed, reassembler, state } = setup();
   feed(split(1, frame(true, 500)));
-  assert.equal(feed(split(9, frame(true, 500))).length, 1);
-  assert.equal(state.requests, 0);
+  feed(split(3, frame(false, 500)));
+  sameFrames(feed(split(4, frame(true, 500))), [frame(true, 500)]);
+  assert.equal(reassembler.metrics().abandoned, 1, 'frame 2 never came');
+  assert.equal(state.requests, 0, 'the keyframe is already here');
+  assert.equal(reassembler.pending, 0);
 });
 
-test('a keyframe that takes many frame intervals to arrive is delivered while its fragments keep coming', () => {
+test('a slow keyframe is not given up while its fragments keep coming', () => {
   const { feed, reassembler, state } = setup(), data = frame(true, MAX_PAYLOAD * 5);
-  const out = split(1, data).flatMap(fragment => { state.time += 30; return feed([fragment]); });
+  const out = split(1, data).flatMap(fragment => { state.time += 90; return feed([fragment]); });
   sameFrames(out, [data]);
   assert.equal(reassembler.metrics().abandoned, 0);
   assert.equal(state.requests, 0);
 });
 
-test('an incomplete frame that has been silent for two frame intervals is abandoned', () => {
+test('no more than 24 frames are held behind a missing one', () => {
   const { feed, reassembler, state } = setup();
   feed(split(1, frame(true, 500)));
-  const [first, second] = split(2, frame(false, MAX_PAYLOAD + 900));
-  feed([first]);
-  state.time = 34;
-  assert.equal(feed([second]).length, 0, 'the rest arrived too late');
+  for (let id = 3; id <= 27; id++) feed(split(id, frame(false, 500)));
+  assert.equal(state.requests, 1, 'the 25th held frame ends the wait');
   assert.equal(reassembler.metrics().abandoned, 1);
-  assert.equal(state.requests, 1);
+  assert.ok(reassembler.pending <= 24);
 });
 
 test('fragments of a delivered or abandoned frame are dropped', () => {
@@ -104,31 +111,22 @@ test('fragments of a delivered or abandoned frame are dropped', () => {
   assert.equal(reassembler.pending, 0);
 });
 
-test('keyframe requests are limited to one per 500 ms', () => {
+test('keyframe requests are limited to one a second, so a lost keyframe cannot start a storm', () => {
   const { feed, state } = setup();
   feed(split(1, frame(true, 500)));
   feed(split(3, frame(false, 500)));
-  feed(split(4, frame(false, 500)));
+  state.time = 301; feed(split(4, frame(false, 500)));
   assert.equal(state.requests, 1);
-  state.time = 499; feed(split(5, frame(false, 500)));
+  state.time = 1300; feed(split(5, frame(false, 500)));
   assert.equal(state.requests, 1);
-  state.time = 500; feed(split(6, frame(false, 500)));
+  state.time = 1301; feed(split(6, frame(false, 500)));
   assert.equal(state.requests, 2);
 });
-
 test('the first frame on a channel must be a keyframe', () => {
   const { feed, state } = setup();
   assert.deepEqual(feed(split(1, frame(false, 500))), []);
   assert.equal(state.requests, 1);
   assert.equal(feed(split(2, frame(true, 500))).length, 1);
-});
-
-test('at most four frames are held; the oldest gives way', () => {
-  const { feed, reassembler } = setup({ frameIntervalMs: 1000 });
-  feed(split(1, frame(true, 500)));
-  for (let id = 2; id <= 6; id++) feed([split(id, frame(false, MAX_PAYLOAD + 900))[0]]);
-  assert.equal(reassembler.pending, 4);
-  assert.equal(reassembler.metrics().abandoned, 1);
 });
 
 test('malformed and oversized fragments are ignored', () => {
@@ -138,22 +136,22 @@ test('malformed and oversized fragments are ignored', () => {
     view.setUint32(0, frameId, true); view.setUint16(4, index, true); view.setUint16(6, count, true);
     return fragment;
   };
-  assert.equal(reassembler.push(new Uint8Array(4)), null, 'shorter than a header');
-  assert.equal(reassembler.push(header(1, 0, 0)), null, 'no fragments');
-  assert.equal(reassembler.push(header(1, 2, 2)), null, 'index past the count');
-  assert.equal(reassembler.push(header(1, 0, Math.ceil(2 * 1024 * 1024 / MAX_PAYLOAD) + 1)), null, 'more than 2 MiB of fragments');
-  assert.equal(reassembler.push(header(1, 0, 2, MAX_PAYLOAD + 1)), null, 'payload above the fragment limit');
+  assert.equal(reassembler.push(new Uint8Array(4)).length, 0, 'shorter than a header');
+  assert.equal(reassembler.push(header(1, 0, 0)).length, 0, 'no fragments');
+  assert.equal(reassembler.push(header(1, 2, 2)).length, 0, 'index past the count');
+  assert.equal(reassembler.push(header(1, 0, Math.ceil(2 * 1024 * 1024 / MAX_PAYLOAD) + 1)).length, 0, 'more than 2 MiB of fragments');
+  assert.equal(reassembler.push(header(1, 0, 2, MAX_PAYLOAD + 1)).length, 0, 'payload above the fragment limit');
   assert.equal(reassembler.pending, 0);
   const [first] = [header(2, 0, 2)];
   reassembler.push(first);
-  assert.equal(reassembler.push(header(2, 1, 3)), null, 'count changed mid-frame');
+  assert.equal(reassembler.push(header(2, 1, 3)).length, 0, 'count changed mid-frame');
   assert.equal(reassembler.pending, 1);
 });
 
 test('an ArrayBuffer is accepted as it comes from a data channel', () => {
   const { reassembler } = setup(), data = frame(true, 100);
   const [fragment] = split(1, data);
-  sameFrames([reassembler.push(fragment.buffer)], [data]);
+  sameFrames(reassembler.push(fragment.buffer), [data]);
 });
 
 test('after a fallback, channel frames up to the named one are ignored and the next must be a keyframe', () => {

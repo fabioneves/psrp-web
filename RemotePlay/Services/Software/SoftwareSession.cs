@@ -36,6 +36,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         published.Track(socket, sendGate);
         active.Set(published);
         var input = new SoftwareInputRouter(controller, null, initializing: true);
+        var keyframes = new KeyframeGate();
         // Video starts on the WebSocket either way; an offer from the browser only adds a channel it may move to.
         using var rtc = grant.Transport == "webrtc" ? new RtcVideoLink(RtcOptions.FromEnvironment(), logger, grant.TestDropPercent) : null;
         if (rtc != null) input.RtcOffer = sdp => rtc.AnswerAsync(sdp, socket, sendGate, ct);
@@ -113,7 +114,12 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 stream = await streams.GetStreamAsync(session.Id);
                 if (stream != null) { stream.PeriodicIdrInterval = null; await stream.RequestKeyframeAsync(); }
                 var console = stream;
-                input.RequestKeyframe = () => { receiver.EnterWaitForIdr(); return console?.RequestKeyframeAsync() ?? Task.CompletedTask; };
+                input.RequestKeyframe = () =>
+                {
+                    if (!keyframes.ShouldAsk(Environment.TickCount64)) return Task.CompletedTask;
+                    receiver.EnterWaitForIdr();
+                    return console?.RequestKeyframeAsync() ?? Task.CompletedTask;
+                };
                 if (!await controller.ConnectAsync(session.Id, ct) || !await controller.StartAsync(session.Id, ct))
                     throw new IOException("Could not start console input.");
                 if (!native) feed = transcoder!.FeedAsync(receiver, ct);
@@ -121,7 +127,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct, sendGate: sendGate);
             await input.BindSessionAsync(sessionId, ct);
             published.Input = input;
-            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, rtc, published, grant.BitrateKbps, () => input.RequestKeyframe?.Invoke() ?? Task.CompletedTask, ct) : transcoder!.SendAsync(socket, ct, sendGate);
+            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, rtc, published, keyframes, grant.BitrateKbps, () => input.RequestKeyframe?.Invoke() ?? Task.CompletedTask, ct) : transcoder!.SendAsync(socket, ct, sendGate);
             var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
             if (stream != null) { _ = SendConsoleStatsAsync(socket, stream, receiver, published, sendGate, ct); _ = SendRumbleAsync(socket, stream, published, sendGate, ct); }
             workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
@@ -244,12 +250,11 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         finally { if (last != null) logger.LogInformation("Console stream summary {Summary}", JsonSerializer.Serialize(last)); }
     }
 
-    private async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, RtcVideoLink? rtc, ActiveSoftwareStream published, int bitrateKbps,
+    private async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, RtcVideoLink? rtc, ActiveSoftwareStream published, KeyframeGate keyframes, int bitrateKbps,
         Func<Task> requestKeyframe, CancellationToken ct)
     {
         var route = new VideoTransportSwitch(bitrateKbps);
         uint frameId = 0;
-        long? askedAt = null;
         await foreach (var unit in receiver.Packets.ReadAllAsync(ct))
         {
             var packet = MediaPacket.Wrap(unit.Data, MediaPacket.AccessUnit, unit.Ready, unit.Ready);
@@ -263,7 +268,8 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             if (announce != null) await SendText(socket, new { type = "transport", transport = announce, frame = announce == "webrtc" ? frameId + 1 : frameId,
                 reason = announce == "websocket" ? "The WebRTC channel closed." : null }, ct, sendGate);
             if (announce != null) logger.LogInformation("Video now travels over {Transport}, from frame {Frame}", announce == "webrtc" ? "WebRTC" : "the WebSocket", frameId + (announce == "webrtc" ? 1u : 0u));
-            if (route.NeedsKeyframe && (askedAt is null || Environment.TickCount64 - askedAt >= 500)) { askedAt = Environment.TickCount64; await requestKeyframe(); }
+            if (unit.Key) keyframes.KeyframeSent();
+            if (route.NeedsKeyframe) await requestKeyframe();
             published.VideoSkipped = route.Skipped;
             if (target == VideoRoute.Skip) continue;
             if (target == VideoRoute.DataChannel)

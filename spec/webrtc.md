@@ -197,6 +197,28 @@ is built first and measures today's code before the fix.
    stream holds over 55 fps with no keyframe requests; at 1080p on the phone,
    fewer than one frozen second a minute.
 
+**Measured 2026-09-19 with the lossy relay** (8 Mbps 720p test stream, which
+cannot make a keyframe on request, so each abandoned frame freezes it for up
+to a second):
+
+| Relay | No retransmission | 250 ms lifetime + 300 ms hold |
+|---|---|---|
+| Loopback, 1 % loss | 2 fps, 63 frames abandoned, 12 keyframe requests | 60 fps, 0 abandoned, 0 requests, 56–67 ms behind |
+| 80 ms round trip, 10 losses in 35–52 s | 28.9 fps, 9 abandoned, 14 requests, 13 send backlogs | 40.6 fps, 5 abandoned, 1 request |
+| 80 ms round trip, 1 % loss | not run | 0–17 fps, 6–8 abandoned; a 600 ms lifetime did no better |
+
+The repair works; the acceptance in point 5 is **not met** at a real round
+trip. The limit is the data channel's congestion control, not the repair: a
+loss halves the sending window, the window regrows by one packet a round trip,
+and for seconds an 8 Mbps stream does not fit through it. Messages then expire
+in the send queue (with a lifetime) or pile up in the buffer until the server
+skips (without one; this is the gradual buffer growth the 1080p field failure
+showed). At 1 % loss and 80 ms no loss-based transport carries more than about
+1.5 Mbps, so that row measures congestion control and nothing else; point 5's
+"1 % loss" was the same mistake as the first draft of criterion 2. The 80 ms
+test stays in the suite as `fixme`, with these numbers, as the one to beat.
+See Open Question 7.
+
 Cost: up to 250 ms of extra delay for the few frames behind a loss, caught up
 by the frame queue's existing drop policy. Risk: usrsctp's fast retransmit
 under real cellular loss patterns is unmeasured; the relay test and one phone
@@ -442,3 +464,12 @@ unless the sender drops it. See [Sender backlog](#sender-backlog).
    replaced by the rate-dip and 0.1 % loss scenarios now in criterion 2.
 6. ~~Fragment size.~~ **Decided 2026-09-19:** messages of up to 64 KiB; see
    Fragmentation and loss.
+7. What to do about loss at a real round trip, where the data channel's
+   congestion control starves the stream after every loss. Candidates: keep
+   the stream well below what the link carries (automatic quality has to see
+   abandoned and skipped frames, which it does not today); usrsctp's other
+   congestion-control modules and a larger initial window (the spike saw no
+   difference at 2 % loss; untested at realistic loss); accept that WebRTC is
+   for links that dip and jitter but do not lose, and let the page fall back
+   to the WebSocket, whose kernel TCP recovers its window faster, when frames
+   keep being abandoned. Not decided.

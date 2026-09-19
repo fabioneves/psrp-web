@@ -1,7 +1,7 @@
 namespace RemotePlay.Services.Software;
 
 /// <summary>The server end of the browser's unreliable video channel: answers one offer completely, then sends access units as fragments.</summary>
-public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertised, int testDropPercent = 0) : IDisposable
+public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertised, int testDropPercent = 0, ushort publicPort = 0) : IDisposable
 {
     private readonly RtcPeer peer = new(port);
 
@@ -13,7 +13,7 @@ public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertise
     public async Task<string> AnswerAsync(string offer, CancellationToken ct)
     {
         peer.SetRemoteDescription(offer, "offer");
-        return Advertise(await peer.LocalDescriptionAsync(ct), advertised, port);
+        return Advertise(await peer.LocalDescriptionAsync(ct), advertised, publicPort == 0 ? port : publicPort);
     }
 
     public bool Send(uint frameId, ReadOnlyMemory<byte> packet)
@@ -40,18 +40,21 @@ public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertise
 }
 
 /// <summary>Where the WebRTC video channel listens and which addresses it tells the browser to try besides the ones the library finds.</summary>
-public sealed record RtcOptions(ushort Port, IReadOnlyList<string> Advertise)
+public sealed record RtcOptions(ushort Port, IReadOnlyList<string> Advertise, ushort PublicPort = 0)
 {
+    /// <summary>The port in advertised candidates: the listening port unless a router or relay maps another one to it.</summary>
+    public ushort PublicPort { get; init; } = PublicPort == 0 ? Port : PublicPort;
+
     public const ushort DefaultPort = 8443;
 
     public static RtcOptions FromEnvironment() => Parse(Environment.GetEnvironmentVariable("WEBRTC_PORT"),
-        Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_ADDRESS"), Environment.GetEnvironmentVariable("REMOTE_PLAY_DOMAIN"));
+        Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_ADDRESS"), Environment.GetEnvironmentVariable("REMOTE_PLAY_DOMAIN"), Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_PORT"));
 
-    public static RtcOptions Parse(string? port, string? addresses, string? domain)
+    public static RtcOptions Parse(string? port, string? addresses, string? domain, string? publicPort = null)
     {
         var names = (string.IsNullOrWhiteSpace(addresses) ? domain ?? "" : addresses)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return new(ushort.TryParse(port, out var parsed) && parsed > 0 ? parsed : DefaultPort, names);
+        return new(ushort.TryParse(port, out var parsed) && parsed > 0 ? parsed : DefaultPort, names, ushort.TryParse(publicPort, out var mapped) ? mapped : (ushort)0);
     }
 
     /// <summary>Candidates carry addresses, so names are looked up for every offer: a home connection's public address changes.</summary>
@@ -131,7 +134,7 @@ public sealed class RtcVideoLink(RtcOptions options, ILogger logger, int testDro
             if (!RtcPeer.Available) throw new IOException("This server was built without WebRTC support.");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
-            created = new RtcVideoChannel(options.Port, await options.ResolveAsync(timeout.Token), testDropPercent);
+            created = new RtcVideoChannel(options.Port, await options.ResolveAsync(timeout.Token), testDropPercent, options.PublicPort);
             reply = new { type = "rtc-answer", sdp = await created.AnswerAsync(offer, timeout.Token) };
             RtcVideoChannel? previous;
             lock (sync)
@@ -163,4 +166,24 @@ public sealed class RtcVideoLink(RtcOptions options, ILogger logger, int testDro
         lock (sync) { disposed = true; last = channel; channel = null; }
         last?.Dispose();
     }
+}
+
+/// <summary>Keeps keyframe requests from piling up: whoever asks (the browser after a loss, the server after a backlog or a
+/// fallback), the console is asked once and then not again until that keyframe has gone out or a second has passed.</summary>
+public sealed class KeyframeGate
+{
+    private long? askedAtMs;
+    private readonly object sync = new();
+
+    public bool ShouldAsk(long nowMs)
+    {
+        lock (sync)
+        {
+            if (askedAtMs is { } asked && nowMs - asked < 1000) return false;
+            askedAtMs = nowMs;
+            return true;
+        }
+    }
+
+    public void KeyframeSent() { lock (sync) askedAtMs = null; }
 }

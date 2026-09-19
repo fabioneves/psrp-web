@@ -10,7 +10,9 @@ export function startRtcVideo({ sendOffer, handOver, onState, openTimeoutMs = 50
   const timer = setTimeout(() => { if (!open) fail(`The WebRTC channel did not open within ${Math.round(openTimeoutMs / 1000)} seconds.`); }, openTimeoutMs);
   peer.onconnectionstatechange = () => { if (peer.connectionState === 'failed') fail('The WebRTC connection failed.'); };
   try {
-    const channel = peer.createDataChannel('video', { ordered: false, maxRetransmits: 0 });
+    // A lost datagram is repaired for a quarter second, about two round trips, and then given up: a loss costs one late
+    // frame instead of a keyframe, and nothing can queue for longer than that.
+    const channel = peer.createDataChannel('video', { ordered: false, maxPacketLifeTime: 250 });
     channel.binaryType = 'arraybuffer';
     handOver(channel);
   } catch (error) { fail(error.message); return null; }

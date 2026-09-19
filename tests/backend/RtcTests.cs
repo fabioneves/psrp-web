@@ -81,8 +81,19 @@ static class RtcTests
         check(backlog.Next(false, false) == (VideoRoute.Skip, "websocket") && backlog.Next(true, false) == (VideoRoute.WebSocket, null),
             "a channel that closes during a backlog still falls back to the WebSocket at the next keyframe");
 
+        var gate = new KeyframeGate();
+        check(gate.ShouldAsk(nowMs: 1000) && !gate.ShouldAsk(1400) && !gate.ShouldAsk(1999),
+            "a second request while the console still owes a keyframe is dropped: each one is a burst into the link that just lost data");
+        check(gate.ShouldAsk(2000), "a keyframe that has not come after a second is asked for again");
+        gate.KeyframeSent();
+        check(gate.ShouldAsk(2100), "once the keyframe has gone out, the next loss may ask at once");
+
         var options = RtcOptions.Parse("18444", " 203.0.113.7, play.example.test ,", "fallback.example.test");
         check(options.Port == 18444 && options.Advertise.SequenceEqual(new[] { "203.0.113.7", "play.example.test" }), "WEBRTC_PORT and WEBRTC_PUBLIC_ADDRESS are read; the domain is not needed when addresses are given");
+        check(options.PublicPort == 18444 && RtcOptions.Parse("18444", "203.0.113.7", null, "443").PublicPort == 443 && RtcOptions.Parse("18444", null, null, "0").PublicPort == 18444,
+            "WEBRTC_PUBLIC_PORT names the port browsers are told to use where it differs from the one the server listens on");
+        check(RtcVideoChannel.Advertise("v=0\r\na=candidate:1 1 UDP 2122317823 10.0.0.5 18444 typ host\r\na=end-of-candidates\r\n", ["203.0.113.7"], 443).Contains("203.0.113.7 443 typ host"),
+            "advertised addresses carry the public port");
         options = RtcOptions.Parse(null, null, "play.example.test");
         check(options.Port == 8443 && options.Advertise.SequenceEqual(new[] { "play.example.test" }), "without settings the port is 8443 and the public address comes from REMOTE_PLAY_DOMAIN");
         check(RtcOptions.Parse("70000", null, null).Port == 8443 && RtcOptions.Parse(null, null, null).Advertise.Count == 0, "an unusable port falls back to the default, and no domain means nothing is advertised");
