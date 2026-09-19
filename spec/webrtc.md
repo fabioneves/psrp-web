@@ -160,15 +160,18 @@ docs/architecture.md, README.md                wire format, setup, troubleshooti
   (same limit as the receiver, 33 messages), enforced by the sender too;
   fragments for unknown or abandoned frames are dropped.
 
-### Loss recovery (proposed 2026-09-19, task 16, not approved)
+### Loss recovery (approved by the user 2026-09-19, task 16)
 
 Field result that prompts it: at 1080p over mobile data the stream froze for
 70 of 124 seconds while keyframe requests went from 2 to 55; at 720p the same
 phone had one frozen second. Today every lost datagram costs a whole frame,
 every lost frame costs a keyframe, and a 1080p keyframe is a burst of several
 hundred datagrams that is itself likely to lose one and to congest the link.
-Task 11's counters are there to confirm this on the next 1080p capture before
-anything below is built.
+A second 1080p run the same evening (`20260919T211358Z.json`) lost nothing and
+was flawless, 185 s at 59.4 fps and never more than 117 ms behind: the storm
+mechanism is therefore still unproven, but one loss event is what separates
+the two runs, and recovery is what this section changes. The lossy relay test
+is built first and measures today's code before the fix.
 
 1. **Retransmit, but only briefly.** The browser opens the channel with
    `maxPacketLifeTime: 250` instead of `maxRetransmits: 0`. SCTP then repairs a
