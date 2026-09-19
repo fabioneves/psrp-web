@@ -81,6 +81,30 @@ reaching the game (two unconfirmed causes: the focus gate at `web/app.js:60`,
 and two event sequence counters at `ControllerService.cs:545` and
 `FeedbackSenderService.cs:529`); no input counters in diagnostics.
 
+### From moonlight-web-stream-tsla (read 2026-09-19, user's pointer)
+
+github.com/Argon2000/moonlight-web-stream-tsla streams Sunshine to the Tesla
+browser. It sends video as a WebRTC **media track** (webrtc-rs 0.14), audio
+and input over data channels; it has no video-over-data-channel path, so
+nothing there can be reused for fragments or backlog. It is GPL-3.0-or-later:
+read for facts, copy nothing. Its dated field notes are the useful part. They
+are that project's observations, not ours; each is marked with what we do
+about it.
+
+| Their finding (file) | Bearing on this plan |
+|---|---|
+| Tesla renderer stalls scale with per-message cost; ~6.3 Mbps over a media track gave regular ~270 ms stalls, ~2.6 Mbps none (`settings_menu.ts:226`) | Biggest new risk. 10 Mbps in 1100-byte fragments is ~1100 JS events a second; our WebSocket delivers 60. The spike now also measures 16 KiB and 64 KiB messages (SCTP fragments natively, one event per frame) and the receiving Chrome's CPU. `MaxPayload` stays a constant in both modules so the spike can decide it. Our own car probe moved 30 Mbps of 1100-byte messages with no loss on 2026-09-18, but with no video decoding beside it. |
+| webrtc-rs mis-parses FORWARD-TSN, so they keep every browser→server channel reliable (`input.ts:164`) | Partial reliability is only as good as the sender's SCTP. The spike must show each library really abandons lost messages with `maxRetransmits: 0`; one that retransmits anyway is out. Our browser sends nothing on the video channel, so their exact bug cannot hit us. |
+| Non-trickle ICE, because the Tesla browser "drops the WS send path after the initial offer"; WebSocket connects fail about half the time (`index.ts:987`, README) | Our WebSocket carries input from the car all session, so the first claim does not match what we see. Non-trickle is still simpler with one fixed server port: one offer, one answer, no candidate messages. Proposed for task 6; the spike confirms both libraries can do it. Needs the spec's Negotiation step 2 changed. |
+| IDR requests rate-limited to 300 ms after PLI→IDR storms made freezes longer (`video.rs:436`) | Same idea as our 500 ms limit on both sides. No change. |
+| Keyframe bursts paced at 3× bitrate (`sender.rs:164`) | SCTP's congestion window paces a data channel; the spike's delay max at 30 Mbps shows whether that is enough. |
+| Shorter ICE timeouts for cellular: 4 s disconnected, 8 s failed; a network switch once cost 37 s (`main.rs:222`) | Task 10 (mid-session fallback) should not wait for the library's default failure timeout. Criterion 5 already demands under 2 s. |
+| 2D canvas fed by VideoFrame capped near 30 fps on Tesla; they use `bitmaprenderer` (`canvas.ts:9`) | Not what we measure: the car held 57–60 fps on "Canvas 2D · worker" on 2026-09-19. No change. |
+| `<video>` playback is killed in drive mode (`canvas.ts:59`) | Confirms the spec's choice not to use a media track into a video element. |
+| Rumble's `playEffect()` stalls the Tesla main thread and causes micro-stutter; they ignore rumble in the car (`input.ts:1238`) | Outside this plan. We have rumble on; the captures of 2026-09-19 show `rumble=0`, so it played no part in them. Worth an A/B in the car. |
+| Audio primed to 240 ms after 200–300 ms cellular radio pauses drained 150 ms (`audio_playback_worklet.js:43`) | Outside this plan. Our capture had 143 ms queued and 26 underruns; relevant to spec Open Question 3. |
+| Mirrored gamepads: one press can show on the physical and the virtual pad; prefer the physical (`input.ts:1160`) | Matches `web/gamepad.js:54`. Nothing there about a focus requirement or lost buttons. |
+
 ### Decided by the user, 2026-09-19
 
 - The Proxmox installer asks for the UDP port (task 12).

@@ -22,7 +22,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 ### Phase 0: decide
 
 - [ ] **1. Library spike.** SIPSorcery and libdatachannel each send 10 and 30 Mbps of 1100-byte unreliable messages to Chrome on the LAN, from inside the Docker image.
-  - Accept: per-message delay (median, p95, max), rate, loss and CPU recorded for both; whether each exposes the channel's buffered amount; both channel-to-worker modes timed in Chrome.
+  - Accept: per-message delay (median, p95, max), rate, loss and CPU recorded for both; whether each exposes the channel's buffered amount; both channel-to-worker modes timed in Chrome. Added 2026-09-19: proof that `maxRetransmits: 0` really abandons lost messages under 2 % induced loss; the same runs with 16 KiB and 64 KiB messages plus the receiving Chrome's CPU, to choose the fragment size; a complete non-trickle answer on a fixed port with an advertised public address.
   - Verify: numbers written into spec Tech Stack; spike branch not merged.
   - Depends: none. Files: `spikes/webrtc/*`, `spec/webrtc.md`. Size: M.
 - [ ] **2. Probe reports data-channel transfer to a worker.**
