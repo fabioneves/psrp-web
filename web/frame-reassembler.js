@@ -57,5 +57,12 @@ export function createReassembler({ frameIntervalMs, isKey, requestKeyframe, now
     return data;
   }
 
-  return { push, metrics: () => ({ ...counts }), get pending() { return pending.size; } };
+  // The server fell back to the WebSocket after sending this frame: whatever of the channel is still in flight is stale.
+  function skipThrough(frameId) {
+    pending.clear();
+    newest = Math.max(newest ?? frameId, frameId);
+    waitingForKey = true;
+  }
+
+  return { push, skipThrough, metrics: () => ({ ...counts }), get pending() { return pending.size; } };
 }

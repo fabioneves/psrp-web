@@ -155,3 +155,17 @@ test('an ArrayBuffer is accepted as it comes from a data channel', () => {
   const [fragment] = split(1, data);
   sameFrames([reassembler.push(fragment.buffer)], [data]);
 });
+
+test('after a fallback, channel frames up to the named one are ignored and the next must be a keyframe', () => {
+  const { feed, reassembler, state } = setup();
+  feed(split(1, frame(true, 500)));
+  const [late] = split(3, frame(false, MAX_PAYLOAD + 900));
+  feed([late]);
+  reassembler.skipThrough(5);
+  assert.equal(reassembler.pending, 0);
+  assert.equal(feed(split(4, frame(true, 500))).length, 0, 'sent before the fallback, arrived after it');
+  assert.equal(feed(split(6, frame(false, 500))).length, 0, 'a delta cannot start the channel again');
+  sameFrames(feed(split(7, frame(true, 500))), [frame(true, 500)]);
+  assert.equal(reassembler.metrics().abandoned, 0, 'frames set aside by a fallback are not losses');
+  assert.equal(state.requests, 1);
+});
