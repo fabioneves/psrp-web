@@ -1,8 +1,8 @@
 # Spec: WebRTC video transport
 
-Status: **draft, not approved.** Building is gated on a car-session diagnostics
-capture showing that transport delay, not decoding, causes the stutter (see
-[Decision gate](#decision-gate)).
+Status: **approved for planning 2026-09-19.** The car-session captures the
+[Decision gate](#decision-gate) asked for exist and point at transport, not
+decoding. Plan and tasks: `tasks/plan.md`, `tasks/todo.md`.
 
 ## Objective
 
@@ -145,6 +145,30 @@ docs/architecture.md, README.md                wire format, setup, troubleshooti
 - Bounds: at most 4 frames in reassembly, 2 MiB per frame (same limit as the
   receiver), fragments for unknown or abandoned frames are dropped.
 
+### Sender backlog
+
+A data channel is still congestion-controlled and buffers what the link cannot
+take, so an unreliable channel alone would reproduce the 2.4 s excursion in the
+[2026-09-19 captures](#result-2026-09-19) as queued fragments instead of queued
+TCP bytes.
+
+- Before fragmenting an access unit the server reads the channel's buffered
+  amount. Above a threshold worth about 100 ms of the ticket's bitrate it skips
+  the unit, keeps skipping until a keyframe, and asks the console for one
+  through the existing keyframe path, at most once per 500 ms.
+- Skipped units and the keyframe requests they cause are counted in telemetry
+  separately from receiver-side abandonment.
+- The threshold is a constant confirmed by the spike, not a setting.
+
+### Worker
+
+The stream runs in `web/stream-worker.js`, where `RTCPeerConnection` does not
+exist. The page owns the peer connection and relays signaling to the worker's
+WebSocket. The data channel is transferred to the worker when the browser
+supports transferring one; otherwise the page forwards each message's buffer
+to the worker by transfer. The spike measures both in the car's Chrome and the
+probe page reports which is available.
+
 ### Setting
 
 Stream settings → Advanced → **Transport**:
@@ -207,7 +231,8 @@ export function createReassembler({ frameIntervalMs, now = () => performance.now
   existing ticket; update `docs/architecture.md` and README setup steps in the
   same change as the behavior.
 - **Ask first:** the WebRTC library choice (new dependency, possibly native);
-  changing the default transport; moving audio or input off the WebSocket;
+  changing the default transport before criterion 6 holds (after it, see Open
+  Question 2); moving audio or input off the WebSocket;
   adding STUN/TURN; publishing a new port in `compose.yaml` and the Proxmox
   installer; any retransmission or FEC scheme.
 - **Never:** decode or re-encode video on the server for this; send video as a
@@ -246,6 +271,30 @@ stretches:
   the browser is the bottleneck; this spec is shelved and the work goes to
   decode and pacing instead.
 
+### Result, 2026-09-19
+
+Two captures from a Model Y (Chrome 148), saved on the production server as
+`20260919T110049Z.json` (720p60, 6 Mbps) and `20260919T111146Z.json` (1080p60,
+10 Mbps, Smooth):
+
+- The browser is not the bottleneck: median decode 1.3 ms, no long tasks in
+  either capture.
+- At 1080p the link dipped to about 4 Mbps under a 7.5 Mbps stream at 410 s.
+  Video age rose to 2.1–2.6 s and stayed there for 27 s at 45–58 fps: the
+  backlog was delivered in order instead of being given up. Ten shorter
+  excursions (0.3–1.2 s) show the same shape. The server shed nothing
+  (`serverDropped=0`); its video queue waits when full
+  (`SoftwareReceiver.cs:15`).
+- The comparison above is weaker than it reads: `rtt` comes from ping/pong on
+  the same WebSocket as the video (`SoftwareInputRouter.cs:48`), so a backlog
+  inflates both numbers and the ratio stays near 1 (median 0.84 here, with rtt
+  itself reaching 2.8 s). Read video `age` instead; the candidate pair's round
+  trip from `getStats()` gives WebRTC sessions an independent figure.
+- These two files are the WebSocket baseline for success criterion 6.
+
+What the captures also show: a transport that can drop late data does nothing
+unless the sender drops it. See [Sender backlog](#sender-backlog).
+
 ## Build order (for /plan, once approved)
 
 1. Library spike: each candidate sends 10 and 30 Mbps of 1100-byte unreliable
@@ -260,8 +309,14 @@ stretches:
 
 ## Open Questions
 
-1. Should the Proxmox installer ask for the UDP port, or only document it?
-2. Should the default become "WebRTC with fallback" once criterion 6 holds, or
-   stay opt-in?
+1. ~~Should the Proxmox installer ask for the UDP port, or only document it?~~
+   **Decided 2026-09-19: it asks**, with `WEBRTC_PORT`'s default offered.
+2. ~~Should the default become "WebRTC with fallback" once criterion 6 holds, or
+   stay opt-in?~~ **Decided 2026-09-19: it becomes the default** once the car
+   session confirms criterion 6. Until then it is opt-in. MPEG-1 Canvas mode
+   keeps WebSocket either way.
 3. Audio: leave on the WebSocket for good, or move to a second unreliable
    channel later if audio underruns still track TCP stalls?
+4. Should the WebSocket path get the same [sender backlog](#sender-backlog)
+   skipping? It stays the fallback wherever UDP is blocked and showed the
+   2.4 s excursion on 2026-09-19.
