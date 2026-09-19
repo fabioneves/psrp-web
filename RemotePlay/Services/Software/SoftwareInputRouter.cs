@@ -14,6 +14,8 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
     public Func<Task>? RequestKeyframe { get; set; }
     /// <summary>Receives the browser's per-second diagnostics sample while its live-telemetry debug switch is on.</summary>
     public Action<SoftwareInput>? Telemetry { get; set; }
+    /// <summary>Receives the browser's WebRTC offer; the handler answers on the socket itself and never throws.</summary>
+    public Func<string, Task>? RtcOffer { get; set; }
 
     public async Task BindSessionAsync(Guid? id, CancellationToken ct)
     {
@@ -25,7 +27,8 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
     public async Task ReceiveAsync(WebSocket socket, CancellationToken ct, bool acknowledge = false, SemaphoreSlim? sendGate = null)
     {
         var source = Guid.NewGuid();
-        var buffer = new byte[2048];
+        // Input messages are tiny; a WebRTC offer from a browser with many interfaces runs to a few kilobytes.
+        var buffer = new byte[16 * 1024];
         var heartbeat = Stopwatch.StartNew();
         try
         {
@@ -60,6 +63,11 @@ public sealed class SoftwareInputRouter(IControllerService controller, Guid? ses
                 if (input.Type == "keyframe")
                 {
                     if (acknowledge && RequestKeyframe is { } request) await request();
+                    continue;
+                }
+                if (input.Type == "rtc-offer")
+                {
+                    if (acknowledge && input.Sdp is { Length: > 0 } sdp && RtcOffer is { } answer) _ = answer(sdp);
                     continue;
                 }
                 if (input.Type == "telemetry")

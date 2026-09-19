@@ -6,7 +6,8 @@ using RemotePlay.Services.Streaming.Protocol;
 
 namespace RemotePlay.Services.Software;
 
-public sealed record VideoUnit(byte[] Data, double Ready);
+/// <param name="Key">The unit starts or is a keyframe: the only place video may move to another transport.</param>
+public sealed record VideoUnit(byte[] Data, double Ready, bool Key = false);
 
 public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCodec = "h264") : IAVReceiver, IDisposable
 {
@@ -67,19 +68,20 @@ public sealed class SoftwareReceiver(int videoQueueCapacity = 8, string videoCod
                 packets.Writer.TryComplete(new IOException("Console frame exceeds the 2 MiB limit."));
                 return;
             }
+            var key = ContainsIdr(packet, videoCodec);
             if (waitingForIdr)
             {
-                if (!ContainsIdr(packet, videoCodec)) return;
-                if (header.Length > 0) Write(header);
+                if (!key) return;
+                if (header.Length > 0) Write(header, true);
                 waitingForIdr = false;
             }
-            Write(packet.AsSpan(1).ToArray());
+            Write(packet.AsSpan(1).ToArray(), key);
         }
     }
 
-    private void Write(byte[] packet)
+    private void Write(byte[] packet, bool key)
     {
-        if (!packets.Writer.TryWrite(new VideoUnit(packet, MediaPacket.Now)))
+        if (!packets.Writer.TryWrite(new VideoUnit(packet, MediaPacket.Now, key)))
             packets.Writer.TryComplete(new IOException("Video delivery cannot keep up. Reconnect or lower the bitrate."));
     }
 

@@ -1,6 +1,10 @@
 using System.Buffers.Binary;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.WebSockets;
+using System.Text;
+using System.Text.Json;
+using Microsoft.Extensions.Logging.Abstractions;
 using RemotePlay.Services.Software;
 
 static class RtcTests
@@ -36,6 +40,32 @@ static class RtcTests
         foreach (var (codec, transport) in new[] { ("mpeg1", "webrtc"), ("h264", "quic") })
             try { tickets.Issue("alice", null, true, 10000, videoCodec: codec, transport: transport); } catch (ArgumentException) { refused++; }
         check(refused == 2, "WebRTC is refused for the MPEG-1 byte stream, and so is an unknown transport");
+
+        var receiver = new SoftwareReceiver(8, "h264");
+        receiver.OnStreamInfo([0, 0, 0, 1, 0x67, 1], []);
+        receiver.OnVideoPacket([2, 0, 0, 0, 1, 0x65, 7]);
+        receiver.OnVideoPacket([2, 0, 0, 0, 1, 0x41, 9]);
+        check(receiver.Packets.TryRead(out var parameters) && parameters.Key && receiver.Packets.TryRead(out var idr) && idr.Key &&
+            receiver.Packets.TryRead(out var delta) && !delta.Key, "the codec header and the IDR are marked as a place to switch transport; a delta frame is not");
+
+        var route = new VideoTransportSwitch();
+        check(route.Next(key: true, channelOpen: false) == (VideoRoute.WebSocket, null) && route.Next(false, true) == (VideoRoute.WebSocket, null),
+            "video stays on the WebSocket until the data channel is open and a keyframe arrives");
+        check(route.Next(true, true) == (VideoRoute.DataChannel, "webrtc") && route.Next(false, true) == (VideoRoute.DataChannel, null),
+            "at the first keyframe after the channel opens video moves to it and says so once");
+        check(route.Next(false, false) == (VideoRoute.Skip, "websocket") && route.NeedsKeyframe && route.Next(false, false) == (VideoRoute.Skip, null),
+            "when the channel goes away the browser is told, a keyframe is wanted, and deltas that followed lost frames are withheld");
+        check(route.Next(true, false) == (VideoRoute.WebSocket, null) && !route.NeedsKeyframe && route.Next(false, false) == (VideoRoute.WebSocket, null),
+            "video resumes on the WebSocket at the next keyframe");
+        check(route.Next(true, true) == (VideoRoute.DataChannel, "webrtc"), "a channel that opens again is used again from a keyframe");
+        route.SendFailed();
+        check(route.Next(false, true) == (VideoRoute.Skip, "websocket") && route.NeedsKeyframe, "a failed send is treated like a closed channel even while it still reads open");
+
+        var options = RtcOptions.Parse("18444", " 203.0.113.7, play.example.test ,", "fallback.example.test");
+        check(options.Port == 18444 && options.Advertise.SequenceEqual(new[] { "203.0.113.7", "play.example.test" }), "WEBRTC_PORT and WEBRTC_PUBLIC_ADDRESS are read; the domain is not needed when addresses are given");
+        options = RtcOptions.Parse(null, null, "play.example.test");
+        check(options.Port == 8443 && options.Advertise.SequenceEqual(new[] { "play.example.test" }), "without settings the port is 8443 and the public address comes from REMOTE_PLAY_DOMAIN");
+        check(RtcOptions.Parse("70000", null, null).Port == 8443 && RtcOptions.Parse(null, null, null).Advertise.Count == 0, "an unusable port falls back to the default, and no domain means nothing is advertised");
     }
 
     // Two libdatachannel peers in this process: the client stands in for the browser, the server side is the product's.
@@ -83,5 +113,48 @@ static class RtcTests
             check(!server.IsOpen && !server.Send(8, unit), "the server notices the browser's channel going away, and sending then reports failure");
         }
         finally { client.Dispose(); }
+        await RunSignalingAsync(check);
+    }
+
+    // The browser's offer arrives as an input message on the stream's WebSocket and the answer leaves on the same socket.
+    private static async Task RunSignalingAsync(Action<bool, string> check)
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        using var browserConnection = new TcpClient();
+        await browserConnection.ConnectAsync(IPAddress.Loopback, ((IPEndPoint)listener.LocalEndpoint).Port);
+        using var serverConnection = await listener.AcceptTcpClientAsync();
+        using var browserSocket = WebSocket.CreateFromStream(browserConnection.GetStream(), false, null, TimeSpan.Zero);
+        using var serverSocket = WebSocket.CreateFromStream(serverConnection.GetStream(), true, null, TimeSpan.Zero);
+        using var sendGate = new SemaphoreSlim(1, 1);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        ushort port;
+        using (var probe = new UdpClient(new IPEndPoint(IPAddress.Any, 0))) port = (ushort)((IPEndPoint)probe.Client.LocalEndPoint!).Port;
+        using var link = new RtcVideoLink(new RtcOptions(port, []), NullLogger.Instance);
+        var router = new SoftwareInputRouter(null!, null, initializing: true)
+        {
+            RtcOffer = sdp => link.AnswerAsync(sdp, serverSocket, sendGate, timeout.Token)
+        };
+        var reading = router.ReceiveAsync(serverSocket, timeout.Token, true, sendGate);
+        using var client = new RtcPeer();
+        client.CreateChannel("video", unordered: true, maxRetransmits: 0);
+        // Padding stands in for a browser with many network interfaces: the offer must not be limited to one small read.
+        var offer = await client.LocalDescriptionAsync(timeout.Token) + string.Concat(Enumerable.Repeat("a=x-padding:0123456789012345678901234567890123456789\r\n", 60));
+        await browserSocket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = "rtc-offer", sdp = offer }), WebSocketMessageType.Text, true, timeout.Token);
+        var buffer = new byte[16 * 1024];
+        var reply = await browserSocket.ReceiveAsync(buffer, timeout.Token);
+        using var message = JsonDocument.Parse(buffer.AsMemory(0, reply.Count));
+        check(offer.Length > 3000 && message.RootElement.GetProperty("type").GetString() == "rtc-answer", "a 3 KB offer sent as an input message is answered on the same socket");
+        client.SetRemoteDescription(message.RootElement.GetProperty("sdp").GetString()!, "answer");
+        await link.Channel!.Opened.WaitAsync(timeout.Token);
+        check(link.Channel.IsOpen, "the channel negotiated over the WebSocket opens");
+        await browserSocket.SendAsync(Encoding.UTF8.GetBytes("{\"type\":\"rtc-offer\",\"sdp\":\"not sdp\"}"), WebSocketMessageType.Text, true, timeout.Token);
+        reply = await browserSocket.ReceiveAsync(buffer, timeout.Token);
+        using var refusal = JsonDocument.Parse(buffer.AsMemory(0, reply.Count));
+        check(refusal.RootElement.GetProperty("type").GetString() == "transport" && refusal.RootElement.GetProperty("transport").GetString() == "websocket" &&
+            refusal.RootElement.GetProperty("reason").GetString()!.Length > 0 && !reading.IsCompleted,
+            "an offer the server cannot use is answered with the WebSocket transport and a reason, and the input reader carries on");
+        timeout.Cancel();
+        try { await reading; } catch (OperationCanceledException) { }
     }
 }

@@ -36,6 +36,9 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         published.Track(socket, sendGate);
         active.Set(published);
         var input = new SoftwareInputRouter(controller, null, initializing: true);
+        // Video starts on the WebSocket either way; an offer from the browser only adds a channel it may move to.
+        using var rtc = grant.Transport == "webrtc" ? new RtcVideoLink(RtcOptions.FromEnvironment(), logger) : null;
+        if (rtc != null) input.RtcOffer = sdp => rtc.AnswerAsync(sdp, socket, sendGate, ct);
         var telemetryCount = 0;
         input.Telemetry = message =>
         {
@@ -118,7 +121,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             await SendStatus(socket, grant.Demo ? "Test stream" : "Console connected", ct, sendGate: sendGate);
             await input.BindSessionAsync(sessionId, ct);
             published.Input = input;
-            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, ct) : transcoder!.SendAsync(socket, ct, sendGate);
+            var sendVideo = native ? SendVideoAsync(socket, receiver, sendGate, rtc, () => input.RequestKeyframe?.Invoke() ?? Task.CompletedTask, ct) : transcoder!.SendAsync(socket, ct, sendGate);
             var sendAudio = SendAudioAsync(socket, receiver, grant.Demo, sendGate, ct);
             if (stream != null) { _ = SendConsoleStatsAsync(socket, stream, receiver, published, sendGate, ct); _ = SendRumbleAsync(socket, stream, published, sendGate, ct); }
             workers = feed is null ? [sendVideo, sendAudio, inputTask] : [feed, sendVideo, sendAudio, inputTask];
@@ -175,14 +178,13 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         catch (Exception) { }
     }
 
-    private static async Task SendStatus(WebSocket socket, string message, CancellationToken ct, bool error = false, SemaphoreSlim? sendGate = null)
+    private static Task SendStatus(WebSocket socket, string message, CancellationToken ct, bool error = false, SemaphoreSlim? sendGate = null) =>
+        SendText(socket, new { type = error ? "error" : "status", message }, ct, sendGate);
+
+    private static async Task SendText(WebSocket socket, object message, CancellationToken ct, SemaphoreSlim? sendGate = null)
     {
         if (sendGate != null) await sendGate.WaitAsync(ct);
-        try
-        {
-            await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(new { type = error ? "error" : "status", message }),
-                WebSocketMessageType.Text, true, ct);
-        }
+        try { await socket.SendAsync(JsonSerializer.SerializeToUtf8Bytes(message), WebSocketMessageType.Text, true, ct); }
         finally { sendGate?.Release(); }
     }
 
@@ -239,11 +241,28 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
         finally { if (last != null) logger.LogInformation("Console stream summary {Summary}", JsonSerializer.Serialize(last)); }
     }
 
-    private static async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, CancellationToken ct)
+    private static async Task SendVideoAsync(WebSocket socket, SoftwareReceiver receiver, SemaphoreSlim sendGate, RtcVideoLink? rtc,
+        Func<Task> requestKeyframe, CancellationToken ct)
     {
+        var route = new VideoTransportSwitch();
+        uint frameId = 0;
+        long? askedAt = null;
         await foreach (var unit in receiver.Packets.ReadAllAsync(ct))
         {
             var packet = MediaPacket.Wrap(unit.Data, MediaPacket.AccessUnit, unit.Ready, unit.Ready);
+            var channel = rtc?.Channel;
+            var (target, announce) = route.Next(unit.Key, channel is { IsOpen: true });
+            // The frame number lets the browser ignore channel frames from before a fallback that arrive after it.
+            if (announce != null) await SendText(socket, new { type = "transport", transport = announce, frame = announce == "webrtc" ? frameId + 1 : frameId,
+                reason = announce == "websocket" ? "The WebRTC channel closed." : null }, ct, sendGate);
+            if (route.NeedsKeyframe && (askedAt is null || Environment.TickCount64 - askedAt >= 500)) { askedAt = Environment.TickCount64; await requestKeyframe(); }
+            if (target == VideoRoute.Skip) continue;
+            if (target == VideoRoute.DataChannel)
+            {
+                MediaPacket.MarkSent(packet);
+                if (!channel!.Send(++frameId, packet)) route.SendFailed();
+                continue;
+            }
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(1));
             await sendGate.WaitAsync(timeout.Token);

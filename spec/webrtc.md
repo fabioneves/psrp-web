@@ -106,19 +106,26 @@ docs/architecture.md, README.md                wire format, setup, troubleshooti
 1. `POST /api/software/tickets` accepts `transport`. `webrtc` is rejected with
    400 for `mpeg1`.
 2. The browser opens the WebSocket as today. For a `webrtc` ticket it creates
-   the peer connection and data channel, then sends
-   `{"type":"rtc-offer","sdp":…}`; the server answers with `rtc-answer`; both
-   sides trickle `rtc-candidate`. Signaling inherits the ticket's
-   authentication and travels over WSS, which also protects the DTLS
-   fingerprints.
+   the peer connection and data channel, waits up to a second for its own
+   candidates, and sends one `{"type":"rtc-offer","sdp":…}`; the server
+   answers with one `rtc-answer` holding every candidate it has. Nothing is
+   trickled: the server's candidates are known up front and it learns the
+   browser's address from the first connectivity check (spike, 2026-09-19).
+   An offer the server cannot use is answered with
+   `{"type":"transport","transport":"websocket","reason":…}`. Signaling
+   inherits the ticket's authentication and travels over WSS, which also
+   protects the DTLS fingerprints.
 3. The server offers host candidates on one fixed UDP port (`WEBRTC_PORT`,
    default 8443): its LAN address, plus the public address when
    `WEBRTC_PUBLIC_ADDRESS` is set or `REMOTE_PLAY_DOMAIN` resolves. No STUN or
    TURN server is contacted.
 4. Video starts on the WebSocket immediately, as today. When the data channel
    opens, the server switches to it at the next keyframe and tells the browser
-   with a `status`-style `transport` message. The first picture is never
-   delayed by negotiation.
+   with `{"type":"transport","transport":"webrtc","frame":N}`, N being the
+   first frame id on the channel. The first picture is never delayed by
+   negotiation. Frame ids count up for the whole session; a later
+   `"transport":"websocket"` message names the last id sent on the channel, so
+   the browser can ignore channel frames that arrive after a fallback.
 
 ### Fallback
 

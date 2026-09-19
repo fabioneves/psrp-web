@@ -49,10 +49,10 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Accept: `POST /api/software/tickets` accepts `transport`; `webrtc` with `mpeg1` answers 400; omitted means `websocket`.
   - Verify: backend tests.
   - Depends: none. Files: `StreamTickets.cs`, `SoftwareController.cs`, `tests/backend/RtcTests.cs`. Size: S.
-- [ ] **6. Server data channel and signaling.**
+- [x] **6. Server data channel and signaling.**
   - Accept: for a `webrtc` ticket the server answers the browser's `rtc-offer` with `rtc-answer`, trickles candidates on `WEBRTC_PORT` with LAN and configured public address, and after the channel opens sends video on it from the next keyframe, announcing it with a `transport` message; video runs on the WebSocket until then; SDP never logged at information level.
   - Verify: backend test with an in-process peer receives fragments that reassemble to the sent access units.
-  - State 2026-09-19: the channel itself is built and tested (libdatachannel build stage, binding, `RtcPeer`, `RtcVideoChannel`, non-trickle answer with advertised addresses). Still to do: signaling through the WebSocket and the switch-over in `SoftwareSession`.
+  - Built 2026-09-19 in two commits. Differs from the first wording: signaling is one `rtc-offer` and one `rtc-answer`, no candidate messages; the `transport` message carries the frame number where the change takes effect; a channel that closes or fails a send already falls back to the WebSocket at the next keyframe (task 10 adds the browser test and the 2 s check). The session glue in `SoftwareSession` has no test of its own yet: task 7's end-to-end test is the first thing to exercise it.
   - Depends: 1, 3, 5. Files: `RtcVideoChannel.cs`, `SoftwareSession.cs`, `SoftwareInputRouter.cs`, `SoftwareInputState.cs`, `RemotePlay.csproj` (+ `Dockerfile` if native). Size: M.
 - [ ] **7. Browser data channel, setting and label.**
   - Accept: Stream settings → Advanced → Transport, saved with the other settings and hidden for Canvas; with WebRTC selected the test stream plays through the reassembler, the playback label says WebRTC, and 720p60 H.264 holds > 55 fps.
