@@ -45,7 +45,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 
 ### Phase 2: one path end to end
 
-- [ ] **5. Tickets carry a transport.**
+- [x] **5. Tickets carry a transport.**
   - Accept: `POST /api/software/tickets` accepts `transport`; `webrtc` with `mpeg1` answers 400; omitted means `websocket`.
   - Verify: backend tests.
   - Depends: none. Files: `StreamTickets.cs`, `SoftwareController.cs`, `tests/backend/RtcTests.cs`. Size: S.

@@ -110,13 +110,15 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
             !await db.UserDevices.AnyAsync(d => d.UserId == userId && d.IsActive && d.Device != null &&
                 d.Device.HostId == request.HostId && d.Device.HostType == "PS5", ct))
             return BadRequest(new { message = "H.265 requires a PS5. Select H.264 or Canvas for this console." });
+        if (request.Transport == "webrtc" && request.VideoCodec == "mpeg1")
+            return BadRequest(new { message = StreamTickets.WebRtcNeedsAccessUnits });
         if (request.InputSession == null)
         {
             if (!await tickets.Viewer.WaitAsync(TimeSpan.FromSeconds(8), ct))
                 return Conflict(new { message = "Another stream is still active on this server. Disconnect that stream before trying again." });
             tickets.Viewer.Release();
         }
-        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec);
+        var ticket = tickets.Issue(userId, request.HostId, request.Demo, request.BitrateKbps, request.InputSession, request.Resolution, request.Fps, request.VideoCodec, request.Transport);
         Response.Headers.CacheControl = "no-store";
         return Ok(new { ticket });
     }
@@ -172,6 +174,7 @@ public sealed class SoftwareController(StreamTickets tickets, RPContext db, Soft
 
 public sealed record StreamRequest(string? HostId, bool Demo = false, [Range(2000, 30000)] int BitrateKbps = 10000,
     Guid? InputSession = null, string Resolution = "720p", int Fps = 60,
-    [Required, RegularExpression("^(mpeg1|h264|h265)$")] string VideoCodec = "mpeg1");
+    [Required, RegularExpression("^(mpeg1|h264|h265)$")] string VideoCodec = "mpeg1",
+    [Required, RegularExpression("^(websocket|webrtc)$")] string Transport = "websocket");
 
 public sealed record WakeRequest([Required, MaxLength(100)] string HostId);

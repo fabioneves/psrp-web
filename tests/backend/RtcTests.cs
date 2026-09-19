@@ -25,5 +25,13 @@ static class RtcTests
         foreach (var packet in new[] { Array.Empty<byte>(), new byte[FrameFragmenter.MaxPayload * (ushort.MaxValue + 1)] })
             try { _ = FrameFragmenter.Split(1, packet).ToList(); } catch (ArgumentException) { rejected++; }
         check(rejected == 2, "an empty access unit and one needing more fragments than the header can count are rejected");
+
+        var tickets = new StreamTickets(TimeProvider.System);
+        check(tickets.Consume(tickets.Issue("alice", null, true, 10000, videoCodec: "h264"))?.Transport == "websocket", "a ticket that names no transport streams over the WebSocket");
+        check(tickets.Consume(tickets.Issue("alice", null, true, 10000, videoCodec: "h265", transport: "webrtc"))?.Transport == "webrtc", "the chosen transport survives the single-use stream ticket");
+        var refused = 0;
+        foreach (var (codec, transport) in new[] { ("mpeg1", "webrtc"), ("h264", "quic") })
+            try { tickets.Issue("alice", null, true, 10000, videoCodec: codec, transport: transport); } catch (ArgumentException) { refused++; }
+        check(refused == 2, "WebRTC is refused for the MPEG-1 byte stream, and so is an unknown transport");
     }
 }
