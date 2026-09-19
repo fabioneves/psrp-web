@@ -26,7 +26,8 @@ test('a stream ticket accepts a transport, and refuses WebRTC for Canvas mode', 
   expect((await ticket({ videoCodec: 'h264', transport: 'quic' })).status()).toBe(400);
 });
 
-// Needs the isolated instance started with tests/browser/compose.rtc.yaml, which publishes the WebRTC port to this host.
+// Needs the isolated instance started with WEBRTC_PORT=18444 WEBRTC_PUBLIC_ADDRESS=127.0.0.1: a bridge-network container only
+// knows its private address, so the published UDP port has to be advertised on an address this browser can reach.
 test('with WebRTC selected the test stream plays over the data channel and says so', async ({ page }) => {
   page.on('console', message => { if (['error', 'warning'].includes(message.type())) console.log(message.text()); });
   await page.addInitScript(() => { localStorage.setItem('remote-play:video-output', 'canvas'); localStorage.setItem('remote-play:video-mode', 'h264'); });

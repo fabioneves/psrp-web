@@ -83,10 +83,11 @@ browser performance. See `docs/validation.md`; no console result is claimed.
   - Accept: per-second samples and server telemetry carry transport in use, fragments, abandoned frames, sender-skipped units, transport-caused keyframe requests, and the candidate pair's round trip and type; a test-only server option drops 2 % of fragments and playback continues with bounded media-ready-to-canvas age.
   - Verify: `tests/diagnostics.test.mjs`, `tests/backend/StreamTelemetryTests.cs`, browser loss test.
   - Depends: 8, 10. Files: `web/diagnostics.js`, `web/rtc-video.js`, `StreamTelemetry.cs`, `RtcVideoChannel.cs`, tests. Size: M.
-- [ ] **Checkpoint C:** user approves publishing the UDP port and forwards it on the router.
+- [x] **Checkpoint C:** approved 2026-09-19; the user forwards UDP 8443 to the server.
 - [ ] **12. Port publishing and docs.**
   - Accept: `WEBRTC_PORT/udp` published in Compose; the Proxmox installer asks for the UDP port, offering the default, and opens it; `docs/architecture.md` has the wire format and negotiation; README has setup and troubleshooting.
   - Verify: fresh `docker compose up --build -d`, WebRTC session from another LAN machine.
+  - State 2026-09-19: done ahead of order for the car test: `compose.yaml` publishes `WEBRTC_PORT/udp` and passes `WEBRTC_PORT`, `WEBRTC_PUBLIC_ADDRESS` and `REMOTE_PLAY_DOMAIN` to the app (the LXC overlay uses host networking, so nothing to publish there). Still open: the installer's question, `docs/architecture.md`, README. `tests/browser/compose.rtc.yaml` is now redundant (the base file takes the same settings from the environment); removing it waits for the user's word.
   - Depends: 11. Files: `compose.yaml`, `compose.lxc.yaml`, `deploy/proxmox/install.sh`, `docs/architecture.md`, `README.md`. Size: M.
 - [ ] **13. Emulated-link comparison.**
   - Accept: criterion 2 as replaced on 2026-09-19: at 80 ms round trip and 10 Mbps, through a 30 s dip to 4 Mbit/s WebRTC video age is back under 150 ms within 1 s of the dip ending and WebSocket is not, and at 0.1 % loss for 5 minutes WebRTC keeps `transportP95` below RTT/2 + 40 ms; 1080p at 30 Mbps holds 60 fps on the LAN (criterion 3).

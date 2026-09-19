@@ -27,8 +27,14 @@ services:
     logging: *logging
     ports:
       - "${PORT:-8080}:8080"
+      # WebRTC video, chosen per viewer under Stream settings. Forward this UDP port like the HTTPS one to use it from outside.
+      - "${WEBRTC_PORT:-8443}:${WEBRTC_PORT:-8443}/udp"
     environment:
       ASPNETCORE_URLS: http://0.0.0.0:8080
+      WEBRTC_PORT: ${WEBRTC_PORT:-8443}
+      # Addresses or names browsers can reach this server on. Empty: the public name below, plus whatever the host itself has.
+      WEBRTC_PUBLIC_ADDRESS: ${WEBRTC_PUBLIC_ADDRESS:-}
+      REMOTE_PLAY_DOMAIN: ${REMOTE_PLAY_DOMAIN:-}
       Database__Host: database
       Database__Port: 5432
       Database__Name: remoteplay

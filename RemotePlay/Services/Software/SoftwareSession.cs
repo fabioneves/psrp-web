@@ -259,6 +259,7 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
             // The frame number lets the browser ignore channel frames from before a fallback that arrive after it.
             if (announce != null) await SendText(socket, new { type = "transport", transport = announce, frame = announce == "webrtc" ? frameId + 1 : frameId,
                 reason = announce == "websocket" ? "The WebRTC channel closed." : null }, ct, sendGate);
+            if (announce != null) logger.LogInformation("Video now travels over {Transport}, from frame {Frame}", announce == "webrtc" ? "WebRTC" : "the WebSocket", frameId + (announce == "webrtc" ? 1u : 0u));
             if (route.NeedsKeyframe && (askedAt is null || Environment.TickCount64 - askedAt >= 500)) { askedAt = Environment.TickCount64; await requestKeyframe(); }
             if (target == VideoRoute.Skip) continue;
             if (target == VideoRoute.DataChannel)
