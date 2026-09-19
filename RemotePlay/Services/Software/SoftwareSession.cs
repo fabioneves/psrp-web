@@ -159,6 +159,9 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 {
                     try { await streams.StopStreamAsync(id); }
                     finally { await sessions.StopSessionAsync(id); }
+                    // Whether the console was told decides whether the next connection meets "still occupied".
+                    logger.LogInformation("Console session closed for {HostId}; goodbye {Outcome}", grant.HostId,
+                        stream == null ? "not sent: the session ended before its stream started" : stream.DisconnectOutcome);
                 }
                 if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
                 {

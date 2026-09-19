@@ -419,16 +419,32 @@ namespace RemotePlay.Services.Streaming.Core
                 }
             }
 
-            if (_cipher != null && (_sendLoopTask == null || _sendLoopTask.IsCompleted))
+            // The console keeps a session "occupied" for a minute or more unless it is told the client left, so the goodbye is
+            // sent like any reliable message: wait for its acknowledgement, and send it once more if none comes.
+            if (_cipher == null) DisconnectOutcome = "not sent: the stream never finished negotiating";
+            else if (_sendLoopTask != null && !_sendLoopTask.IsCompleted) DisconnectOutcome = "not sent: the send loop was still running after 2 s";
+            else
             {
                 try
                 {
                     var disconnectData = ProtoHandler.DisconnectPayload();
                     var disconnectTsn = _lastSentDataTsn is { } last ? unchecked(last + 1) : _tsn;
-                    await SendPacketInternalAsync(Packet.CreateData(disconnectTsn, 1, 1, disconnectData), disconnectData.Length);
+                    var disconnect = Packet.CreateData(disconnectTsn, 1, 1, disconnectData);
+                    var watch = System.Diagnostics.Stopwatch.StartNew();
+                    await SendPacketInternalAsync(disconnect, disconnectData.Length);
+                    var acknowledged = await WaitForAckAsync(disconnectTsn, TimeSpan.FromMilliseconds(150));
+                    if (!acknowledged && _udpClient != null && _remoteEndPoint != null)
+                    {
+                        // The same bytes again: a repeated sequence number is what a retransmission looks like to the console.
+                        await _udpClient.SendAsync(disconnect, _remoteEndPoint);
+                        acknowledged = await WaitForAckAsync(disconnectTsn, TimeSpan.FromMilliseconds(250));
+                    }
+                    DisconnectOutcome = acknowledged ? $"acknowledged by the console after {watch.ElapsedMilliseconds} ms (tsn {disconnectTsn})"
+                        : $"sent twice, not acknowledged within {watch.ElapsedMilliseconds} ms (tsn {disconnectTsn})";
                 }
                 catch (Exception ex)
                 {
+                    DisconnectOutcome = $"failed: {ex.Message}";
                     _logger.LogWarning(ex, "Failed to send console disconnect");
                 }
             }
@@ -442,6 +458,30 @@ namespace RemotePlay.Services.Streaming.Core
             catch { }
 
             _logger.LogInformation("RPStream stopped");
+        }
+
+        /// <summary>What became of the goodbye to the console when this stream stopped; empty until then.</summary>
+        public string DisconnectOutcome { get; private set; } = "";
+
+        // The receive loop has ended by now, so the socket is read here. Video keeps arriving until the console reacts and is skipped.
+        private async Task<bool> WaitForAckAsync(uint tsn, TimeSpan patience)
+        {
+            if (_udpClient == null) return false;
+            using var deadline = new CancellationTokenSource(patience);
+            try
+            {
+                while (true)
+                {
+                    var received = await _udpClient.ReceiveAsync(deadline.Token);
+                    if (received.Buffer.Length == 0 || received.Buffer[0] != (byte)HeaderType.CONTROL) continue;
+                    Packet? packet;
+                    try { packet = Packet.Parse(received.Buffer); } catch (Exception) { continue; }
+                    if (packet?.ChunkType == ChunkType.DATA_ACK && (uint)packet.Params.Tsn == tsn) return true;
+                }
+            }
+            catch (OperationCanceledException) { return false; }
+            catch (SocketException) { return false; }
+            catch (ObjectDisposedException) { return false; }
         }
 
         /// <summary>

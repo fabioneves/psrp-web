@@ -34,5 +34,29 @@ static class StreamDisconnectTests
         check(BinaryPrimitives.ReadUInt32BigEndian(packet.Buffer.AsSpan(PacketConst.HeaderLength + 4)) == 6,
             "disconnect follows the last transmitted sequence even when cancelled queued messages reserved later numbers");
         check(packet.Buffer.AsSpan(packet.Buffer.Length - payload.Length).SequenceEqual(payload), "stopping a cancelled stream sends the disconnect before closing UDP");
+        check(stream.DisconnectOutcome.StartsWith("sent twice, not acknowledged"), $"a console that never answers is reported as such: {stream.DisconnectOutcome}");
+
+        // A console that acknowledges: the stop returns as soon as the acknowledgement for the disconnect's sequence arrives.
+        using var polite = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
+        var second = new RPStreamV2(NullLogger<RPStreamV2>.Instance, NullLoggerFactory.Instance, new RemoteSession(), "127.0.0.1", ((IPEndPoint)polite.Client.LocalEndPoint!).Port, stopped.Token);
+        void SetSecond(string name, object value) => typeof(RPStreamV2).GetField(name, BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(second, value);
+        SetSecond("_udpClient", new UdpClient(new IPEndPoint(IPAddress.Loopback, 0)));
+        SetSecond("_remoteEndPoint", polite.Client.LocalEndPoint!);
+        SetSecond("_cipher", new StreamCipher(new byte[16], new byte[32]));
+        SetSecond("_tsn", 41u);
+        var answering = Task.Run(async () =>
+        {
+            var received = await polite.ReceiveAsync(timeout.Token);
+            var tsn = BinaryPrimitives.ReadUInt32BigEndian(received.Buffer.AsSpan(PacketConst.HeaderLength + 4));
+            await polite.SendAsync(Packet.CreateDataAck(tsn), received.RemoteEndPoint);
+        });
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        await second.StopAsync();
+        await answering;
+        check(second.DisconnectOutcome.StartsWith("acknowledged") && watch.ElapsedMilliseconds < 300, $"an acknowledged disconnect ends the stop at once: {second.DisconnectOutcome}");
+
+        var idle = new RPStreamV2(NullLogger<RPStreamV2>.Instance, NullLoggerFactory.Instance, new RemoteSession(), "127.0.0.1", 9, stopped.Token);
+        await idle.StopAsync();
+        check(idle.DisconnectOutcome.StartsWith("not sent"), $"a stream that never negotiated has nothing to say goodbye with, and says so: {idle.DisconnectOutcome}");
     }
 }
