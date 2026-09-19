@@ -33,7 +33,7 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 
 ### Phase 1: pure modules
 
-- [ ] **3. FrameFragmenter.** Access unit → fragments of ≤ 1100 bytes with `frameId, index, count`.
+- [x] **3. FrameFragmenter.** Access unit → fragments of ≤ 1100 bytes with `frameId, index, count`.
   - Accept: round trip for 1 byte, exactly 1100 bytes and 2 MiB; `count` overflow rejected.
   - Verify: `docker build --target test -t player-one-tests .`
   - Depends: none. Files: `RemotePlay/Services/Software/FrameFragmenter.cs`, `tests/backend/RtcTests.cs`, `tests/backend/Program.cs`. Size: S.
