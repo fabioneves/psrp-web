@@ -26,6 +26,12 @@ jobs:
       DISCOVERY_SUBNETS: ""
       ALLOW_REGISTRATION: "true"
       TEST_URL: http://127.0.0.1:8080
+      # WebRTC tests reach the server through a lossy UDP relay they start on 18445; the instance advertises only that.
+      WEBRTC_PORT: "18444"
+      WEBRTC_PUBLIC_PORT: "18445"
+      WEBRTC_PUBLIC_ADDRESS: 127.0.0.1
+      WEBRTC_PUBLIC_ONLY: "1"
+      WEBRTC_TEST_DROP: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

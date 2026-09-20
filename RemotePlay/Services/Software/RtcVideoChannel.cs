@@ -1,7 +1,7 @@
 namespace RemotePlay.Services.Software;
 
 /// <summary>The server end of the browser's unreliable video channel: answers one offer completely, then sends access units as fragments.</summary>
-public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertised, int testDropPercent = 0, ushort publicPort = 0) : IDisposable
+public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertised, int testDropPercent = 0, ushort publicPort = 0, bool publicOnly = false) : IDisposable
 {
     private readonly RtcPeer peer = new(port);
 
@@ -13,7 +13,7 @@ public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertise
     public async Task<string> AnswerAsync(string offer, CancellationToken ct)
     {
         peer.SetRemoteDescription(offer, "offer");
-        return Advertise(await peer.LocalDescriptionAsync(ct), advertised, publicPort == 0 ? port : publicPort);
+        return Advertise(await peer.LocalDescriptionAsync(ct), advertised, publicPort == 0 ? port : publicPort, publicOnly);
     }
 
     public bool Send(uint frameId, ReadOnlyMemory<byte> packet)
@@ -25,12 +25,21 @@ public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertise
     }
 
     /// <summary>Adds addresses the library cannot discover, such as a router's public one, as host candidates on the fixed port.</summary>
-    public static string Advertise(string sdp, IReadOnlyList<string> addresses, ushort port)
+    public static string Advertise(string sdp, IReadOnlyList<string> addresses, ushort port, bool only = false)
     {
         if (addresses.Count == 0) return sdp;
         var lines = sdp.Split("\r\n").ToList();
-        var last = lines.FindLastIndex(line => line.StartsWith("a=candidate:"));
         var end = lines.FindIndex(line => line.StartsWith("a=end-of-candidates"));
+        if (only)
+        {
+            // Tests put a lossy relay in front of the server; the addresses the library found would let the browser go around it.
+            var first = lines.FindIndex(line => line.StartsWith("a=candidate:"));
+            lines.RemoveAll(line => line.StartsWith("a=candidate:"));
+            end = lines.FindIndex(line => line.StartsWith("a=end-of-candidates"));
+            lines.InsertRange(end >= 0 ? end : first >= 0 ? first : Math.Max(0, lines.Count - 1), addresses.Select((address, index) => $"a=candidate:{91 + index} 1 UDP {2122317566 - index} {address} {port} typ host"));
+            return string.Join("\r\n", lines);
+        }
+        var last = lines.FindLastIndex(line => line.StartsWith("a=candidate:"));
         var at = last >= 0 ? last + 1 : end >= 0 ? end : Math.Max(0, lines.Count - 1);
         lines.InsertRange(at, addresses.Select((address, index) => $"a=candidate:{91 + index} 1 UDP {2122317566 - index} {address} {port} typ host"));
         return string.Join("\r\n", lines);
@@ -40,7 +49,7 @@ public sealed class RtcVideoChannel(ushort port, IReadOnlyList<string> advertise
 }
 
 /// <summary>Where the WebRTC video channel listens and which addresses it tells the browser to try besides the ones the library finds.</summary>
-public sealed record RtcOptions(ushort Port, IReadOnlyList<string> Advertise, ushort PublicPort = 0)
+public sealed record RtcOptions(ushort Port, IReadOnlyList<string> Advertise, ushort PublicPort = 0, bool PublicOnly = false)
 {
     /// <summary>The port in advertised candidates: the listening port unless a router or relay maps another one to it.</summary>
     public ushort PublicPort { get; init; } = PublicPort == 0 ? Port : PublicPort;
@@ -48,13 +57,13 @@ public sealed record RtcOptions(ushort Port, IReadOnlyList<string> Advertise, us
     public const ushort DefaultPort = 8443;
 
     public static RtcOptions FromEnvironment() => Parse(Environment.GetEnvironmentVariable("WEBRTC_PORT"),
-        Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_ADDRESS"), Environment.GetEnvironmentVariable("REMOTE_PLAY_DOMAIN"), Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_PORT"));
+        Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_ADDRESS"), Environment.GetEnvironmentVariable("REMOTE_PLAY_DOMAIN"), Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_PORT"), Environment.GetEnvironmentVariable("WEBRTC_PUBLIC_ONLY"));
 
-    public static RtcOptions Parse(string? port, string? addresses, string? domain, string? publicPort = null)
+    public static RtcOptions Parse(string? port, string? addresses, string? domain, string? publicPort = null, string? publicOnly = null)
     {
         var names = (string.IsNullOrWhiteSpace(addresses) ? domain ?? "" : addresses)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return new(ushort.TryParse(port, out var parsed) && parsed > 0 ? parsed : DefaultPort, names, ushort.TryParse(publicPort, out var mapped) ? mapped : (ushort)0);
+        return new(ushort.TryParse(port, out var parsed) && parsed > 0 ? parsed : DefaultPort, names, ushort.TryParse(publicPort, out var mapped) ? mapped : (ushort)0, publicOnly == "1");
     }
 
     /// <summary>Candidates carry addresses, so names are looked up for every offer: a home connection's public address changes.</summary>
@@ -134,7 +143,7 @@ public sealed class RtcVideoLink(RtcOptions options, ILogger logger, int testDro
             if (!RtcPeer.Available) throw new IOException("This server was built without WebRTC support.");
             using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeout.CancelAfter(TimeSpan.FromSeconds(5));
-            created = new RtcVideoChannel(options.Port, await options.ResolveAsync(timeout.Token), testDropPercent, options.PublicPort);
+            created = new RtcVideoChannel(options.Port, await options.ResolveAsync(timeout.Token), testDropPercent, options.PublicPort, options.PublicOnly);
             reply = new { type = "rtc-answer", sdp = await created.AnswerAsync(offer, timeout.Token) };
             RtcVideoChannel? previous;
             lock (sync)

@@ -94,6 +94,10 @@ static class RtcTests
             "WEBRTC_PUBLIC_PORT names the port browsers are told to use where it differs from the one the server listens on");
         check(RtcVideoChannel.Advertise("v=0\r\na=candidate:1 1 UDP 2122317823 10.0.0.5 18444 typ host\r\na=end-of-candidates\r\n", ["203.0.113.7"], 443).Contains("203.0.113.7 443 typ host"),
             "advertised addresses carry the public port");
+        check(!RtcVideoChannel.Advertise("v=0\r\na=candidate:1 1 UDP 2122317823 172.18.0.3 18444 typ host\r\na=end-of-candidates\r\n", ["127.0.0.1"], 18445, only: true).Contains("172.18.0.3") &&
+            RtcVideoChannel.Advertise("v=0\r\na=candidate:1 1 UDP 2122317823 172.18.0.3 18444 typ host\r\na=end-of-candidates\r\n", ["127.0.0.1"], 18445, only: true).Contains("127.0.0.1 18445 typ host\r\na=end-of-candidates") &&
+            RtcOptions.Parse("18444", "127.0.0.1", null, "18445", "1").PublicOnly && !RtcOptions.Parse("18444", "127.0.0.1", null).PublicOnly,
+            "WEBRTC_PUBLIC_ONLY leaves only the advertised addresses in the answer, so a test relay cannot be bypassed through the container's own address");
         options = RtcOptions.Parse(null, null, "play.example.test");
         check(options.Port == 8443 && options.Advertise.SequenceEqual(new[] { "play.example.test" }), "without settings the port is 8443 and the public address comes from REMOTE_PLAY_DOMAIN");
         check(RtcOptions.Parse("70000", null, null).Port == 8443 && RtcOptions.Parse(null, null, null).Advertise.Count == 0, "an unusable port falls back to the default, and no domain means nothing is advertised");

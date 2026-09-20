@@ -39,6 +39,8 @@ services:
       REMOTE_PLAY_DOMAIN: ${REMOTE_PLAY_DOMAIN:-}
       # Browser tests only: lets a ticket ask for lost data-channel fragments.
       WEBRTC_TEST_DROP: ${WEBRTC_TEST_DROP:-}
+      # Browser tests only: advertise nothing but WEBRTC_PUBLIC_ADDRESS, so the tests' lossy relay cannot be bypassed.
+      WEBRTC_PUBLIC_ONLY: ${WEBRTC_PUBLIC_ONLY:-}
       Database__Host: database
       Database__Port: 5432
       Database__Name: remoteplay
