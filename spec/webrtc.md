@@ -472,4 +472,7 @@ unless the sender drops it. See [Sender backlog](#sender-backlog).
    difference at 2 % loss; untested at realistic loss); accept that WebRTC is
    for links that dip and jitter but do not lose, and let the page fall back
    to the WebSocket, whose kernel TCP recovers its window faster, when frames
-   keep being abandoned. Not decided.
+   keep being abandoned. **Decided 2026-09-19: the first**, built in
+   `web/adaptive.js`: four seconds with abandoned or skipped frames within
+   twenty lower the bitrate, and the frame-rate dip after a loss no longer
+   reads as a slow browser. The other two stay open.

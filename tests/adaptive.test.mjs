@@ -34,3 +34,35 @@ test('adaptation bottoms out at 360p30 and preserves a manual 30fps ceiling', ()
   for (let time = 15000; time < 100000; time += 1000) assert.equal(quality.sample(slow, time), null);
   assert.equal(quality.current.fps, 30);
 });
+
+// Over WebRTC a struggling link does not queue video, it loses it: delivery time stays low while frames are abandoned in the
+// browser or skipped by the server, and the frame rate dips as the picture waits for a keyframe.
+const channel = (abandoned, skipped = 0, fps = 60) => ({ ...healthy, fps, videoTransport: 'webrtc', rtcAbandoned: abandoned, rtcSkipped: skipped });
+
+test('video lost on the data channel lowers the bitrate, not the resolution', () => {
+  const quality = new AdaptiveQuality(ceiling, 0);
+  let change = null, abandoned = 0;
+  for (let second = 16; second <= 40 && !change; second++) {
+    const lossy = second % 5 === 0; // one bad second in five, the pattern of the 1080p field failure's first minute
+    if (lossy) abandoned += 2;
+    change = quality.sample(channel(abandoned, 0, lossy ? 35 : 60), second * 1000);
+  }
+  assert.ok(change, 'four lossy seconds within twenty are enough');
+  assert.equal(change.profile.resolution, '1080p');
+  assert.equal(change.profile.bitrateKbps, 15000);
+  assert.match(change.reason, /losing video/i);
+});
+
+test('frames the server skipped for a send backlog count the same way', () => {
+  const quality = new AdaptiveQuality(ceiling, 0);
+  let change = null, skipped = 0;
+  for (let second = 16; second <= 40 && !change; second++) { if (second % 4 === 0) skipped += 9; change = quality.sample(channel(0, skipped), second * 1000); }
+  assert.equal(change?.profile.bitrateKbps, 15000);
+});
+
+test('one lost frame changes nothing, and a lossy second is not mistaken for a slow browser', () => {
+  const quality = new AdaptiveQuality(ceiling, 0);
+  quality.sample(channel(0), 16000);
+  for (let second = 17; second <= 19; second++) assert.equal(quality.sample(channel(1, 0, 30), second * 1000), null, 'fps fell with the loss, not because decoding is slow');
+  for (let second = 20; second <= 60; second++) assert.equal(quality.sample(channel(1), second * 1000), null);
+});

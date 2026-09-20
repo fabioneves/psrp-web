@@ -6,7 +6,7 @@ export class AdaptiveQuality {
     this.ceiling = { ...ceiling }; this.current = { ...ceiling };
     this.changedAt = time - 15000; this.restart(time);
   }
-  restart(time = performance.now()) { this.startedAt = time; this.bad = 0; this.goodSince = null; }
+  restart(time = performance.now()) { this.startedAt = time; this.bad = 0; this.goodSince = null; this.lossSeconds = []; this.lastLossAt = null; this.abandoned = 0; this.skipped = 0; }
   lower(cpu) {
     const next = { ...this.current }, level = resolutions.indexOf(next.resolution);
     const floor = Math.min(3000, bitrates[next.resolution]);
@@ -33,11 +33,22 @@ export class AdaptiveQuality {
   }
   sample(stats, time = performance.now(), visible = true) {
     if (!visible) { this.restart(time); return null; }
+    // Over WebRTC a link that cannot carry the stream does not queue video, it loses it: frames abandoned in the browser
+    // or skipped by the server. Both arrive as running totals.
+    const lost = Math.max(0, (stats.rtcAbandoned ?? 0) - this.abandoned) + Math.max(0, (stats.rtcSkipped ?? 0) - this.skipped);
+    this.abandoned = stats.rtcAbandoned ?? 0; this.skipped = stats.rtcSkipped ?? 0;
     if (time - this.startedAt < 6000 || time - this.changedAt < 15000 || !stats.width) return null;
+    if (lost) { this.lastLossAt = time; this.lossSeconds.push(time); this.goodSince = null; }
+    this.lossSeconds = this.lossSeconds.filter(at => time - at < 20000);
+    // A lost frame now and then is what the transport is for. Four lossy seconds within twenty mean the stream does not fit;
+    // every change costs a reconnect, so nothing less is acted on.
+    if (this.lossSeconds.length >= 4) return this.change(this.lower(false), 'Connection is losing video', time);
     const budget = 1000 / this.current.fps;
     const cost = stats.codecMs + stats.colorMs + stats.drawMs;
     const network = stats.transportMs > Math.max(100, (stats.rttMs || 0) * 0.85 + 40) || stats.serverQueueMs > 40;
-    const cpu = cost > budget * 0.8 || (!network && stats.fps < this.current.fps * 0.8);
+    // The picture waits for a keyframe for a moment after a loss; that dip in frame rate says nothing about the browser.
+    const recovering = this.lastLossAt != null && time - this.lastLossAt < 3000;
+    const cpu = cost > budget * 0.8 || (!network && !recovering && stats.fps < this.current.fps * 0.8);
     if (cpu || network) {
       this.goodSince = null;
       // Browser overload acts after 3 s; delivery queuing waits 6 s so a short Wi-Fi burst does not cost bitrate.
