@@ -163,11 +163,25 @@ public sealed class SoftwareSession(RPContext db, ISessionService sessions, IStr
                 await ObserveWorkers(workers);
                 if (sessionId is { } id)
                 {
+                    if (stream == null)
+                    {
+                        // The browser left while the console session was starting. Bring the stream up after all, with a throwaway
+                        // receiver, so the stop below has something to say goodbye on; otherwise the console stays "occupied".
+                        stream = await ConsoleFarewell.FinishStartAsync(
+                            limit => sessions.WaitReadyAsync(id, TimeSpan.FromSeconds(6), limit),
+                            async limit =>
+                            {
+                                if (await streams.GetStreamAsync(id) is null && !await streams.StartStreamAsync(id, true, CancellationToken.None).WaitAsync(limit)) return null;
+                                return await streams.GetStreamAsync(id);
+                            },
+                            started => started.IsReady, TimeSpan.FromSeconds(8));
+                        if (stream != null) logger.LogInformation("Finished starting the console stream for {HostId} so it can be closed properly", grant.HostId);
+                    }
                     try { await streams.StopStreamAsync(id); }
                     finally { await sessions.StopSessionAsync(id); }
                     // Whether the console was told decides whether the next connection meets "still occupied".
                     logger.LogInformation("Console session closed for {HostId}; goodbye {Outcome}", grant.HostId,
-                        stream == null ? "not sent: the session ended before its stream started" : stream.DisconnectOutcome);
+                        stream == null ? "not sent: the console stream could not be started" : stream.DisconnectOutcome);
                 }
                 if (socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
                 {

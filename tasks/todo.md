@@ -104,4 +104,4 @@ browser performance. See `docs/validation.md`; no console result is claimed.
 - [ ] **Checkpoint D:** all seven success criteria checked off in the spec; remaining open questions (WebSocket backlog skipping, audio channel) decided.
 
 - [ ] **16. Keyframes survive loss** (added 2026-09-19, spec: Loss recovery). Built: 250 ms packet lifetime, in-order delivery with a 300 ms hold, one keyframe request a second with a server-side gate, `WEBRTC_PUBLIC_PORT`, a lossy UDP relay for browser tests. Loopback acceptance met (1 % loss: 60 fps, nothing abandoned). **Open: not met at an 80 ms round trip** (5 of 10 losses still cost a frame); the cause is the data channel's congestion control, spec Open Question 7.
-- [ ] **17. A session that dies while starting says goodbye.** Not started.
+- [ ] **17. A session that dies while starting says goodbye.** Built 2026-09-20: the session's cleanup finishes starting the console stream on its own 8-second clock and then stops it normally. The orchestration is tested with fakes; **whether the PS5 then frees the session quickly is unverified** and needs a real early disconnect (reload the page while it says "Connecting").

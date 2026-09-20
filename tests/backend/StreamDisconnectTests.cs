@@ -4,6 +4,7 @@ using System.Net.Sockets;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using RemotePlay.Models.PlayStation;
+using RemotePlay.Services.Software;
 using RemotePlay.Services.Streaming.Core;
 using RemotePlay.Services.Streaming.Protocol;
 using RemotePlay.Utils.Crypto;
@@ -54,6 +55,25 @@ static class StreamDisconnectTests
         await second.StopAsync();
         await answering;
         check(second.DisconnectOutcome.StartsWith("acknowledged") && watch.ElapsedMilliseconds < 300, $"an acknowledged disconnect ends the stop at once: {second.DisconnectOutcome}");
+
+        // A browser that leaves while the console session is still starting: the stream is brought up anyway, because the
+        // goodbye can only travel on it, and the console otherwise keeps the session "occupied" for a minute or two.
+        var steps = new List<string>();
+        var ready = false;
+        var finished = await ConsoleFarewell.FinishStartAsync(
+            async ct => { steps.Add("wait"); await Task.Delay(20, ct); return true; },
+            async ct => { steps.Add("start"); _ = Task.Delay(150, ct).ContinueWith(_ => ready = true); await Task.Yield(); return "stream"; },
+            _ => ready, TimeSpan.FromSeconds(3));
+        check(finished == "stream" && ready && steps.SequenceEqual(new[] { "wait", "start" }), "an abandoned start is finished: session ready, stream started, negotiation waited for");
+        var slow = System.Diagnostics.Stopwatch.StartNew();
+        check(await ConsoleFarewell.FinishStartAsync(_ => Task.FromResult(true), _ => Task.FromResult<string?>("stream"), _ => false, TimeSpan.FromMilliseconds(300)) == "stream" && slow.ElapsedMilliseconds is >= 250 and < 1500,
+            "a stream that does not finish negotiating in time is still handed back, so stopping it can report why no goodbye went out");
+        check(await ConsoleFarewell.FinishStartAsync(_ => Task.FromResult(false), _ => throw new InvalidOperationException("must not start"), (string _) => true, TimeSpan.FromSeconds(1)) == null,
+            "a console session that never became ready has no stream to start");
+        check(await ConsoleFarewell.FinishStartAsync<string>(_ => throw new IOException("console gone"), _ => Task.FromResult<string?>("stream"), _ => true, TimeSpan.FromSeconds(1)) == null,
+            "a failure while finishing the start is swallowed: this runs during cleanup");
+        check(await ConsoleFarewell.FinishStartAsync<string>(async ct => { await Task.Delay(5000, ct); return true; }, _ => Task.FromResult<string?>("stream"), _ => true, TimeSpan.FromMilliseconds(200)) == null,
+            "the whole attempt keeps to its time limit");
 
         var idle = new RPStreamV2(NullLogger<RPStreamV2>.Instance, NullLoggerFactory.Instance, new RemoteSession(), "127.0.0.1", 9, stopped.Token);
         await idle.StopAsync();
